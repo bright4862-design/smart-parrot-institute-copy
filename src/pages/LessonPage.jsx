@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import ProgressBar from '@/components/lesson/ProgressBar';
@@ -8,7 +9,7 @@ import LessonComplete from '@/components/lesson/LessonComplete';
 import { useUserProgress } from '@/lib/useUserProgress';
 
 export default function LessonPage() {
-  const lessonId = window.location.pathname.split('/lesson/')[1];
+  const { id: lessonId } = useParams();
   const { user } = useAuth();
   const { progress, updateProgress } = useUserProgress();
   const queryClient = useQueryClient();

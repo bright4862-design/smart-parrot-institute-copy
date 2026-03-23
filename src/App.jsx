@@ -6,11 +6,11 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import AppLayout from '@/components/layout/AppLayout';
-import Dashboard from '@/pages/Dashboard';
-import Learn from '@/pages/Learn';
-import LessonPage from '@/pages/LessonPage';
-import Leaderboard from '@/pages/Leaderboard';
-import Profile from '@/pages/Profile';
+import Dashboard from '@/pages/Dashboard.jsx';
+import Learn from '@/pages/Learn.jsx';
+import LessonPage from '@/pages/LessonPage.jsx';
+import Leaderboard from '@/pages/Leaderboard.jsx';
+import Profile from '@/pages/Profile.jsx';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();

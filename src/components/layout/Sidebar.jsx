@@ -23,7 +23,7 @@ export default function Sidebar() {
           <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center">
             <Flame className="w-5 h-5 text-primary-foreground" />
           </div>
-          <span className="font-extrabold text-lg text-foreground">Linguo</span>
+          <span className="font-extrabold text-lg text-foreground">Smart Parrot Institute</span>
         </div>
         <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2">
           {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}

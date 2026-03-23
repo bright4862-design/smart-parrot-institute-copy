@@ -67,7 +67,7 @@ export default function Learn() {
       >
         <h1 className="text-3xl font-black text-foreground">Learn</h1>
         <p className="text-muted-foreground font-semibold mt-1">
-          Spanish • {lessons.length} lessons
+          English 🇺🇸 • {lessons.length} lessons
         </p>
       </motion.div>
 

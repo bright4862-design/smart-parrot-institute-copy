@@ -9,7 +9,7 @@ const unitColors = [
 ];
 
 const unitDescriptions = {
-  1: 'Master the basics of Spanish',
+  1: 'Master the basics of English',
   2: 'Build your vocabulary',
   3: 'Real-world conversations',
 };

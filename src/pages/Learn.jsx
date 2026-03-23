@@ -11,7 +11,7 @@ export default function Learn() {
 
   const { data: lessons = [], isLoading: lessonsLoading } = useQuery({
     queryKey: ['lessons'],
-    queryFn: () => base44.entities.Lesson.list('order', 100),
+    queryFn: () => base44.entities.Lesson.list('+unit', 100),
   });
 
   const { data: lessonProgress = [] } = useQuery({

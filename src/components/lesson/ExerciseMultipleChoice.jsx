@@ -51,7 +51,7 @@ export default function ExerciseMultipleChoice({ exercise, onAnswer }) {
           )}
 
           <div className="grid grid-cols-1 gap-3">
-            {exercise.options.map((option, i) => (
+            {(exercise.options || []).map((option, i) => (
               <motion.button
                 key={option}
                 initial={{ opacity: 0, x: -20 }}

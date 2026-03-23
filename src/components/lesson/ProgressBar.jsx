@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 export default function ProgressBar({ current, total, hearts }) {
-  const progress = ((current) / total) * 100;
+  const progress = total > 0 ? (current / total) * 100 : 0;
 
   return (
     <div className="flex items-center gap-4 p-4">

@@ -15,11 +15,10 @@ import LanguageSelector from '@/components/onboarding/LanguageSelector';
 export default function Dashboard() {
   const { progress, isLoading, initProgress, user } = useUserProgress();
 
-  useEffect(() => {
-    if (!isLoading && !progress && user?.email) {
-      initProgress.mutate();
-    }
-  }, [isLoading, progress, user]);
+  // Show language selector if no progress yet
+  if (!isLoading && !progress && user?.email) {
+    return <LanguageSelector onSelect={(lang) => initProgress.mutate(lang)} />;
+  }
 
   const { data: lessonProgress = [] } = useQuery({
     queryKey: ['lessonProgress', user?.email],
@@ -57,7 +56,7 @@ export default function Dashboard() {
           Welcome back{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}! 👋
         </h1>
         <p className="text-muted-foreground font-semibold mt-1">
-          Ready to continue your Spanish journey?
+          Ready to continue your English journey?
         </p>
       </motion.div>
 
@@ -78,7 +77,7 @@ export default function Dashboard() {
                   <span className="text-sm font-bold opacity-90">Continue Learning</span>
                 </div>
                 <h2 className="text-xl font-extrabold">
-                  {lessonProgress.length === 0 ? 'Start your first lesson!' : 'Jump back into Spanish'}
+                  {lessonProgress.length === 0 ? 'Start your first lesson!' : 'Jump back into English'}
                 </h2>
                 <p className="text-sm opacity-80 mt-1">
                   {lessonProgress.length} lesson{lessonProgress.length !== 1 ? 's' : ''} completed

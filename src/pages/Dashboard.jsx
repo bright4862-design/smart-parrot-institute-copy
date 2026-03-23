@@ -10,6 +10,7 @@ import DailyGoalCard from '@/components/dashboard/DailyGoalCard';
 import XpCard from '@/components/dashboard/XpCard';
 import HeartsCard from '@/components/dashboard/HeartsCard';
 import { useUserProgress } from '@/lib/useUserProgress';
+import LanguageSelector from '@/components/onboarding/LanguageSelector';
 
 export default function Dashboard() {
   const { progress, isLoading, initProgress, user } = useUserProgress();

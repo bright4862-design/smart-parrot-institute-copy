@@ -15,7 +15,7 @@ export function useUserProgress() {
   const progress = progressList?.[0] || null;
 
   const initProgress = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (nativeLanguage) => {
       const today = new Date().toISOString().split('T')[0];
       return base44.entities.UserProgress.create({
         user_email: user.email,
@@ -28,7 +28,7 @@ export function useUserProgress() {
         daily_goal: 50,
         last_practice_date: today,
         hearts: 5,
-        language: 'spanish',
+        native_language: nativeLanguage,
         lessons_completed: 0,
       });
     },

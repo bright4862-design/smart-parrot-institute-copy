@@ -46,7 +46,7 @@ export default function Sidebar() {
           <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center shadow-md">
             <Flame className="w-6 h-6 text-primary-foreground" />
           </div>
-          <span className="font-extrabold text-xl text-foreground tracking-tight">Linguo</span>
+          <span className="font-extrabold text-xl text-foreground tracking-tight">Smart Parrot Institute</span>
         </div>
 
         {/* Nav */}

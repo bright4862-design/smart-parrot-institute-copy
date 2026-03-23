@@ -8,7 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoadingPublicSettings] = useState(false);
-  const [authError, setAuthError] = useState(null);
+  const [authError] = useState(null);
 
   useEffect(() => {
     checkUserAuth();
@@ -16,19 +16,13 @@ export const AuthProvider = ({ children }) => {
 
   const checkUserAuth = async () => {
     try {
-      setIsLoadingAuth(true);
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
-    } catch (error) {
+    } catch {
+      // No auth — allow access anyway
+      setUser(null);
       setIsAuthenticated(false);
-      if (error.status === 401 || error.status === 403) {
-        setAuthError({ type: 'auth_required', message: 'Authentication required' });
-      } else if (error.data?.extra_data?.reason === 'user_not_registered') {
-        setAuthError({ type: 'user_not_registered', message: 'User not registered' });
-      } else {
-        setAuthError({ type: 'auth_required', message: 'Authentication required' });
-      }
     } finally {
       setIsLoadingAuth(false);
     }

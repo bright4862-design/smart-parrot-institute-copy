@@ -15,16 +15,16 @@ import LanguageSelector from '@/components/onboarding/LanguageSelector';
 export default function Dashboard() {
   const { progress, isLoading, initProgress, user } = useUserProgress();
 
-  // Show language selector if no progress yet
-  if (!isLoading && !progress && user?.email) {
-    return <LanguageSelector onSelect={(lang) => initProgress.mutate(lang)} />;
-  }
-
   const { data: lessonProgress = [] } = useQuery({
     queryKey: ['lessonProgress', user?.email],
     queryFn: () => base44.entities.LessonProgress.filter({ user_email: user?.email }),
     enabled: !!user?.email,
   });
+
+  // Show language selector if no progress yet
+  if (!isLoading && !progress && user?.email) {
+    return <LanguageSelector onSelect={(lang) => initProgress.mutate(lang)} />;
+  }
 
   if (isLoading) {
     return (

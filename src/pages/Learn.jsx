@@ -45,15 +45,7 @@ export default function Learn() {
   });
 
   const sortedLessons = Object.values(units).flat();
-  const unlockedIds = new Set();
-  sortedLessons.forEach((lesson, idx) => {
-    if (idx === 0 || completedSet.has(sortedLessons[idx - 1]?.id)) {
-      unlockedIds.add(lesson.id);
-    }
-    if (completedSet.has(lesson.id)) {
-      unlockedIds.add(lesson.id);
-    }
-  });
+  const unlockedIds = new Set(sortedLessons.map(l => l.id));
 
   return (
     <div className="max-w-lg mx-auto p-6 lg:p-8">

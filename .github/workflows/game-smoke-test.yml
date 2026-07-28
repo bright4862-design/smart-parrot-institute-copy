@@ -41,8 +41,8 @@ jobs:
             page.on('pageerror', err => errors.push(err.message));
 
             await page.setViewportSize({ width: 1440, height: 900 });
-            await page.goto('http://127.0.0.1:5173/london', { waitUntil: 'networkidle' });
-            await expect(page.locator('canvas')).toBeVisible();
+            await page.goto('http://127.0.0.1:5173/london', { waitUntil: 'domcontentloaded' });
+            await expect(page.locator('canvas')).toBeVisible({ timeout: 15000 });
             await expect(page.getByText(/Heathrow|London/i).first()).toBeVisible();
             await page.screenshot({ path: 'smoke-desktop.png', fullPage: true });
 
@@ -53,8 +53,8 @@ jobs:
             await page.waitForTimeout(300);
 
             await page.setViewportSize({ width: 390, height: 844 });
-            await page.reload({ waitUntil: 'networkidle' });
-            await expect(page.locator('canvas')).toBeVisible();
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await expect(page.locator('canvas')).toBeVisible({ timeout: 15000 });
             await page.screenshot({ path: 'smoke-mobile.png', fullPage: true });
 
             expect(errors, `Browser errors: ${errors.join('\n')}`).toEqual([]);

@@ -22,7 +22,9 @@ jobs:
       - name: Build
         run: npm run build
       - name: Install Playwright
-        run: npx -y playwright@1.54.1 install --with-deps chromium
+        run: |
+          npm install --no-save @playwright/test@1.54.1
+          npx playwright install --with-deps chromium
       - name: Start app
         run: |
           npm run dev -- --host 127.0.0.1 > /tmp/smart-parrot-vite.log 2>&1 &
@@ -58,7 +60,7 @@ jobs:
             expect(errors, `Browser errors: ${errors.join('\n')}`).toEqual([]);
           });
           EOF
-          npx -y playwright@1.54.1 test smoke-tests/heathrow.spec.js --reporter=line
+          npx playwright test smoke-tests/heathrow.spec.js --reporter=line
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -1,0 +1,81 @@
+{
+  "name": "Lesson",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Lesson title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of lesson content"
+    },
+    "unit": {
+      "type": "number",
+      "description": "Unit number"
+    },
+    "order": {
+      "type": "number",
+      "description": "Order within the unit"
+    },
+    "language": {
+      "type": "string",
+      "default": "spanish"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "default": "beginner"
+    },
+    "xp_reward": {
+      "type": "number",
+      "default": 10,
+      "description": "XP earned for completing this lesson"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Icon identifier for the lesson"
+    },
+    "exercises": {
+      "type": "array",
+      "description": "Array of exercises in this lesson",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "multiple_choice",
+              "translation",
+              "fill_blank"
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "correct_answer": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "title",
+    "unit",
+    "order"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "LessonProgress",
+  "type": "object",
+  "properties": {
+    "lesson_id": {
+      "type": "string",
+      "description": "Reference to the lesson"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "User email"
+    },
+    "completed": {
+      "type": "boolean",
+      "default": false
+    },
+    "score": {
+      "type": "number",
+      "default": 0,
+      "description": "Score out of 100"
+    },
+    "xp_earned": {
+      "type": "number",
+      "default": 0
+    },
+    "completed_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "attempts": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "lesson_id",
+    "user_email"
+  ]
+}

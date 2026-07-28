@@ -1,0 +1,65 @@
+{
+  "name": "UserProgress",
+  "type": "object",
+  "properties": {
+    "total_xp": {
+      "type": "number",
+      "default": 0
+    },
+    "level": {
+      "type": "number",
+      "default": 1
+    },
+    "current_streak": {
+      "type": "number",
+      "default": 0
+    },
+    "longest_streak": {
+      "type": "number",
+      "default": 0
+    },
+    "daily_xp": {
+      "type": "number",
+      "default": 0
+    },
+    "daily_goal": {
+      "type": "number",
+      "default": 50
+    },
+    "last_practice_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "hearts": {
+      "type": "number",
+      "default": 5
+    },
+    "native_language": {
+      "type": "string",
+      "enum": [
+        "french",
+        "arabic",
+        "spanish",
+        "portuguese",
+        "german",
+        "chinese",
+        "korean",
+        "japanese"
+      ],
+      "description": "The learner's native language"
+    },
+    "lessons_completed": {
+      "type": "number",
+      "default": 0
+    },
+    "user_name": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_email"
+  ]
+}

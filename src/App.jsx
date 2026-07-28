@@ -10,6 +10,7 @@ import Learn from '@/pages/Learn';
 import LessonPage from '@/pages/LessonPage';
 import Leaderboard from '@/pages/Leaderboard';
 import Profile from '@/pages/Profile';
+import LondonMission from '@/pages/LondonMission';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings } = useAuth();
@@ -33,6 +34,8 @@ const AuthenticatedApp = () => {
         <Route path="/profile" element={<Profile />} />
       </Route>
       <Route path="/lesson/:id" element={<LessonPage />} />
+      <Route path="/london" element={<LondonMission />} />
+      <Route path="/heathrow-mission" element={<LondonMission />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

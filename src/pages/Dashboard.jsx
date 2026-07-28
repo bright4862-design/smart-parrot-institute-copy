@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { BookOpen, ArrowRight } from 'lucide-react';
+import { ArrowRight, Map, Sparkles, Trophy } from 'lucide-react';
 import StreakCard from '@/components/dashboard/StreakCard';
 import DailyGoalCard from '@/components/dashboard/DailyGoalCard';
 import XpCard from '@/components/dashboard/XpCard';
 import HeartsCard from '@/components/dashboard/HeartsCard';
+import ParrotGuide from '@/components/characters/ParrotGuide';
 import { useUserProgress } from '@/lib/useUserProgress';
 import LanguageSelector from '@/components/onboarding/LanguageSelector';
 
@@ -22,8 +23,8 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
       </div>
     );
   }
@@ -42,57 +43,78 @@ export default function Dashboard() {
     hearts: 5,
   };
 
-  return (
-    <div className="max-w-4xl mx-auto p-6 lg:p-8">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <h1 className="text-3xl font-black text-foreground">
-          Welcome back{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}! 👋
-        </h1>
-        <p className="text-muted-foreground font-semibold mt-1">
-          Ready to continue your English journey?
-        </p>
-      </motion.div>
+  const completed = lessonProgress.filter((item) => item.completed).length;
+  const firstName = user?.full_name?.split(' ')[0];
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
+  return (
+    <div className="mx-auto max-w-5xl space-y-6 p-5 lg:p-8">
+      <motion.section
+        initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
+        className="relative overflow-hidden rounded-[2rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-6 shadow-sm lg:p-8"
       >
-        <Link to="/learn">
-          <div className="bg-primary rounded-3xl p-6 text-primary-foreground relative overflow-hidden group cursor-pointer transition-shadow hover:shadow-xl">
-            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full transition-transform group-hover:scale-110" />
-            <div className="absolute -right-5 -bottom-10 w-32 h-32 bg-white/5 rounded-full" />
-            <div className="relative z-10 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <BookOpen className="w-5 h-5" />
-                  <span className="text-sm font-bold opacity-90">Continue Learning</span>
-                </div>
-                <h2 className="text-xl font-extrabold">
-                  {lessonProgress.length === 0 ? 'Start your first lesson!' : 'Jump back into English'}
-                </h2>
-                <p className="text-sm opacity-80 mt-1">
-                  {lessonProgress.length} lesson{lessonProgress.length !== 1 ? 's' : ''} completed
-                </p>
-              </div>
-              <div className="bg-white/20 rounded-2xl p-3 group-hover:bg-white/30 transition-colors">
-                <ArrowRight className="w-6 h-6" />
+        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-emerald-200/30 blur-2xl" />
+        <div className="relative grid items-center gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-emerald-700 shadow-sm">
+              <Sparkles className="h-3.5 w-3.5" /> Smart Parrot Adventure
+            </div>
+            <h1 className="max-w-2xl text-3xl font-black leading-tight text-slate-900 lg:text-5xl">
+              Welcome back{firstName ? `, ${firstName}` : ''}.
+            </h1>
+            <p className="mt-3 max-w-xl text-base font-semibold leading-relaxed text-slate-600 lg:text-lg">
+              Continue your journey, unlock new places, and help Pico rebuild the world of languages.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                to="/learn"
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700"
+              >
+                Explore the map <ArrowRight className="h-5 w-5" />
+              </Link>
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 font-extrabold text-slate-700">
+                <Trophy className="h-5 w-5 text-amber-500" /> Level {p.level}
               </div>
             </div>
           </div>
-        </Link>
-      </motion.div>
+          <ParrotGuide
+            mood={completed > 0 ? 'proud' : 'happy'}
+            message={completed > 0 ? `You have completed ${completed} lesson${completed === 1 ? '' : 's'}. Let’s keep flying!` : 'Your first adventure is waiting on Beginner Island!'}
+          />
+        </div>
+      </motion.section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <Link to="/learn" className="block">
+        <motion.section
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          className="group relative overflow-hidden rounded-[2rem] bg-slate-950 p-6 text-white shadow-xl lg:p-8"
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(52,211,153,0.35),transparent_40%)]" />
+          <div className="relative flex items-center justify-between gap-5">
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-sm font-black text-emerald-300">
+                <Map className="h-5 w-5" /> Current world
+              </div>
+              <h2 className="text-2xl font-black">Beginner Island</h2>
+              <p className="mt-2 font-semibold text-slate-300">
+                {completed === 0 ? 'Begin at Welcome Cove and unlock your first path.' : `${completed} lessons restored. Your next destination is ready.`}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white/10 p-4 transition group-hover:translate-x-1 group-hover:bg-white/15">
+              <ArrowRight className="h-6 w-6" />
+            </div>
+          </div>
+        </motion.section>
+      </Link>
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StreakCard streak={p.current_streak} longestStreak={p.longest_streak} />
         <DailyGoalCard dailyXp={p.daily_xp} dailyGoal={p.daily_goal} />
         <XpCard totalXp={p.total_xp} level={p.level} />
         <HeartsCard hearts={p.hearts} />
-      </div>
+      </section>
     </div>
   );
 }

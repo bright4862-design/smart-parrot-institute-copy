@@ -29,7 +29,8 @@ jobs:
           npx -y wait-on@8.0.1 http://127.0.0.1:5173
       - name: Run smoke test
         run: |
-          cat > /tmp/smoke.spec.js <<'EOF'
+          mkdir -p smoke-tests
+          cat > smoke-tests/heathrow.spec.js <<'EOF'
           const { test, expect } = require('@playwright/test');
 
           test('Heathrow playable spine boots and responds', async ({ page }) => {
@@ -57,7 +58,7 @@ jobs:
             expect(errors, `Browser errors: ${errors.join('\n')}`).toEqual([]);
           });
           EOF
-          npx -y playwright@1.54.1 test /tmp/smoke.spec.js --reporter=line
+          npx -y playwright@1.54.1 test smoke-tests/heathrow.spec.js --reporter=line
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

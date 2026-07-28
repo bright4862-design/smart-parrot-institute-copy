@@ -41,7 +41,7 @@ jobs:
             page.on('pageerror', err => errors.push(err.message));
 
             await page.setViewportSize({ width: 1440, height: 900 });
-            await page.goto('http://127.0.0.1:5173/LondonMission', { waitUntil: 'networkidle' });
+            await page.goto('http://127.0.0.1:5173/london', { waitUntil: 'networkidle' });
             await expect(page.locator('canvas')).toBeVisible();
             await expect(page.getByText(/Heathrow|London/i).first()).toBeVisible();
             await page.screenshot({ path: 'smoke-desktop.png', fullPage: true });

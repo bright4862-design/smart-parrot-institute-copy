@@ -54,9 +54,10 @@ export default function Learn() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <h1 className="text-3xl font-black text-foreground">Beginner English</h1>
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-primary mb-2">London · Mission 1</p>
+        <h1 className="text-3xl font-black text-foreground">Arrive at Heathrow</h1>
         <p className="text-muted-foreground font-semibold mt-1">
-          Beginner English 🇺🇸 • {lessons.length} lessons
+          Find the Underground 🇬🇧 • {lessons.length} mission{lessons.length === 1 ? '' : 's'}
         </p>
       </motion.div>
 

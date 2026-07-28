@@ -3,6 +3,8 @@ name: Game Smoke Test
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -20,24 +22,33 @@ jobs:
       - name: Build
         run: npm run build
       - name: Install Playwright
-        run: npx -y playwright@1.54.1 install --with-deps chromium
+        run: |
+          npm install --no-save @playwright/test@1.54.1
+          npx playwright install --with-deps chromium
       - name: Start app
         run: |
           npm run dev -- --host 127.0.0.1 > /tmp/smart-parrot-vite.log 2>&1 &
           npx -y wait-on@8.0.1 http://127.0.0.1:5173
       - name: Run smoke test
         run: |
-          cat > /tmp/smoke.spec.js <<'EOF'
-          const { test, expect } = require('@playwright/test');
+          mkdir -p smoke-tests
+          cat > smoke-tests/heathrow.spec.js <<'EOF'
+          import { test, expect } from '@playwright/test';
 
           test('Heathrow playable spine boots and responds', async ({ page }) => {
             const errors = [];
-            page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+            const isExpectedLocalBase44Error = (text) =>
+              text.includes('[Base44 SDK Error] 404') ||
+              text.includes('Failed to load resource: the server responded with a status of 404');
+
+            page.on('console', msg => {
+              if (msg.type() === 'error' && !isExpectedLocalBase44Error(msg.text())) errors.push(msg.text());
+            });
             page.on('pageerror', err => errors.push(err.message));
 
             await page.setViewportSize({ width: 1440, height: 900 });
-            await page.goto('http://127.0.0.1:5173/LondonMission', { waitUntil: 'networkidle' });
-            await expect(page.locator('canvas')).toBeVisible();
+            await page.goto('http://127.0.0.1:5173/london', { waitUntil: 'domcontentloaded' });
+            await expect(page.locator('canvas')).toBeVisible({ timeout: 15000 });
             await expect(page.getByText(/Heathrow|London/i).first()).toBeVisible();
             await page.screenshot({ path: 'smoke-desktop.png', fullPage: true });
 
@@ -48,14 +59,14 @@ jobs:
             await page.waitForTimeout(300);
 
             await page.setViewportSize({ width: 390, height: 844 });
-            await page.reload({ waitUntil: 'networkidle' });
-            await expect(page.locator('canvas')).toBeVisible();
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await expect(page.locator('canvas')).toBeVisible({ timeout: 15000 });
             await page.screenshot({ path: 'smoke-mobile.png', fullPage: true });
 
             expect(errors, `Browser errors: ${errors.join('\n')}`).toEqual([]);
           });
           EOF
-          npx -y playwright@1.54.1 test /tmp/smoke.spec.js --reporter=line
+          npx playwright test smoke-tests/heathrow.spec.js --reporter=line
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

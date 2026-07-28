@@ -31,7 +31,7 @@ jobs:
         run: |
           mkdir -p smoke-tests
           cat > smoke-tests/heathrow.spec.js <<'EOF'
-          const { test, expect } = require('@playwright/test');
+          import { test, expect } from '@playwright/test';
 
           test('Heathrow playable spine boots and responds', async ({ page }) => {
             const errors = [];

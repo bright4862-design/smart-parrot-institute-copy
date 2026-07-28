@@ -1,5 +1,5 @@
-import HeathrowGreybox from '@/game/heathrow/HeathrowGreybox';
+import HeathrowPlayableSpine from '@/game/heathrow/HeathrowPlayableSpine';
 
 export default function LondonMission() {
-  return <HeathrowGreybox />;
+  return <HeathrowPlayableSpine />;
 }

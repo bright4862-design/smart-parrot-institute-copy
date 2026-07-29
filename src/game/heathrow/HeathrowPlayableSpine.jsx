@@ -30,6 +30,79 @@ const dampAngle = (current, target, smoothing, delta) => (
   current + normalizeAngle(target - current) * (1 - Math.exp(-smoothing * delta))
 );
 
+const readMobileRenderProfile = () => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return { mobile: false, ios: false, android: false };
+  }
+
+  const userAgent = navigator.userAgent || '';
+  const ipadDesktopMode = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const ios = /iPhone|iPad|iPod/i.test(userAgent) || ipadDesktopMode;
+  const android = /Android/i.test(userAgent);
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  const compactViewport = Math.min(window.innerWidth, window.innerHeight) < 900;
+
+  return {
+    mobile: ios || android || (coarsePointer && compactViewport),
+    ios,
+    android,
+  };
+};
+
+function useMobileRenderProfile() {
+  const [profile, setProfile] = useState(readMobileRenderProfile);
+
+  useEffect(() => {
+    const refresh = () => setProfile(readMobileRenderProfile());
+    window.addEventListener('resize', refresh);
+    window.addEventListener('orientationchange', refresh);
+    return () => {
+      window.removeEventListener('resize', refresh);
+      window.removeEventListener('orientationchange', refresh);
+    };
+  }, []);
+
+  return profile;
+}
+
+class GameCanvasBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error) {
+    this.props.onError?.(error);
+  }
+
+  componentDidUpdate(previousProps) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.failed) {
+      this.setState({ failed: false });
+    }
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+function RendererFallback({ onRetry }) {
+  return (
+    <div className="absolute inset-0 z-50 grid place-items-center bg-slate-950 px-6 text-center text-white">
+      <div className="max-w-sm rounded-[28px] border border-white/15 bg-white/10 p-6 shadow-2xl backdrop-blur-xl">
+        <div className="text-4xl">🦜</div>
+        <h2 className="mt-3 text-xl font-black">The 3D scene needs a quick restart</h2>
+        <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">Close other graphics-heavy tabs, then retry. Smart Parrot will use the lightweight mobile renderer on iOS and Android.</p>
+        <button type="button" onClick={onRetry} className="mt-5 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-slate-950 active:scale-95">Retry mission</button>
+      </div>
+    </div>
+  );
+}
+
 function useInput(inputRef, onInteractPress, onInteractRelease) {
   useEffect(() => {
     const bindings = {
@@ -155,23 +228,23 @@ function Terminal() {
   );
 }
 
-function RainyWindowAtmosphere() {
+function RainyWindowAtmosphere({ mobileRenderer = false }) {
   const rainRef = useRef();
   const runwayGlowRef = useRef();
   const shadowRef = useRef();
   const aircraftRef = useRef();
 
-  const drops = useMemo(() => Array.from({ length: 72 }, (_, index) => ({
+  const drops = useMemo(() => Array.from({ length: mobileRenderer ? 32 : 72 }, (_, index) => ({
     x: -22 + ((index * 7.13) % 44),
     y: 1 + ((index * 3.71) % 13),
     length: 0.25 + ((index * 0.17) % 0.75),
     speed: 0.35 + ((index * 0.11) % 0.8),
-  })), []);
+  })), [mobileRenderer]);
 
-  const runwayLights = useMemo(() => Array.from({ length: 18 }, (_, index) => ({
+  const runwayLights = useMemo(() => Array.from({ length: mobileRenderer ? 10 : 18 }, (_, index) => ({
     x: -21 + index * 2.5,
     color: index % 5 === 0 ? '#ff8b55' : index % 2 === 0 ? '#8fd3ff' : '#fff0a8',
-  })), []);
+  })), [mobileRenderer]);
 
   useFrame(({ clock }) => {
     const time = clock.elapsedTime;
@@ -266,12 +339,12 @@ function UndergroundSpot() {
   );
 }
 
-function HeathrowLighting() {
+function HeathrowLighting({ mobileRenderer = false }) {
   const keyLight = useRef();
 
   useEffect(() => {
     const light = keyLight.current;
-    if (!light) return;
+    if (!light || mobileRenderer) return;
     light.shadow.mapSize.set(1024, 1024);
     light.shadow.camera.left = -24;
     light.shadow.camera.right = 24;
@@ -282,67 +355,49 @@ function HeathrowLighting() {
     light.shadow.camera.updateProjectionMatrix();
     light.shadow.bias = -0.00018;
     light.shadow.normalBias = 0.025;
-  }, []);
+  }, [mobileRenderer]);
 
   useFrame(({ clock }) => {
-    if (keyLight.current) keyLight.current.intensity = 2.8 + Math.sin(clock.elapsedTime * 0.22) * 0.06;
+    if (keyLight.current) {
+      const baseIntensity = mobileRenderer ? 2.15 : 2.8;
+      keyLight.current.intensity = baseIntensity + Math.sin(clock.elapsedTime * 0.22) * 0.06;
+    }
   });
 
   return (
     <>
-      <Environment background={false} resolution={128} frames={1} environmentIntensity={0.82}>
-        <Lightformer
-          form="rect"
-          intensity={4.2}
-          color="#f7e2c5"
-          position={[0, 9, -3]}
-          rotation={[Math.PI / 2, 0, 0]}
-          scale={[22, 8, 1]}
-        />
-        <Lightformer
-          form="rect"
-          intensity={2.4}
-          color="#9dd8ff"
-          position={[0, 6, -13]}
-          rotation={[0, 0, 0]}
-          scale={[28, 8, 1]}
-        />
-        <Lightformer
-          form="ring"
-          intensity={1.4}
-          color="#c6b7ff"
-          position={[10, 5, 5]}
-          rotation={[0, -Math.PI / 2, 0]}
-          scale={[5, 5, 1]}
-        />
-      </Environment>
-      <ambientLight intensity={0.18} color="#cfdfeb" />
-      <hemisphereLight args={['#d8edfa', '#625a55', 0.58]} />
+      {!mobileRenderer && (
+        <Environment background={false} resolution={128} frames={1} environmentIntensity={0.82}>
+          <Lightformer form="rect" intensity={4.2} color="#f7e2c5" position={[0, 9, -3]} rotation={[Math.PI / 2, 0, 0]} scale={[22, 8, 1]} />
+          <Lightformer form="rect" intensity={2.4} color="#9dd8ff" position={[0, 6, -13]} rotation={[0, 0, 0]} scale={[28, 8, 1]} />
+          <Lightformer form="ring" intensity={1.4} color="#c6b7ff" position={[10, 5, 5]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 5, 1]} />
+        </Environment>
+      )}
+      <ambientLight intensity={mobileRenderer ? 0.38 : 0.18} color="#cfdfeb" />
+      <hemisphereLight args={['#d8edfa', '#625a55', mobileRenderer ? 0.82 : 0.58]} />
       <directionalLight
         ref={keyLight}
         position={[-10, 16, -10]}
         color="#f7e8d3"
-        intensity={2.8}
-        castShadow
+        intensity={mobileRenderer ? 2.15 : 2.8}
+        castShadow={!mobileRenderer}
       />
-      <UndergroundSpot />
+      {!mobileRenderer && <UndergroundSpot />}
     </>
   );
 }
 
 function CinematicBloom() {
   const bloomLight = useRef();
-  const { size } = useThree();
-  const mobile = size.width < 768;
 
   return (
     <>
       <directionalLight ref={bloomLight} position={[8, 10, 6]} color="#b9d9ff" intensity={0.34} />
-      <EffectComposer multisampling={0} resolutionScale={mobile ? 0.5 : 0.72}>
+      <EffectComposer multisampling={0} resolutionScale={0.72}>
         <SelectiveBloom
           lights={[bloomLight]}
-          intensity={mobile ? 0.62 : 0.9}
-          luminanceThreshold={mobile ? 0.62 : 0.5}
+          intensity={0.9}
+          luminanceThreshold={0.5}
           luminanceSmoothing={0.42}
           mipmapBlur
           ignoreBackground
@@ -587,7 +642,7 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   );
 }
 
-function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled, suitcaseProximity, pickupAnimating, picoEntering, quizOpen, npcQuestion }) {
+function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled, suitcaseProximity, pickupAnimating, picoEntering, quizOpen, npcQuestion, mobileRenderer }) {
   const engagedQuestionId = npcQuestion
     || (activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null);
   const conversationTarget = quizOpen
@@ -601,8 +656,8 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
       <>
         <color attach="background" args={['#718fa3']} />
         <fog attach="fog" args={['#aebfc9', 22, 56]} />
-        <HeathrowLighting />
-        <RainyWindowAtmosphere />
+        <HeathrowLighting mobileRenderer={mobileRenderer} />
+        <RainyWindowAtmosphere mobileRenderer={mobileRenderer} />
         <ArrivalCutsceneCamera active={cutsceneActive} />
         <Terminal />
         <AirportNPCs
@@ -638,7 +693,7 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
             </Float>
           </Select>
         )}
-        <CinematicBloom />
+        {!mobileRenderer && <CinematicBloom />}
       </>
     </Selection>
   );
@@ -666,6 +721,9 @@ export default function HeathrowPlayableSpine() {
   const [holdProgress, setHoldProgress] = useState(0);
   const [pickupAnimating, setPickupAnimating] = useState(false);
   const [picoEntering, setPicoEntering] = useState(false);
+  const renderProfile = useMobileRenderProfile();
+  const [rendererFailure, setRendererFailure] = useState('');
+  const [rendererKey, setRendererKey] = useState(0);
   const canHoldSuitcaseRef = useRef(false);
   const pickupAnimatingRef = useRef(false);
   const interactionTimersRef = useRef([]);
@@ -887,35 +945,68 @@ export default function HeathrowPlayableSpine() {
     { eyebrow: 'PICO', title: '“Purple suitcase. Very fashionable.”', body: '“Also, apparently, very easy to lose.”' },
   ][cutsceneBeat];
 
+  const retryRenderer = () => {
+    setRendererFailure('');
+    setRendererKey((value) => value + 1);
+  };
+
+  const rendererFallback = <RendererFallback onRetry={retryRenderer} />;
+
   return (
-    <main className="relative h-[100dvh] min-h-[560px] overflow-hidden bg-slate-950 text-white [touch-action:none]">
-      <Canvas
-        shadows
-        dpr={[1, 1.5]}
-        camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: 120 }}
-        gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.02 }}
-        onCreated={({ gl }) => {
-          gl.outputColorSpace = THREE.SRGBColorSpace;
-          gl.shadowMap.enabled = true;
-          gl.shadowMap.type = THREE.PCFSoftShadowMap;
-        }}
-      >
-        <World
-          inputRef={inputRef}
-          mission={mission}
-          resetToken={resetToken}
-          reportPosition={reportPosition}
-          playerPosition={playerPosition}
-          activeTarget={activeTarget}
-          cutsceneActive={cutsceneActive}
-          gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion && !pickupAnimating && !picoEntering}
-          suitcaseProximity={mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? suitcaseProximity : 0}
-          pickupAnimating={pickupAnimating}
-          picoEntering={picoEntering}
-          quizOpen={quizOpen}
-          npcQuestion={npcQuestion}
-        />
-      </Canvas>
+    <main
+      className="relative h-screen h-[100dvh] min-h-[560px] overflow-hidden bg-slate-950 text-white [touch-action:none]"
+      data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
+      data-mobile-platform={renderProfile.ios ? 'ios' : renderProfile.android ? 'android' : 'other'}
+    >
+      {rendererFailure ? rendererFallback : (
+        <GameCanvasBoundary resetKey={rendererKey} onError={() => setRendererFailure('render-error')} fallback={rendererFallback}>
+          <Canvas
+            key={`${rendererKey}-${renderProfile.mobile ? 'mobile' : 'desktop'}`}
+            fallback={rendererFallback}
+            shadows={!renderProfile.mobile}
+            dpr={renderProfile.mobile ? 1 : [1, 1.5]}
+            camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: renderProfile.mobile ? 80 : 120 }}
+            gl={{
+              antialias: !renderProfile.mobile,
+              alpha: false,
+              depth: true,
+              stencil: false,
+              preserveDrawingBuffer: false,
+              failIfMajorPerformanceCaveat: false,
+              precision: renderProfile.mobile ? 'mediump' : 'highp',
+              powerPreference: renderProfile.mobile ? 'default' : 'high-performance',
+              toneMapping: THREE.ACESFilmicToneMapping,
+              toneMappingExposure: 1.02,
+            }}
+            onCreated={({ gl }) => {
+              gl.outputColorSpace = THREE.SRGBColorSpace;
+              gl.shadowMap.enabled = !renderProfile.mobile;
+              if (!renderProfile.mobile) gl.shadowMap.type = THREE.PCFSoftShadowMap;
+              gl.domElement.addEventListener('webglcontextlost', (event) => {
+                event.preventDefault();
+                setRendererFailure('context-lost');
+              }, { once: true });
+            }}
+          >
+            <World
+              inputRef={inputRef}
+              mission={mission}
+              resetToken={resetToken}
+              reportPosition={reportPosition}
+              playerPosition={playerPosition}
+              activeTarget={activeTarget}
+              cutsceneActive={cutsceneActive}
+              gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion && !pickupAnimating && !picoEntering}
+              suitcaseProximity={mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? suitcaseProximity : 0}
+              pickupAnimating={pickupAnimating}
+              picoEntering={picoEntering}
+              quizOpen={quizOpen}
+              npcQuestion={npcQuestion}
+              mobileRenderer={renderProfile.mobile}
+            />
+          </Canvas>
+        </GameCanvasBoundary>
+      )}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/28 via-transparent to-slate-950/42" />
       <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_rgba(15,23,42,.3)]" />
 

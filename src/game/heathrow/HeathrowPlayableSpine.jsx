@@ -283,7 +283,7 @@ function HeathrowLighting() {
         castShadow
       />
       <directionalLight position={[9, 9, 4]} color="#86b9e8" intensity={0.62} />
-      <rectAreaLight position={[0, 7.8, -8]} rotation={[-Math.PI / 2.2, 0, 0]} width={28} height={8} color="#cce8f6" intensity={1.9} />
+      <directionalLight position={[0, 12, -6]} color="#cce8f6" intensity={0.85} />
       <pointLight position={[12, 4.2, -5.5]} color="#ffbd74" intensity={26} distance={12} decay={2.1} />
       <pointLight position={[-10.5, 3.6, -6.8]} color="#b5ccff" intensity={18} distance={10} decay={2.1} />
       <UndergroundSpot />

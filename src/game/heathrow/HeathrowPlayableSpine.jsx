@@ -18,6 +18,9 @@ import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from '
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
 const UNDERGROUND = Object.freeze({ x: 0, z: 10.4 });
+const SUITCASE_INTERACT_RADIUS = 2.35;
+const SUITCASE_GLOW_RADIUS = 8;
+const SUITCASE_HOLD_MS = 1050;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 

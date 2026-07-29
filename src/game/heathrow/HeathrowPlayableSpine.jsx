@@ -18,10 +18,11 @@ import {
 import TravelerAvatar from './TravelerAvatar';
 import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from './AirportNPCs';
 import AirportSigns, { AIRPORT_SIGNS, findNearbyAirportSign, getAirportSign } from './AirportSigns';
+import TerminalExpansion from './TerminalExpansion';
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
-const UNDERGROUND = Object.freeze({ x: 0, z: 10.4 });
+const UNDERGROUND = Object.freeze({ x: 0, z: 19.2 });
 const SUITCASE_INTERACT_RADIUS = 2.35;
 const SUITCASE_GLOW_RADIUS = 8;
 const SUITCASE_HOLD_MS = 1050;
@@ -161,35 +162,35 @@ function useInput(inputRef, onInteractPress, onInteractRelease) {
 }
 
 function Terminal() {
-  const columns = useMemo(() => Array.from({ length: 8 }, (_, i) => -21 + i * 6), []);
-  const ceilingLights = useMemo(() => Array.from({ length: 7 }, (_, i) => -18 + i * 6), []);
+  const columns = useMemo(() => Array.from({ length: 11 }, (_, i) => -30 + i * 6), []);
+  const ceilingLights = useMemo(() => Array.from({ length: 10 }, (_, i) => -27 + i * 6), []);
 
   return (
     <group>
-      <mesh receiveShadow position={[0, -0.12, 0]}>
-        <boxGeometry args={[48, 0.2, 34]} />
+      <mesh receiveShadow position={[0, -0.12, 1]}>
+        <boxGeometry args={[68, 0.2, 48]} />
         <meshStandardMaterial color="#cfd5dc" roughness={0.2} metalness={0.2} />
       </mesh>
 
-      <mesh position={[0, 7.8, -15.5]} receiveShadow>
-        <boxGeometry args={[48, 16, 0.45]} />
+      <mesh position={[0, 7.8, -22.5]} receiveShadow>
+        <boxGeometry args={[68, 16, 0.45]} />
         <meshPhysicalMaterial color="#789fba" transparent opacity={0.48} roughness={0.12} metalness={0.08} transmission={0.18} />
       </mesh>
 
-      <mesh position={[0, 7.8, -15.28]}>
-        <planeGeometry args={[46, 14]} />
+      <mesh position={[0, 7.8, -22.28]}>
+        <planeGeometry args={[66, 14]} />
         <meshBasicMaterial color="#a8c8d8" transparent opacity={0.13} toneMapped={false} />
       </mesh>
 
       {columns.map((x) => (
-        <mesh key={x} position={[x, 4, -14.9]} castShadow receiveShadow>
+        <mesh key={x} position={[x, 4, -21.9]} castShadow receiveShadow>
           <boxGeometry args={[0.45, 8, 0.45]} />
           <meshStandardMaterial color="#f7f8fa" metalness={0.62} roughness={0.2} />
         </mesh>
       ))}
 
-      <mesh position={[0, 8.5, 0]} receiveShadow>
-        <boxGeometry args={[48, 0.35, 34]} />
+      <mesh position={[0, 8.5, 1]} receiveShadow>
+        <boxGeometry args={[68, 0.35, 48]} />
         <meshStandardMaterial color="#e6e9ed" roughness={0.62} />
       </mesh>
 
@@ -215,8 +216,8 @@ function Terminal() {
       </RoundedBox>
       <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
 
-      <mesh position={[0, 0.03, 4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[3.2, 16]} />
+      <mesh position={[0, 0.03, 7.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[3.2, 34]} />
         <meshStandardMaterial color="#f4c847" roughness={0.4} />
       </mesh>
     </group>
@@ -266,7 +267,7 @@ function RainyWindowAtmosphere({ mobileRenderer = false }) {
 
   return (
     <group>
-      <group ref={rainRef} position={[0, 0, -15.03]}>
+      <group ref={rainRef} position={[0, 0, -22.03]}>
         {drops.map((drop, index) => (
           <mesh key={index} position={[drop.x, drop.y, 0]} rotation={[0, 0, -0.08]}>
             <planeGeometry args={[0.025, drop.length]} />
@@ -275,7 +276,7 @@ function RainyWindowAtmosphere({ mobileRenderer = false }) {
         ))}
       </group>
 
-      <group position={[0, 0, -16.2]}>
+      <group position={[0, 0, -23.2]}>
         <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[54, 12]} />
           <meshStandardMaterial color="#344552" roughness={0.22} metalness={0.28} />
@@ -304,12 +305,12 @@ function RainyWindowAtmosphere({ mobileRenderer = false }) {
         </mesh>
       </group>
 
-      <mesh ref={runwayGlowRef} position={[-19, 0.015, -7]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={runwayGlowRef} position={[-19, 0.015, -28]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[7, 1.1]} />
         <meshBasicMaterial color="#86cfff" transparent opacity={0.2} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </mesh>
 
-      <mesh ref={shadowRef} position={[-18, 0.022, -1]} rotation={[-Math.PI / 2, 0, -0.16]}>
+      <mesh ref={shadowRef} position={[-18, 0.022, -24]} rotation={[-Math.PI / 2, 0, -0.16]}>
         <planeGeometry args={[13, 3.2]} />
         <meshBasicMaterial color="#102132" transparent opacity={0.04} depthWrite={false} />
       </mesh>
@@ -322,14 +323,14 @@ function UndergroundSpot() {
   const target = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(() => {
-    target.position.set(0, 0, 11);
+    target.position.set(0, 0, 20);
     if (light.current) light.current.target = target;
   }, [target]);
 
   return (
     <>
       <primitive object={target} />
-      <spotLight ref={light} position={[0, 9, 9]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={24} decay={2} />
+      <spotLight ref={light} position={[0, 10, 17]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={28} decay={2} />
     </>
   );
 }
@@ -341,10 +342,10 @@ function HeathrowLighting({ mobileRenderer = false }) {
     const light = keyLight.current;
     if (!light || mobileRenderer) return;
     light.shadow.mapSize.set(1024, 1024);
-    light.shadow.camera.left = -24;
-    light.shadow.camera.right = 24;
-    light.shadow.camera.top = 24;
-    light.shadow.camera.bottom = -24;
+    light.shadow.camera.left = -34;
+    light.shadow.camera.right = 34;
+    light.shadow.camera.top = 34;
+    light.shadow.camera.bottom = -34;
     light.shadow.camera.near = 1;
     light.shadow.camera.far = 50;
     light.shadow.camera.updateProjectionMatrix();
@@ -449,7 +450,7 @@ function Suitcase({ visible, active, proximity = 0, collecting = false }) {
 
 function Underground({ active }) {
   return (
-    <group position={[0, 3.4, 11.4]}>
+    <group position={[UNDERGROUND.x, 3.4, UNDERGROUND.z + 1]}>
       <Select enabled>
         <group>
           <mesh castShadow><torusGeometry args={[1.45, 0.34, 20, 48]} /><meshStandardMaterial color={active ? '#ff4c55' : '#db2c37'} emissive={active ? '#a4141d' : '#4f050a'} emissiveIntensity={active ? 2.1 : 0.85} /></mesh>
@@ -571,8 +572,8 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
     if (moveVector.lengthSq()) moveVector.normalize();
     velocity.current.lerp(moveVector.multiplyScalar(controlsEnabled ? 5.2 : 0), 1 - Math.pow(0.001, delta));
     ref.current.position.addScaledVector(velocity.current, delta);
-    ref.current.position.x = clamp(ref.current.position.x, -20, 20);
-    ref.current.position.z = clamp(ref.current.position.z, -13, 12);
+    ref.current.position.x = clamp(ref.current.position.x, -31, 31);
+    ref.current.position.z = clamp(ref.current.position.z, -21, 23);
 
     const isMoving = velocity.current.lengthSq() > 0.35;
     if (conversationTarget) {
@@ -690,11 +691,12 @@ function World({
     <Selection>
       <>
         <color attach="background" args={['#718fa3']} />
-        <fog attach="fog" args={['#aebfc9', 22, 56]} />
+        <fog attach="fog" args={['#aebfc9', 32, 82]} />
         <HeathrowLighting mobileRenderer={mobileRenderer} />
         <RainyWindowAtmosphere mobileRenderer={mobileRenderer} />
         <ArrivalCutsceneCamera active={cutsceneActive} />
         <Terminal />
+        <TerminalExpansion mobileRenderer={mobileRenderer} />
         <AirportSigns
           missionActive={mission.step === HEATHROW_STEPS.INSPECT_SIGNS}
           inspectedIds={inspectedSignIds}
@@ -1099,7 +1101,7 @@ export default function HeathrowPlayableSpine() {
             fallback={rendererFallback}
             shadows={!renderProfile.mobile}
             dpr={adaptiveDpr}
-            camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: renderProfile.mobile ? 80 : 120 }}
+            camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: renderProfile.mobile ? 110 : 160 }}
             gl={{
               antialias: !renderProfile.mobile,
               alpha: false,

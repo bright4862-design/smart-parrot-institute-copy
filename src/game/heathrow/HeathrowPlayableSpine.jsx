@@ -570,10 +570,7 @@ export default function HeathrowPlayableSpine() {
 
   const interact = useCallback(() => {
     const position = positionRef.current;
-    if (mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && distance(position, SUITCASE) < 2.4) {
-      dispatch({ type: 'COLLECT_SUITCASE' });
-      setPicoLine('Pico: “There you are! Ready for London?”');
-    } else if (mission.step === HEATHROW_STEPS.MEET_PICO) {
+    if (mission.step === HEATHROW_STEPS.MEET_PICO) {
       dispatch({ type: 'MEET_PICO' });
       setPicoLine('Pico: “I know the way. Mostly. Let’s ask the human in the smart jacket.”');
     } else if (mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && distance(position, AIRPORT_EMPLOYEE_POSITION) < 3.2) {

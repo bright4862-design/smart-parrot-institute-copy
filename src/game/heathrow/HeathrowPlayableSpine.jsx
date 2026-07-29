@@ -978,7 +978,8 @@ export default function HeathrowPlayableSpine() {
 
   return (
     <main
-      className="relative h-screen h-[100dvh] min-h-[560px] overflow-hidden bg-slate-950 text-white [touch-action:none]"
+      className="relative h-screen h-[100dvh] overflow-hidden bg-slate-950 text-white [touch-action:none]"
+      style={{ minHeight: renderProfile.mobile ? 0 : 560 }}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
       data-mobile-platform={renderProfile.ios ? 'ios' : renderProfile.android ? 'android' : 'other'}
     >
@@ -1141,7 +1142,7 @@ export default function HeathrowPlayableSpine() {
 
       {!cutsceneActive && !npcQuestion && !pickupAnimating && !picoEntering && (
         <>
-          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] left-4 z-20 grid grid-cols-3 gap-1.5 sm:hidden"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
+          {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_5.25rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>}
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">
             {activeTarget === 'suitcase' ? (
               <button

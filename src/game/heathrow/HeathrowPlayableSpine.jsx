@@ -202,6 +202,23 @@ function RainyWindowAtmosphere() {
   );
 }
 
+function UndergroundSpot() {
+  const light = useRef();
+  const target = useMemo(() => new THREE.Object3D(), []);
+
+  useEffect(() => {
+    target.position.set(0, 0, 11);
+    if (light.current) light.current.target = target;
+  }, [target]);
+
+  return (
+    <>
+      <primitive object={target} />
+      <spotLight ref={light} position={[0, 9, 9]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={24} decay={2} />
+    </>
+  );
+}
+
 function HeathrowLighting() {
   const keyLight = useRef();
   const movingLight = useRef();
@@ -240,7 +257,7 @@ function HeathrowLighting() {
       <rectAreaLight position={[0, 7.8, -8]} rotation={[-Math.PI / 2.2, 0, 0]} width={28} height={8} color="#cce8f6" intensity={1.9} />
       <pointLight position={[12, 4.2, -5.5]} color="#ffbd74" intensity={26} distance={12} decay={2.1} />
       <pointLight position={[-10.5, 3.6, -6.8]} color="#b5ccff" intensity={18} distance={10} decay={2.1} />
-      <spotLight position={[0, 9, 9]} target-position={[0, 0, 11]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={24} decay={2} />
+      <UndergroundSpot />
       <pointLight ref={movingLight} position={[-18, 1.2, -10]} color="#91d7ff" intensity={5.5} distance={10} decay={2} />
     </>
   );

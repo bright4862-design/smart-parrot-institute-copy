@@ -17,9 +17,6 @@ export default defineConfig({
     }),
     react(),
   ],
-  resolve: {
-    dedupe: ['three', '@react-three/fiber', '@react-three/drei']
-  },
   optimizeDeps: {
     include: ['@react-three/fiber', '@react-three/drei', 'three']
   }

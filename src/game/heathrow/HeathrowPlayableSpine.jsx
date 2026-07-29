@@ -315,7 +315,43 @@ function Pico({ target, visible, celebrating }) {
   );
 }
 
-function Player({ inputRef, resetToken, reportPosition }) {
+function ArrivalCutsceneCamera({ active }) {
+  const { camera } = useThree();
+  const startedAt = useRef(null);
+  const positionCurve = useMemo(() => new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-19, 7.8, -12.5),
+    new THREE.Vector3(-13.5, 6.2, -8.5),
+    new THREE.Vector3(-7.5, 5.1, -3.5),
+    new THREE.Vector3(4.5, 4.8, 1.5),
+    new THREE.Vector3(0, 7.15, 2.8),
+  ]), []);
+  const targetCurve = useMemo(() => new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-14, 1.3, -10),
+    new THREE.Vector3(-10.5, 1.1, -7.4),
+    new THREE.Vector3(0, 1.5, -2),
+    new THREE.Vector3(5.8, 1.3, 1.6),
+    new THREE.Vector3(0, 1.15, -10.8),
+  ]), []);
+
+  useEffect(() => {
+    if (!active) return;
+    startedAt.current = null;
+    camera.position.copy(positionCurve.getPoint(0));
+  }, [active, camera, positionCurve]);
+
+  useFrame(({ clock }) => {
+    if (!active) return;
+    if (startedAt.current === null) startedAt.current = clock.elapsedTime;
+    const raw = clamp((clock.elapsedTime - startedAt.current) / 6.4, 0, 1);
+    const eased = raw * raw * (3 - 2 * raw);
+    camera.position.copy(positionCurve.getPoint(eased));
+    camera.lookAt(targetCurve.getPoint(eased));
+  });
+
+  return null;
+}
+
+function Player({ inputRef, resetToken, reportPosition, controlsEnabled }) {
   const ref = useRef();
   const velocity = useRef(new THREE.Vector3());
   const [moving, setMoving] = useState(false);
@@ -328,10 +364,10 @@ function Player({ inputRef, resetToken, reportPosition }) {
 
   useFrame((_, delta) => {
     if (!ref.current) return;
-    const input = inputRef.current;
+    const input = controlsEnabled ? inputRef.current : { forward: false, backward: false, left: false, right: false };
     const move = new THREE.Vector3((input.right ? 1 : 0) - (input.left ? 1 : 0), 0, (input.backward ? 1 : 0) - (input.forward ? 1 : 0));
     if (move.lengthSq()) move.normalize();
-    velocity.current.lerp(move.multiplyScalar(5.2), 1 - Math.pow(0.001, delta));
+    velocity.current.lerp(move.multiplyScalar(controlsEnabled ? 5.2 : 0), 1 - Math.pow(0.001, delta));
     ref.current.position.addScaledVector(velocity.current, delta);
     ref.current.position.x = clamp(ref.current.position.x, -20, 20);
     ref.current.position.z = clamp(ref.current.position.z, -13, 12);
@@ -339,11 +375,13 @@ function Player({ inputRef, resetToken, reportPosition }) {
     if (isMoving) ref.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.z);
     setMoving((current) => (current === isMoving ? current : isMoving));
     reportPosition(ref.current.position.x, ref.current.position.z);
-    const mobile = size.width < 640;
-    const cameraHeight = mobile ? 7.15 : 6.4;
-    const cameraDistance = mobile ? 11.8 : 9.8;
-    camera.position.lerp(new THREE.Vector3(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance), 1 - Math.pow(0.002, delta));
-    camera.lookAt(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
+    if (controlsEnabled) {
+      const mobile = size.width < 640;
+      const cameraHeight = mobile ? 7.15 : 6.4;
+      const cameraDistance = mobile ? 11.8 : 9.8;
+      camera.position.lerp(new THREE.Vector3(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance), 1 - Math.pow(0.002, delta));
+      camera.lookAt(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
+    }
   });
 
   return (
@@ -353,19 +391,20 @@ function Player({ inputRef, resetToken, reportPosition }) {
   );
 }
 
-function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget }) {
+function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled }) {
   return (
     <>
       <color attach="background" args={['#718fa3']} />
       <fog attach="fog" args={['#aebfc9', 22, 56]} />
       <HeathrowLighting />
       <RainyWindowAtmosphere />
+      <ArrivalCutsceneCamera active={cutsceneActive} />
       <Terminal />
       <AirportNPCs employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE} />
       <Suitcase visible={!mission.suitcaseCollected} active={activeTarget === 'suitcase'} />
       <Underground active={activeTarget === 'underground'} />
-      <Player inputRef={inputRef} resetToken={resetToken} reportPosition={reportPosition} />
-      <Pico target={playerPosition} visible={mission.suitcaseCollected} celebrating={mission.step === HEATHROW_STEPS.COMPLETE} />
+      <Player inputRef={inputRef} resetToken={resetToken} reportPosition={reportPosition} controlsEnabled={gameplayEnabled} />
+      <Pico target={cutsceneActive ? SUITCASE : playerPosition} visible={cutsceneActive || mission.suitcaseCollected} celebrating={!cutsceneActive && mission.step === HEATHROW_STEPS.COMPLETE} />
       {mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && <Float speed={1.4} floatIntensity={0.25}><Text position={[0, 6.7, 11]} fontSize={0.58} color="#13213b" anchorX="center">Follow the yellow path</Text></Float>}
     </>
   );
@@ -385,6 +424,8 @@ export default function HeathrowPlayableSpine() {
   const [picoLine, setPicoLine] = useState('');
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizFeedback, setQuizFeedback] = useState('');
+  const [cutsceneActive, setCutsceneActive] = useState(() => mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && !mission.suitcaseCollected);
+  const [cutsceneBeat, setCutsceneBeat] = useState(0);
 
   const reportPosition = useCallback((x, z) => {
     positionRef.current.x = x;
@@ -423,6 +464,18 @@ export default function HeathrowPlayableSpine() {
 
   useInput(inputRef, interact);
   useEffect(() => saveCheckpoint(mission), [mission]);
+  useEffect(() => {
+    if (!cutsceneActive) return undefined;
+    inputRef.current = { forward: false, backward: false, left: false, right: false };
+    setCutsceneBeat(0);
+    const timers = [
+      window.setTimeout(() => setCutsceneBeat(1), 1400),
+      window.setTimeout(() => setCutsceneBeat(2), 3000),
+      window.setTimeout(() => setCutsceneBeat(3), 4700),
+      window.setTimeout(() => setCutsceneActive(false), 6400),
+    ];
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [cutsceneActive]);
 
   const restart = () => {
     clearCheckpoint();
@@ -432,6 +485,8 @@ export default function HeathrowPlayableSpine() {
     setPicoLine('');
     setQuizOpen(false);
     setQuizFeedback('');
+    setCutsceneActive(true);
+    setCutsceneBeat(0);
     dispatch({ type: 'RESET' });
     setResetToken((value) => value + 1);
   };
@@ -465,7 +520,7 @@ export default function HeathrowPlayableSpine() {
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
-        <World inputRef={inputRef} mission={mission} resetToken={resetToken} reportPosition={reportPosition} playerPosition={playerPosition} activeTarget={activeTarget} />
+        <World inputRef={inputRef} mission={mission} resetToken={resetToken} reportPosition={reportPosition} playerPosition={playerPosition} activeTarget={activeTarget} cutsceneActive={cutsceneActive} gameplayEnabled={!cutsceneActive && !quizOpen} />
       </Canvas>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/28 via-transparent to-slate-950/42" />
       <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_rgba(15,23,42,.3)]" />

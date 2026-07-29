@@ -2,7 +2,7 @@ import '@/game/r3fSafeDataProps';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Float, Lightformer, RoundedBox, Text } from '@react-three/drei';
-import { EffectComposer, Select, Selection, SelectiveBloom } from '@react-three/postprocessing';
+import { Bloom, EffectComposer, Select, Selection } from '@react-three/postprocessing';
 import { HelpCircle, RotateCcw, Sparkles } from 'lucide-react';
 import * as THREE from 'three';
 import {
@@ -400,22 +400,15 @@ function HeathrowLighting({ mobileRenderer = false }) {
 }
 
 function CinematicBloom() {
-  const bloomLight = useRef();
-
   return (
-    <>
-      <directionalLight ref={bloomLight} position={[8, 10, 6]} color="#b9d9ff" intensity={0.34} />
-      <EffectComposer multisampling={0} resolutionScale={0.72}>
-        <SelectiveBloom
-          lights={[bloomLight]}
-          intensity={0.9}
-          luminanceThreshold={0.5}
-          luminanceSmoothing={0.42}
-          mipmapBlur
-          ignoreBackground
-        />
-      </EffectComposer>
-    </>
+    <EffectComposer multisampling={0} resolutionScale={0.72}>
+      <Bloom
+        intensity={0.42}
+        luminanceThreshold={0.9}
+        luminanceSmoothing={0.34}
+        mipmapBlur
+      />
+    </EffectComposer>
   );
 }
 

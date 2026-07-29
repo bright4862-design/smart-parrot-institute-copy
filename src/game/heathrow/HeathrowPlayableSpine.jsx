@@ -538,11 +538,24 @@ export default function HeathrowPlayableSpine() {
     setPlayerPosition((current) => (Math.abs(current.x - x) > 0.08 || Math.abs(current.z - z) > 0.08 ? { x, z } : current));
   }, []);
 
-  const nearSuitcase = distance(playerPosition, SUITCASE) < 2.8;
+  const suitcaseDistance = distance(playerPosition, SUITCASE);
+  const nearSuitcase = suitcaseDistance < SUITCASE_INTERACT_RADIUS;
+  const suitcaseProximity = clamp(
+    1 - ((suitcaseDistance - SUITCASE_INTERACT_RADIUS) / (SUITCASE_GLOW_RADIUS - SUITCASE_INTERACT_RADIUS)),
+    0,
+    1,
+  );
   const nearEmployee = distance(playerPosition, AIRPORT_EMPLOYEE_POSITION) < 3.2;
   const nearUnderground = distance(playerPosition, UNDERGROUND) < 3.8;
   const nearGateTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.gate) < 2.8;
   const nearRestroomTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.restroom) < 2.8;
+  const canHoldSuitcase = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
+    && nearSuitcase
+    && !pickupAnimating
+    && !cutsceneActive
+    && !quizOpen
+    && !npcQuestion;
+  canHoldSuitcaseRef.current = canHoldSuitcase;
   const activeTarget = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && nearSuitcase
     ? 'suitcase'
     : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && nearEmployee

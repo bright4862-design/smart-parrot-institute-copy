@@ -70,14 +70,16 @@ function QuestionMarker({ questionId, highlighted }) {
   return (
     <Float speed={1.8} floatIntensity={0.1}>
       <group position={[0, 2.45, 0]}>
-        <RoundedBox args={[1.05, 0.38, 0.12]} radius={0.12} castShadow>
-          <meshStandardMaterial
-            color={highlighted ? '#F8D65C' : '#FFFFFF'}
-            emissive={highlighted ? '#7C5C00' : '#000000'}
-            emissiveIntensity={highlighted ? 0.6 : 0}
-            roughness={0.35}
-          />
-        </RoundedBox>
+        <Select enabled={highlighted}>
+          <RoundedBox args={[1.05, 0.38, 0.12]} radius={0.12} castShadow>
+            <meshStandardMaterial
+              color={highlighted ? '#F8D65C' : '#FFFFFF'}
+              emissive={highlighted ? '#7C5C00' : '#000000'}
+              emissiveIntensity={highlighted ? 0.9 : 0}
+              roughness={0.35}
+            />
+          </RoundedBox>
+        </Select>
         <Text position={[0, 0, 0.075]} fontSize={0.13} color="#17213B" anchorX="center" anchorY="middle">
           {copy}
         </Text>

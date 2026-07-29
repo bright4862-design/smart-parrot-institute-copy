@@ -884,13 +884,61 @@ export default function HeathrowPlayableSpine() {
         </div>
       )}
 
-      {!cutsceneActive && !npcQuestion && (
+      {!cutsceneActive && !npcQuestion && !pickupAnimating && !picoEntering && (
         <>
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] left-4 z-20 grid grid-cols-3 gap-1.5 sm:hidden"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
-          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[52%] sm:bottom-5 sm:right-5 sm:max-w-[58%]">
-            {canInteract ? <button onClick={interact} className="min-h-12 rounded-full bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button> : mission.step === HEATHROW_STEPS.COMPLETE ? <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div> : <div className="hidden rounded-full border border-white/30 bg-slate-950/60 px-5 py-3 text-sm font-bold backdrop-blur sm:block">Move with WASD or arrow keys</div>}
+          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">
+            {activeTarget === 'suitcase' ? (
+              <button
+                type="button"
+                aria-label="Hold to collect the purple suitcase"
+                aria-pressed={holdingSuitcase}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture?.(event.pointerId);
+                  beginSuitcaseHold();
+                }}
+                onPointerUp={(event) => {
+                  event.preventDefault();
+                  if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                  endSuitcaseHold();
+                }}
+                onPointerCancel={endSuitcaseHold}
+                onPointerLeave={() => {
+                  if (holdingSuitcase) endSuitcaseHold();
+                }}
+                onContextMenu={(event) => event.preventDefault()}
+                className="flex select-none items-center gap-2 rounded-full border border-amber-100/70 bg-slate-950/78 p-1.5 pr-3 text-left text-white shadow-[0_0_36px_rgba(167,139,250,.5)] backdrop-blur-xl active:scale-[0.98] sm:gap-3 sm:p-2 sm:pr-5"
+              >
+                <span
+                  className="grid h-[66px] w-[66px] shrink-0 place-items-center rounded-full p-[5px] shadow-[0_0_24px_rgba(252,211,77,.45)] sm:h-[76px] sm:w-[76px]"
+                  style={{ background: `conic-gradient(#facc15 ${holdProgress * 360}deg, rgba(255,255,255,.2) 0deg)` }}
+                >
+                  <span className="grid h-full w-full place-items-center rounded-full bg-amber-300 text-slate-950 shadow-inner">
+                    <span className="text-center leading-none">
+                      <span className="block text-sm font-black sm:text-base">{Math.round(holdProgress * 100)}%</span>
+                      <span className="mt-1 block text-[8px] font-black tracking-[.16em] sm:text-[9px]">HOLD</span>
+                    </span>
+                  </span>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-black leading-tight sm:text-sm">Hold to collect</span>
+                  <span className="mt-0.5 block text-[9px] font-semibold text-slate-300 sm:text-[10px]">Keep holding until the ring fills<span className="hidden sm:inline"> · E</span></span>
+                </span>
+              </button>
+            ) : canInteract ? (
+              <button onClick={interact} className="min-h-12 rounded-full bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button>
+            ) : mission.step === HEATHROW_STEPS.COMPLETE ? (
+              <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div>
+            ) : (
+              <div className="hidden rounded-full border border-white/30 bg-slate-950/60 px-5 py-3 text-sm font-bold backdrop-blur sm:block">Move with WASD or arrow keys</div>
+            )}
           </div>
         </>
+      )}
+
+      {pickupAnimating && (
+        <div className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom)_+_8.5rem)] right-4 z-30 rounded-full border border-violet-200/50 bg-violet-950/80 px-5 py-3 text-xs font-black text-violet-100 shadow-[0_0_36px_rgba(167,139,250,.65)] backdrop-blur sm:bottom-6 sm:right-6 sm:text-sm">Suitcase collected ✓</div>
       )}
     </main>
   );

@@ -277,12 +277,12 @@ function Pico({ target, visible, celebrating }) {
   const ref = useRef();
   useFrame(({ clock }) => {
     if (!ref.current || !visible) return;
-    ref.current.position.lerp(new THREE.Vector3(target.x - 1.2, (celebrating ? 2.7 : 2.15) + Math.sin(clock.elapsedTime * 3) * 0.16, target.z - 1.1), 0.045);
+    ref.current.position.lerp(new THREE.Vector3(target.x - 0.9, (celebrating ? 2.25 : 1.9) + Math.sin(clock.elapsedTime * 3) * 0.11, target.z - 0.8), 0.055);
     ref.current.rotation.z = celebrating ? Math.sin(clock.elapsedTime * 6) * 0.22 : 0;
   });
   if (!visible) return null;
   return (
-    <group ref={ref}>
+    <group ref={ref} scale={0.48}>
       <mesh castShadow scale={[0.72, 0.9, 0.72]}><sphereGeometry args={[0.7, 24, 24]} /><meshStandardMaterial color="#28b67a" roughness={0.5} /></mesh>
       <mesh position={[0.58, 0.08, 0]} rotation={[0, 0, -0.2]} castShadow><coneGeometry args={[0.34, 0.75, 18]} /><meshStandardMaterial color="#f3bd37" /></mesh>
       <mesh position={[0.22, 0.28, 0.55]}><sphereGeometry args={[0.12, 16, 16]} /><meshStandardMaterial color="#121722" roughness={0.15} /></mesh>
@@ -296,7 +296,7 @@ function Player({ inputRef, resetToken, reportPosition }) {
   const ref = useRef();
   const velocity = useRef(new THREE.Vector3());
   const [moving, setMoving] = useState(false);
-  const { camera } = useThree();
+  const { camera, size } = useThree();
 
   useEffect(() => {
     ref.current?.position.set(SPAWN.x, 0.95, SPAWN.z);
@@ -316,8 +316,11 @@ function Player({ inputRef, resetToken, reportPosition }) {
     if (isMoving) ref.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.z);
     setMoving((current) => (current === isMoving ? current : isMoving));
     reportPosition(ref.current.position.x, ref.current.position.z);
-    camera.position.lerp(new THREE.Vector3(ref.current.position.x, 6.2, ref.current.position.z + 8.5), 1 - Math.pow(0.002, delta));
-    camera.lookAt(ref.current.position.x, 1.3, ref.current.position.z - 2.2);
+    const mobile = size.width < 640;
+    const cameraHeight = mobile ? 7.15 : 6.4;
+    const cameraDistance = mobile ? 11.8 : 9.8;
+    camera.position.lerp(new THREE.Vector3(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance), 1 - Math.pow(0.002, delta));
+    camera.lookAt(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
   });
 
   return (
@@ -346,7 +349,7 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
 
 function DirectionButton({ label, action, inputRef }) {
   const set = (value) => { inputRef.current[action] = value; };
-  return <button aria-label={label} onPointerDown={(e) => { e.preventDefault(); set(true); }} onPointerUp={() => set(false)} onPointerCancel={() => set(false)} onPointerLeave={() => set(false)} className="grid h-14 w-14 select-none place-items-center rounded-2xl border border-white/40 bg-slate-950/55 text-xl font-black text-white shadow-xl backdrop-blur active:scale-95">{label}</button>;
+  return <button aria-label={label} onPointerDown={(e) => { e.preventDefault(); set(true); }} onPointerUp={() => set(false)} onPointerCancel={() => set(false)} onPointerLeave={() => set(false)} className="grid h-13 w-13 select-none place-items-center rounded-2xl border border-white/40 bg-slate-950/62 text-lg font-black text-white shadow-xl backdrop-blur active:scale-95">{label}</button>;
 }
 
 export default function HeathrowPlayableSpine() {
@@ -399,11 +402,11 @@ export default function HeathrowPlayableSpine() {
   const label = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? 'Collect suitcase' : mission.step === HEATHROW_STEPS.MEET_PICO ? 'Say hello to Pico' : 'Enter Underground';
 
   return (
-    <main className="relative h-screen min-h-[640px] overflow-hidden bg-slate-950 text-white">
+    <main className="relative h-[100dvh] min-h-[560px] overflow-hidden bg-slate-950 text-white [touch-action:none]">
       <Canvas
         shadows
         dpr={[1, 1.5]}
-        camera={{ position: [0, 6.2, 0], fov: 48, near: 0.1, far: 120 }}
+        camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: 120 }}
         gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.02 }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
@@ -415,22 +418,22 @@ export default function HeathrowPlayableSpine() {
       </Canvas>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/28 via-transparent to-slate-950/42" />
       <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_rgba(15,23,42,.3)]" />
-      <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-6">
-        <div className="pointer-events-auto max-w-sm rounded-[24px] border border-white/35 bg-slate-950/68 p-4 shadow-2xl backdrop-blur-xl">
-          <div className="flex items-center gap-2 text-xs font-black tracking-[.18em] text-amber-300"><Sparkles className="h-4 w-4" /> LONDON · A1</div>
-          <h1 className="mt-1 text-xl font-black">Heathrow Terminal 5</h1>
-          <p className="mt-2 text-sm font-semibold text-slate-200">{objectiveCopy(mission.step)}</p>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15"><div className={`h-full rounded-full bg-amber-300 transition-all duration-500 ${progress}`} /></div>
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:gap-3 sm:p-6">
+        <div className="pointer-events-auto w-[calc(100%-6rem)] max-w-sm rounded-[20px] border border-white/35 bg-slate-950/72 p-3 shadow-2xl backdrop-blur-xl sm:w-auto sm:rounded-[24px] sm:p-4">
+          <div className="flex items-center gap-1.5 text-[10px] font-black tracking-[.16em] text-amber-300 sm:text-xs"><Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> LONDON · A1</div>
+          <h1 className="mt-0.5 text-base font-black sm:mt-1 sm:text-xl">Heathrow Terminal 5</h1>
+          <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-200 sm:mt-2 sm:text-sm">{objectiveCopy(mission.step)}</p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15 sm:mt-3 sm:h-2"><div className={`h-full rounded-full bg-amber-300 transition-all duration-500 ${progress}`} /></div>
         </div>
         <div className="pointer-events-auto flex gap-2">
-          <button aria-label="Show help" onClick={() => setPicoLine('Pico: “Look for the softly glowing object.”')} className="grid h-11 w-11 place-items-center rounded-full border border-white/30 bg-slate-950/60 backdrop-blur"><HelpCircle className="h-5 w-5" /></button>
-          <button aria-label="Restart mission" onClick={restart} className="grid h-11 w-11 place-items-center rounded-full border border-white/30 bg-slate-950/60 backdrop-blur"><RotateCcw className="h-5 w-5" /></button>
+          <button aria-label="Show help" onClick={() => setPicoLine('Pico: “Look for the softly glowing object.”')} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><HelpCircle className="h-4.5 w-4.5 sm:h-5 sm:w-5" /></button>
+          <button aria-label="Restart mission" onClick={restart} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><RotateCcw className="h-4.5 w-4.5 sm:h-5 sm:w-5" /></button>
         </div>
       </header>
-      {picoLine && <div className="pointer-events-none absolute left-1/2 top-32 w-[min(88vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/72 px-5 py-3 text-center text-sm font-bold shadow-2xl backdrop-blur-xl">{picoLine}</div>}
-      <div className="absolute bottom-5 left-5 grid grid-cols-3 gap-2 sm:hidden"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
-      <div className="absolute bottom-5 right-5 max-w-[58%]">
-        {canInteract ? <button onClick={interact} className="rounded-full bg-amber-300 px-6 py-4 text-sm font-black text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button> : mission.step === HEATHROW_STEPS.COMPLETE ? <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div> : <div className="hidden rounded-full border border-white/30 bg-slate-950/60 px-5 py-3 text-sm font-bold backdrop-blur sm:block">Move with WASD or arrow keys</div>}
+      {picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
+      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+7.5rem)] left-4 z-20 grid grid-cols-3 gap-1.5 sm:hidden"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
+      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+7.5rem)] right-4 z-20 max-w-[52%] sm:bottom-5 sm:right-5 sm:max-w-[58%]">
+        {canInteract ? <button onClick={interact} className="min-h-12 rounded-full bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button> : mission.step === HEATHROW_STEPS.COMPLETE ? <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div> : <div className="hidden rounded-full border border-white/30 bg-slate-950/60 px-5 py-3 text-sm font-bold backdrop-blur sm:block">Move with WASD or arrow keys</div>}
       </div>
     </main>
   );

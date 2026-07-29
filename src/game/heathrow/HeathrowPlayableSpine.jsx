@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Float, RoundedBox, Text } from '@react-three/drei';
+import { Environment, Float, Lightformer, RoundedBox, Text } from '@react-three/drei';
+import { EffectComposer, Select, Selection, SelectiveBloom } from '@react-three/postprocessing';
 import { HelpCircle, RotateCcw, Sparkles } from 'lucide-react';
 import * as THREE from 'three';
 import {
@@ -101,13 +102,16 @@ function Terminal() {
       </mesh>
 
       {ceilingLights.map((x) => (
-        <group key={x} position={[x, 8.28, -0.5]}>
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[3.8, 0.85]} />
-            <meshBasicMaterial color="#fff4d6" toneMapped={false} />
-          </mesh>
-          <pointLight color="#ffe9bd" intensity={8} distance={8} decay={2.2} />
-        </group>
+        <mesh key={x} position={[x, 8.28, -0.5]} rotation={[Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[3.8, 0.85]} />
+          <meshStandardMaterial
+            color="#fff4d6"
+            emissive="#ffe3a1"
+            emissiveIntensity={1.9}
+            roughness={0.38}
+            toneMapped={false}
+          />
+        </mesh>
       ))}
 
       <RoundedBox args={[11, 2.2, 3.2]} radius={0.45} position={[-10.5, 1.05, -8]} castShadow receiveShadow>
@@ -208,8 +212,14 @@ function RainyWindowAtmosphere() {
             <boxGeometry args={[1.2, 0.08, 5]} />
             <meshStandardMaterial color="#ccd7de" roughness={0.38} metalness={0.46} />
           </mesh>
-          <pointLight position={[-2.2, 0, 0]} color="#ff665a" intensity={18} distance={7} decay={2} />
-          <pointLight position={[2.2, 0, 0]} color="#72dcff" intensity={18} distance={7} decay={2} />
+          <mesh position={[-2.2, 0, 0]}>
+            <sphereGeometry args={[0.12, 12, 12]} />
+            <meshBasicMaterial color="#ff665a" toneMapped={false} />
+          </mesh>
+          <mesh position={[2.2, 0, 0]}>
+            <sphereGeometry args={[0.12, 12, 12]} />
+            <meshBasicMaterial color="#72dcff" toneMapped={false} />
+          </mesh>
         </mesh>
       </group>
 

@@ -223,6 +223,21 @@ function HeathrowLighting() {
   const keyLight = useRef();
   const movingLight = useRef();
 
+  useEffect(() => {
+    const light = keyLight.current;
+    if (!light) return;
+    light.shadow.mapSize.set(2048, 2048);
+    light.shadow.camera.left = -24;
+    light.shadow.camera.right = 24;
+    light.shadow.camera.top = 24;
+    light.shadow.camera.bottom = -24;
+    light.shadow.camera.near = 1;
+    light.shadow.camera.far = 50;
+    light.shadow.camera.updateProjectionMatrix();
+    light.shadow.bias = -0.00018;
+    light.shadow.normalBias = 0.025;
+  }, []);
+
   useFrame(({ clock }) => {
     const time = clock.elapsedTime;
     if (keyLight.current) keyLight.current.intensity = 3.05 + Math.sin(time * 0.22) * 0.08;
@@ -242,16 +257,6 @@ function HeathrowLighting() {
         color="#f7e8d3"
         intensity={3.05}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-left={-24}
-        shadow-camera-right={24}
-        shadow-camera-top={24}
-        shadow-camera-bottom={-24}
-        shadow-camera-near={1}
-        shadow-camera-far={50}
-        shadow-bias={-0.00018}
-        shadow-normalBias={0.025}
       />
       <directionalLight position={[9, 9, 4]} color="#86b9e8" intensity={0.62} />
       <rectAreaLight position={[0, 7.8, -8]} rotation={[-Math.PI / 2.2, 0, 0]} width={28} height={8} color="#cce8f6" intensity={1.9} />

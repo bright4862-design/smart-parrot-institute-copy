@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 
-const HeathrowLearningMission = lazy(() => import('@/game/heathrow/HeathrowLearningMission'));
+const HeathrowPlayableSpine = lazy(() => import('@/game/heathrow/HeathrowPlayableSpine'));
 
 function MissionLoading() {
   return (
@@ -8,7 +8,7 @@ function MissionLoading() {
       <div>
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-white/15 bg-white/10 text-3xl shadow-2xl">🦜</div>
         <h1 className="mt-5 text-xl font-black">Preparing Heathrow Terminal 5</h1>
-        <p className="mt-2 text-sm font-semibold text-slate-300">Loading the five-minute language adventure…</p>
+        <p className="mt-2 text-sm font-semibold text-slate-300">Loading the full-screen 3D chapter…</p>
         <div className="mx-auto mt-5 h-1.5 w-48 overflow-hidden rounded-full bg-white/10">
           <div className="h-full w-2/3 animate-pulse rounded-full bg-amber-300" />
         </div>
@@ -20,7 +20,7 @@ function MissionLoading() {
 export default function LondonMission() {
   return (
     <Suspense fallback={<MissionLoading />}>
-      <HeathrowLearningMission />
+      <HeathrowPlayableSpine />
     </Suspense>
   );
 }

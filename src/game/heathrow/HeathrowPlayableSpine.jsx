@@ -7,6 +7,7 @@ import { HelpCircle, RotateCcw, Sparkles } from 'lucide-react';
 import * as THREE from 'three';
 import {
   clearCheckpoint,
+  HEATHROW_SEQUENCE,
   HEATHROW_STEPS,
   INITIAL_MISSION_STATE,
   loadCheckpoint,
@@ -16,6 +17,7 @@ import {
 } from './missionState';
 import TravelerAvatar from './TravelerAvatar';
 import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from './AirportNPCs';
+import AirportSigns, { AIRPORT_SIGNS, findNearbyAirportSign, getAirportSign } from './AirportSigns';
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
@@ -207,30 +209,11 @@ function Terminal() {
       <RoundedBox args={[11, 2.2, 3.2]} radius={0.45} position={[-10.5, 1.05, -8]} castShadow receiveShadow>
         <meshStandardMaterial color="#2d333d" metalness={0.72} roughness={0.28} />
       </RoundedBox>
-      <Text position={[-10.5, 2.7, -6.25]} fontSize={0.62} color="#17233d" anchorX="center">BAGGAGE RECLAIM</Text>
 
       <RoundedBox args={[7.2, 3.2, 2.2]} radius={0.25} position={[12, 1.6, -7]} castShadow receiveShadow>
         <meshStandardMaterial color="#815036" roughness={0.42} />
       </RoundedBox>
       <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
-
-      <Select enabled>
-        <group>
-          <RoundedBox args={[4.2, 1.2, 0.24]} radius={0.14} position={[-3.8, 4.3, -5.7]} castShadow>
-            <meshStandardMaterial color="#17365F" emissive="#0d2d5f" emissiveIntensity={1.15} roughness={0.36} />
-          </RoundedBox>
-          <Text position={[-3.8, 4.3, -5.55]} fontSize={0.34} color="#FFFFFF" anchorX="center">GATE A12 →</Text>
-        </group>
-      </Select>
-
-      <Select enabled>
-        <group>
-          <RoundedBox args={[3.8, 1.2, 0.24]} radius={0.14} position={[9.5, 4.25, -4.8]} castShadow>
-            <meshStandardMaterial color="#17365F" emissive="#0d2d5f" emissiveIntensity={1.15} roughness={0.36} />
-          </RoundedBox>
-          <Text position={[9.5, 4.25, -4.65]} fontSize={0.3} color="#FFFFFF" anchorX="center">RESTROOMS →</Text>
-        </group>
-      </Select>
 
       <mesh position={[0, 0.03, 4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[3.2, 16]} />
@@ -618,7 +601,7 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
 
       cameraLook.set(
         (ref.current.position.x + conversationTarget.x) * 0.5,
-        1.48,
+        conversationTarget.lookY ?? 1.48,
         (ref.current.position.z + conversationTarget.z) * 0.5,
       );
       cameraGoal.copy(cameraLook)
@@ -669,14 +652,39 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   );
 }
 
-function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled, suitcaseProximity, pickupAnimating, picoEntering, quizOpen, npcQuestion, mobileRenderer }) {
+function World({
+  inputRef,
+  mission,
+  resetToken,
+  reportPosition,
+  playerPosition,
+  activeTarget,
+  cutsceneActive,
+  gameplayEnabled,
+  suitcaseProximity,
+  pickupAnimating,
+  picoEntering,
+  quizOpen,
+  npcQuestion,
+  inspectedSignIds,
+  focusedSignId,
+  mobileRenderer,
+}) {
   const engagedQuestionId = npcQuestion
     || (activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null);
-  const conversationTarget = quizOpen
-    ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: -1 }
-    : npcQuestion
-      ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: npcQuestion === 'gate' ? 1 : -1 }
-      : null;
+  const focusedSign = getAirportSign(focusedSignId);
+  const conversationTarget = focusedSign
+    ? {
+        x: focusedSign.position[0],
+        z: focusedSign.position[2],
+        lookY: focusedSign.position[1],
+        cameraSide: focusedSign.cameraSide,
+      }
+    : quizOpen
+      ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: -1 }
+      : npcQuestion
+        ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: npcQuestion === 'gate' ? 1 : -1 }
+        : null;
 
   return (
     <Selection>
@@ -687,6 +695,11 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
         <RainyWindowAtmosphere mobileRenderer={mobileRenderer} />
         <ArrivalCutsceneCamera active={cutsceneActive} />
         <Terminal />
+        <AirportSigns
+          missionActive={mission.step === HEATHROW_STEPS.INSPECT_SIGNS}
+          inspectedIds={inspectedSignIds}
+          focusedId={focusedSignId}
+        />
         <AirportNPCs
           employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE}
           employeeEngaged={activeTarget === 'employee' || quizOpen}
@@ -715,7 +728,7 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
           celebrating={!cutsceneActive && mission.step === HEATHROW_STEPS.COMPLETE}
           entering={picoEntering}
         />
-        {mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && (
+        {mission.step === HEATHROW_STEPS.FOLLOW_YELLOW_ROUTE && (
           <Select enabled>
             <Float speed={1.4} floatIntensity={0.25}>
               <Text position={[0, 6.7, 11]} fontSize={0.58} color="#f7d65c" anchorX="center" outlineWidth={0.018} outlineColor="#17213b">Follow the yellow path</Text>
@@ -789,6 +802,8 @@ export default function HeathrowPlayableSpine() {
   const [quizFeedback, setQuizFeedback] = useState('');
   const [npcQuestion, setNpcQuestion] = useState(null);
   const [npcQuestionFeedback, setNpcQuestionFeedback] = useState('');
+  const [inspectedSignIds, setInspectedSignIds] = useState([]);
+  const [focusedSignId, setFocusedSignId] = useState(null);
   const [cutsceneActive, setCutsceneActive] = useState(() => mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && !mission.suitcaseCollected);
   const [cutsceneBeat, setCutsceneBeat] = useState(0);
   const [holdingSuitcase, setHoldingSuitcase] = useState(false);
@@ -803,6 +818,7 @@ export default function HeathrowPlayableSpine() {
   const canHoldSuitcaseRef = useRef(false);
   const pickupAnimatingRef = useRef(false);
   const interactionTimersRef = useRef([]);
+  const signsCompletedRef = useRef(false);
 
   useEffect(() => {
     setAdaptiveDpr(renderRange.initialDpr);
@@ -825,6 +841,12 @@ export default function HeathrowPlayableSpine() {
   const nearUnderground = distance(playerPosition, UNDERGROUND) < 3.8;
   const nearGateTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.gate) < 2.8;
   const nearRestroomTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.restroom) < 2.8;
+  const nearbySign = mission.step === HEATHROW_STEPS.INSPECT_SIGNS
+    ? findNearbyAirportSign(playerPosition)
+    : null;
+  const canInspectNearbySign = nearbySign
+    && !inspectedSignIds.includes(nearbySign.id)
+    && !focusedSignId;
   const canHoldSuitcase = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
     && nearSuitcase
     && !pickupAnimating
@@ -834,38 +856,67 @@ export default function HeathrowPlayableSpine() {
   canHoldSuitcaseRef.current = canHoldSuitcase;
   const activeTarget = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && nearSuitcase
     ? 'suitcase'
-    : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && nearEmployee
-      ? 'employee'
-      : mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && nearUnderground
-        ? 'underground'
-        : mission.step !== HEATHROW_STEPS.MEET_PICO && nearGateTraveler
-          ? 'gate_question'
-          : mission.step !== HEATHROW_STEPS.MEET_PICO && nearRestroomTraveler
-            ? 'restroom_question'
-            : null;
+    : canInspectNearbySign
+      ? `sign:${nearbySign.id}`
+      : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && nearEmployee
+        ? 'employee'
+        : mission.step === HEATHROW_STEPS.REACH_UNDERGROUND && nearUnderground
+          ? 'underground'
+          : mission.step === HEATHROW_STEPS.HELP_GATE_TRAVELER && nearGateTraveler
+            ? 'gate_question'
+            : mission.step === HEATHROW_STEPS.HELP_RESTROOM_TRAVELER && nearRestroomTraveler
+              ? 'restroom_question'
+              : null;
 
   const interact = useCallback(() => {
     const position = positionRef.current;
     if (mission.step === HEATHROW_STEPS.MEET_PICO) {
       dispatch({ type: 'MEET_PICO' });
-      setPicoLine('Pico: “I know the way. Mostly. Let’s ask the human in the smart jacket.”');
+      setPicoLine('Pico: “Let’s read the airport signs before we choose a route.”');
+    } else if (mission.step === HEATHROW_STEPS.INSPECT_SIGNS) {
+      const sign = findNearbyAirportSign(position);
+      if (!sign || inspectedSignIds.includes(sign.id)) return;
+      inputRef.current = { forward: false, backward: false, left: false, right: false };
+      setPicoLine('');
+      setInspectedSignIds((current) => [...current, sign.id]);
+      setFocusedSignId(sign.id);
     } else if (mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && distance(position, AIRPORT_EMPLOYEE_POSITION) < 3.2) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
       setQuizFeedback('');
       setQuizOpen(true);
-    } else if (mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && distance(position, UNDERGROUND) < 3.8) {
-      dispatch({ type: 'FIND_UNDERGROUND' });
+    } else if (mission.step === HEATHROW_STEPS.REACH_UNDERGROUND && distance(position, UNDERGROUND) < 3.8) {
+      dispatch({ type: 'REACH_UNDERGROUND' });
       setPicoLine('Pico: “You found it. London is waiting.”');
-    } else if (distance(position, QUESTION_NPC_POSITIONS.gate) < 2.8) {
+    } else if (
+      mission.step === HEATHROW_STEPS.HELP_GATE_TRAVELER
+      && distance(position, QUESTION_NPC_POSITIONS.gate) < 2.8
+    ) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
       setNpcQuestionFeedback('');
       setNpcQuestion('gate');
-    } else if (distance(position, QUESTION_NPC_POSITIONS.restroom) < 2.8) {
+    } else if (
+      mission.step === HEATHROW_STEPS.HELP_RESTROOM_TRAVELER
+      && distance(position, QUESTION_NPC_POSITIONS.restroom) < 2.8
+    ) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
       setNpcQuestionFeedback('');
       setNpcQuestion('restroom');
     }
-  }, [mission.step]);
+  }, [inspectedSignIds, mission.step]);
+
+  useEffect(() => {
+    if (
+      mission.step !== HEATHROW_STEPS.INSPECT_SIGNS
+      || inspectedSignIds.length !== AIRPORT_SIGNS.length
+      || signsCompletedRef.current
+    ) {
+      return;
+    }
+
+    signsCompletedRef.current = true;
+    dispatch({ type: 'INSPECT_SIGNS' });
+    setPicoLine('Pico: “Three signs, three clues. Let’s help the traveller at Gate A12.”');
+  }, [inspectedSignIds, mission.step]);
 
   const clearInteractionTimers = useCallback(() => {
     interactionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -974,6 +1025,9 @@ export default function HeathrowPlayableSpine() {
     setQuizFeedback('');
     setNpcQuestion(null);
     setNpcQuestionFeedback('');
+    setInspectedSignIds([]);
+    setFocusedSignId(null);
+    signsCompletedRef.current = false;
     setHoldingSuitcase(false);
     setHoldProgress(0);
     setPickupAnimating(false);
@@ -984,15 +1038,12 @@ export default function HeathrowPlayableSpine() {
     setResetToken((value) => value + 1);
   };
 
-  const progress = {
-    collect_suitcase: 'w-1/5',
-    meet_pico: 'w-2/5',
-    ask_employee: 'w-3/5',
-    find_underground: 'w-4/5',
-    complete: 'w-full',
-  }[mission.step];
+  const missionStepIndex = Math.max(0, HEATHROW_SEQUENCE.indexOf(mission.step));
+  const progressPercent = ((missionStepIndex + 1) / HEATHROW_SEQUENCE.length) * 100;
   const canInteract = activeTarget || mission.step === HEATHROW_STEPS.MEET_PICO;
-  const label = activeTarget === 'gate_question' || activeTarget === 'restroom_question'
+  const label = activeTarget?.startsWith('sign:')
+    ? 'Inspect sign'
+    : activeTarget === 'gate_question' || activeTarget === 'restroom_question'
     ? 'Talk to traveler'
     : mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
       ? 'Collect suitcase'
@@ -1001,6 +1052,7 @@ export default function HeathrowPlayableSpine() {
         : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE
           ? 'Ask airport staff'
           : 'Enter Underground';
+  const focusedSignData = getAirportSign(focusedSignId);
   const npcQuestionData = npcQuestion === 'gate'
     ? {
         eyebrow: 'TRAVELER QUESTION',
@@ -1085,12 +1137,14 @@ export default function HeathrowPlayableSpine() {
               playerPosition={playerPosition}
               activeTarget={activeTarget}
               cutsceneActive={cutsceneActive}
-              gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion && !pickupAnimating && !picoEntering}
+              gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion && !focusedSignId && !pickupAnimating && !picoEntering}
               suitcaseProximity={mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? suitcaseProximity : 0}
               pickupAnimating={pickupAnimating}
               picoEntering={picoEntering}
               quizOpen={quizOpen}
               npcQuestion={npcQuestion}
+              inspectedSignIds={inspectedSignIds}
+              focusedSignId={focusedSignId}
               mobileRenderer={renderProfile.mobile}
             />
           </Canvas>
@@ -1126,7 +1180,17 @@ export default function HeathrowPlayableSpine() {
           <div className="flex items-center gap-1.5 text-[10px] font-black tracking-[.16em] text-amber-300 sm:text-xs"><Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> LONDON · A1</div>
           <h1 className="mt-0.5 text-base font-black sm:mt-1 sm:text-xl">Heathrow Terminal 5</h1>
           <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-200 sm:mt-2 sm:text-sm">{objectiveCopy(mission.step)}</p>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15 sm:mt-3 sm:h-2"><div className={`h-full rounded-full bg-amber-300 transition-all duration-500 ${progress}`} /></div>
+          {mission.step === HEATHROW_STEPS.INSPECT_SIGNS && (
+            <div className="mt-2 text-[10px] font-black tracking-[.12em] text-sky-200 sm:text-xs">
+              AIRPORT SIGNS · {inspectedSignIds.length}/{AIRPORT_SIGNS.length}
+            </div>
+          )}
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15 sm:mt-3 sm:h-2">
+            <div
+              className="h-full rounded-full bg-amber-300 transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
         </div>
         <div className="pointer-events-auto flex gap-2">
           <button aria-label="Show help" onClick={() => setPicoLine('Pico: “Look for the softly glowing object.”')} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><HelpCircle className="h-[18px] w-[18px] sm:h-5 sm:w-5" /></button>
@@ -1134,6 +1198,28 @@ export default function HeathrowPlayableSpine() {
         </div>
       </header>}
       {!cutsceneActive && picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
+
+      {focusedSignData && (
+        <div className="absolute inset-0 z-40 flex items-end justify-end bg-slate-950/18 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6">
+          <div className="w-full max-w-sm rounded-[24px] border border-sky-100/55 bg-slate-950/90 p-5 text-white shadow-2xl backdrop-blur-xl sm:p-6">
+            <div className="text-[10px] font-black tracking-[.18em] text-sky-300 sm:text-xs">
+              AIRPORT SIGNS · {inspectedSignIds.length}/{AIRPORT_SIGNS.length}
+            </div>
+            <h2 className="mt-2 text-2xl font-black tracking-tight">{focusedSignData.shortLabel}</h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-100">{focusedSignData.learningCopy}</p>
+            <p className="mt-3 rounded-2xl bg-sky-400/12 px-4 py-3 text-xs font-bold leading-5 text-sky-100">
+              {focusedSignData.hint}
+            </p>
+            <button
+              type="button"
+              onClick={() => setFocusedSignId(null)}
+              className="mt-5 w-full rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 active:scale-[0.98]"
+            >
+              Continue exploring
+            </button>
+          </div>
+        </div>
+      )}
 
       {quizOpen && (
         <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
@@ -1204,7 +1290,7 @@ export default function HeathrowPlayableSpine() {
         </div>
       )}
 
-      {!cutsceneActive && !npcQuestion && !pickupAnimating && !picoEntering && (
+      {!cutsceneActive && !npcQuestion && !focusedSignId && !pickupAnimating && !picoEntering && (
         <>
           {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_5.25rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>}
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">

@@ -1,17 +1,29 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
-import Dashboard from '@/pages/Dashboard';
-import Learn from '@/pages/Learn';
-import LessonPage from '@/pages/LessonPage';
-import Leaderboard from '@/pages/Leaderboard';
-import Profile from '@/pages/Profile';
-import LondonMission from '@/pages/LondonMission';
-import AdventurePrototype from '@/pages/adventure-prototype';
+
+const Learn = lazy(() => import('@/pages/Learn'));
+const LessonPage = lazy(() => import('@/pages/LessonPage'));
+const Leaderboard = lazy(() => import('@/pages/Leaderboard'));
+const Profile = lazy(() => import('@/pages/Profile'));
+const LondonMission = lazy(() => import('@/pages/LondonMission'));
+const AdventurePrototype = lazy(() => import('@/pages/adventure-prototype'));
+
+function RouteLoading() {
+  return (
+    <div className="fixed inset-0 grid place-items-center bg-slate-950 text-white">
+      <div className="text-center">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-amber-300" />
+        <p className="mt-4 text-sm font-bold text-slate-300">Loading Smart Parrot…</p>
+      </div>
+    </div>
+  );
+}
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings } = useAuth();
@@ -27,19 +39,21 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/" element={<LondonMission />} />
-        <Route path="/learn" element={<Learn />} />
-        <Route path="/leaderboard" element={<Leaderboard />} />
-        <Route path="/profile" element={<Profile />} />
-      </Route>
-      <Route path="/lesson/:id" element={<LessonPage />} />
-      <Route path="/london" element={<LondonMission />} />
-      <Route path="/heathrow-mission" element={<LondonMission />} />
-      <Route path="/adventure-prototype" element={<AdventurePrototype />} />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <Suspense fallback={<RouteLoading />}>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<LondonMission />} />
+          <Route path="/learn" element={<Learn />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
+        <Route path="/lesson/:id" element={<LessonPage />} />
+        <Route path="/london" element={<LondonMission />} />
+        <Route path="/heathrow-mission" element={<LondonMission />} />
+        <Route path="/adventure-prototype" element={<AdventurePrototype />} />
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+    </Suspense>
   );
 };
 

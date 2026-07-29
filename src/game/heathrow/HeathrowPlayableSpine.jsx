@@ -12,6 +12,7 @@ import {
   reduceMission,
   saveCheckpoint,
 } from './missionState';
+import TravelerAvatar from './TravelerAvatar';
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
@@ -321,9 +322,7 @@ function Player({ inputRef, resetToken, reportPosition }) {
 
   return (
     <group ref={ref} position={[SPAWN.x, 0.95, SPAWN.z]}>
-      <mesh castShadow><capsuleGeometry args={[0.48, 1.2, 8, 16]} /><meshStandardMaterial color="#7c5ce7" roughness={0.42} /></mesh>
-      <mesh position={[0, 1.05, 0]} castShadow><sphereGeometry args={[0.43, 24, 24]} /><meshStandardMaterial color="#f0bd99" roughness={0.54} /></mesh>
-      <mesh position={[0, 1.28, 0]} scale={[1.08, 0.55, 1.08]} castShadow><sphereGeometry args={[0.45, 20, 20]} /><meshStandardMaterial color="#493225" roughness={0.7} /></mesh>
+      <TravelerAvatar moving={moving} />
     </group>
   );
 }

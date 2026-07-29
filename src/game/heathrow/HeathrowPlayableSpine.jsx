@@ -25,6 +25,10 @@ const SUITCASE_GLOW_RADIUS = 8;
 const SUITCASE_HOLD_MS = 1050;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+const dampAngle = (current, target, smoothing, delta) => (
+  current + normalizeAngle(target - current) * (1 - Math.exp(-smoothing * delta))
+);
 
 function useInput(inputRef, onInteractPress, onInteractRelease) {
   useEffect(() => {
@@ -125,15 +129,23 @@ function Terminal() {
       </RoundedBox>
       <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
 
-      <RoundedBox args={[4.2, 1.2, 0.24]} radius={0.14} position={[-3.8, 4.3, -5.7]} castShadow>
-        <meshStandardMaterial color="#17365F" roughness={0.42} />
-      </RoundedBox>
-      <Text position={[-3.8, 4.3, -5.55]} fontSize={0.34} color="#FFFFFF" anchorX="center">GATE A12 →</Text>
+      <Select enabled>
+        <group>
+          <RoundedBox args={[4.2, 1.2, 0.24]} radius={0.14} position={[-3.8, 4.3, -5.7]} castShadow>
+            <meshStandardMaterial color="#17365F" emissive="#0d2d5f" emissiveIntensity={1.15} roughness={0.36} />
+          </RoundedBox>
+          <Text position={[-3.8, 4.3, -5.55]} fontSize={0.34} color="#FFFFFF" anchorX="center">GATE A12 →</Text>
+        </group>
+      </Select>
 
-      <RoundedBox args={[3.8, 1.2, 0.24]} radius={0.14} position={[9.5, 4.25, -4.8]} castShadow>
-        <meshStandardMaterial color="#17365F" roughness={0.42} />
-      </RoundedBox>
-      <Text position={[9.5, 4.25, -4.65]} fontSize={0.3} color="#FFFFFF" anchorX="center">RESTROOMS →</Text>
+      <Select enabled>
+        <group>
+          <RoundedBox args={[3.8, 1.2, 0.24]} radius={0.14} position={[9.5, 4.25, -4.8]} castShadow>
+            <meshStandardMaterial color="#17365F" emissive="#0d2d5f" emissiveIntensity={1.15} roughness={0.36} />
+          </RoundedBox>
+          <Text position={[9.5, 4.25, -4.65]} fontSize={0.3} color="#FFFFFF" anchorX="center">RESTROOMS →</Text>
+        </group>
+      </Select>
 
       <mesh position={[0, 0.03, 4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[3.2, 16]} />
@@ -260,7 +272,7 @@ function HeathrowLighting() {
   useEffect(() => {
     const light = keyLight.current;
     if (!light) return;
-    light.shadow.mapSize.set(2048, 2048);
+    light.shadow.mapSize.set(1024, 1024);
     light.shadow.camera.left = -24;
     light.shadow.camera.right = 24;
     light.shadow.camera.top = 24;
@@ -320,16 +332,18 @@ function HeathrowLighting() {
 
 function CinematicBloom() {
   const bloomLight = useRef();
+  const { size } = useThree();
+  const mobile = size.width < 768;
 
   return (
     <>
-      <directionalLight ref={bloomLight} position={[8, 10, 6]} color="#b9d9ff" intensity={0.44} />
-      <EffectComposer multisampling={0} resolutionScale={0.72}>
+      <directionalLight ref={bloomLight} position={[8, 10, 6]} color="#b9d9ff" intensity={0.34} />
+      <EffectComposer multisampling={0} resolutionScale={mobile ? 0.5 : 0.72}>
         <SelectiveBloom
           lights={[bloomLight]}
-          intensity={1.18}
-          luminanceThreshold={0.34}
-          luminanceSmoothing={0.48}
+          intensity={mobile ? 0.62 : 0.9}
+          luminanceThreshold={mobile ? 0.62 : 0.5}
+          luminanceSmoothing={0.42}
           mipmapBlur
           ignoreBackground
         />
@@ -393,11 +407,14 @@ function Suitcase({ visible, active, proximity = 0, collecting = false }) {
 function Underground({ active }) {
   return (
     <group position={[0, 3.4, 11.4]}>
-      <mesh castShadow><torusGeometry args={[1.45, 0.34, 20, 48]} /><meshStandardMaterial color={active ? '#ff4c55' : '#db2c37'} emissive={active ? '#7a0910' : '#230000'} emissiveIntensity={active ? 1.8 : 0.5} /></mesh>
-      <mesh position={[0, 0, 0.2]} castShadow><boxGeometry args={[4.2, 0.62, 0.35]} /><meshStandardMaterial color="#163f8f" emissive="#09245a" emissiveIntensity={active ? 1.1 : 0.35} /></mesh>
-      <Text position={[0, 0, 0.41]} fontSize={0.42} color="white" anchorX="center">UNDERGROUND</Text>
+      <Select enabled>
+        <group>
+          <mesh castShadow><torusGeometry args={[1.45, 0.34, 20, 48]} /><meshStandardMaterial color={active ? '#ff4c55' : '#db2c37'} emissive={active ? '#a4141d' : '#4f050a'} emissiveIntensity={active ? 2.1 : 0.85} /></mesh>
+          <mesh position={[0, 0, 0.2]} castShadow><boxGeometry args={[4.2, 0.62, 0.35]} /><meshStandardMaterial color="#163f8f" emissive="#123b91" emissiveIntensity={active ? 1.55 : 0.75} /></mesh>
+          <Text position={[0, 0, 0.41]} fontSize={0.42} color="white" anchorX="center">UNDERGROUND</Text>
+        </group>
+      </Select>
       <mesh position={[0, -2.45, 0]} castShadow><boxGeometry args={[0.35, 3.7, 0.35]} /><meshStandardMaterial color="#39414c" metalness={0.65} /></mesh>
-      {active && <pointLight position={[0, 0, 1.8]} color="#ff6c65" intensity={12} distance={7} decay={2} />}
     </group>
   );
 }
@@ -439,13 +456,14 @@ function Pico({ target, visible, celebrating, entering = false }) {
 
   if (!visible) return null;
   return (
-    <group ref={ref} scale={0.48}>
-      <mesh castShadow scale={[0.72, 0.9, 0.72]}><sphereGeometry args={[0.7, 24, 24]} /><meshStandardMaterial color="#28b67a" roughness={0.5} /></mesh>
-      <mesh position={[0.58, 0.08, 0]} rotation={[0, 0, -0.2]} castShadow><coneGeometry args={[0.34, 0.75, 18]} /><meshStandardMaterial color="#f3bd37" /></mesh>
-      <mesh position={[0.22, 0.28, 0.55]}><sphereGeometry args={[0.12, 16, 16]} /><meshStandardMaterial color="#121722" roughness={0.15} /></mesh>
-      <mesh position={[-0.45, -0.1, 0]} rotation={[0, 0, 0.55]} castShadow><capsuleGeometry args={[0.22, 0.8, 6, 12]} /><meshStandardMaterial color="#148f68" /></mesh>
-      <pointLight position={[0, 0.7, 0.6]} color="#8fffd0" intensity={entering ? 5.5 : 2.5} distance={entering ? 5 : 3.5} decay={2} />
-    </group>
+    <Select enabled={entering || celebrating}>
+      <group ref={ref} scale={0.48}>
+        <mesh castShadow scale={[0.72, 0.9, 0.72]}><sphereGeometry args={[0.7, 24, 24]} /><meshStandardMaterial color="#28b67a" emissive="#0a5d42" emissiveIntensity={entering ? 1.35 : celebrating ? 0.9 : 0.22} roughness={0.5} /></mesh>
+        <mesh position={[0.58, 0.08, 0]} rotation={[0, 0, -0.2]} castShadow><coneGeometry args={[0.34, 0.75, 18]} /><meshStandardMaterial color="#f3bd37" emissive="#8b6200" emissiveIntensity={entering ? 0.8 : 0.18} /></mesh>
+        <mesh position={[0.22, 0.28, 0.55]}><sphereGeometry args={[0.12, 16, 16]} /><meshStandardMaterial color="#121722" roughness={0.15} /></mesh>
+        <mesh position={[-0.45, -0.1, 0]} rotation={[0, 0, 0.55]} castShadow><capsuleGeometry args={[0.22, 0.8, 6, 12]} /><meshStandardMaterial color="#148f68" emissive="#083d2f" emissiveIntensity={entering ? 0.75 : 0.16} /></mesh>
+      </group>
+    </Select>
   );
 }
 
@@ -485,9 +503,14 @@ function ArrivalCutsceneCamera({ active }) {
   return null;
 }
 
-function Player({ inputRef, resetToken, reportPosition, controlsEnabled }) {
+function Player({ inputRef, resetToken, reportPosition, controlsEnabled, conversationTarget = null }) {
   const ref = useRef();
   const velocity = useRef(new THREE.Vector3());
+  const cameraGoal = useMemo(() => new THREE.Vector3(), []);
+  const cameraLook = useMemo(() => new THREE.Vector3(), []);
+  const cameraAim = useMemo(() => new THREE.Object3D(), []);
+  const toSpeaker = useMemo(() => new THREE.Vector3(), []);
+  const cameraSide = useMemo(() => new THREE.Vector3(), []);
   const [moving, setMoving] = useState(false);
   const { camera, size } = useThree();
 
@@ -505,55 +528,119 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled }) {
     ref.current.position.addScaledVector(velocity.current, delta);
     ref.current.position.x = clamp(ref.current.position.x, -20, 20);
     ref.current.position.z = clamp(ref.current.position.z, -13, 12);
+
     const isMoving = velocity.current.lengthSq() > 0.35;
-    if (isMoving) ref.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.z);
+    if (conversationTarget) {
+      const speakerYaw = Math.atan2(
+        conversationTarget.x - ref.current.position.x,
+        conversationTarget.z - ref.current.position.z,
+      );
+      ref.current.rotation.y = dampAngle(ref.current.rotation.y, speakerYaw, 7.2, delta);
+    } else if (isMoving) {
+      ref.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.z);
+    }
+
     setMoving((current) => (current === isMoving ? current : isMoving));
     reportPosition(ref.current.position.x, ref.current.position.z);
-    if (controlsEnabled) {
-      const mobile = size.width < 640;
+
+    const mobile = size.width < 640;
+    if (conversationTarget) {
+      toSpeaker.set(
+        conversationTarget.x - ref.current.position.x,
+        0,
+        conversationTarget.z - ref.current.position.z,
+      );
+      const speakerDistance = Math.max(toSpeaker.length(), 0.001);
+      toSpeaker.multiplyScalar(1 / speakerDistance);
+      cameraSide.set(-toSpeaker.z, 0, toSpeaker.x).multiplyScalar(conversationTarget.cameraSide ?? 1);
+
+      cameraLook.set(
+        (ref.current.position.x + conversationTarget.x) * 0.5,
+        1.48,
+        (ref.current.position.z + conversationTarget.z) * 0.5,
+      );
+      cameraGoal.copy(cameraLook)
+        .addScaledVector(cameraSide, mobile ? 5.5 : 4.8)
+        .addScaledVector(toSpeaker, mobile ? -0.75 : -0.55);
+      cameraGoal.y = mobile ? 4.65 : 4.05;
+
+      camera.position.lerp(cameraGoal, 1 - Math.pow(0.0008, delta));
+      cameraAim.position.copy(camera.position);
+      cameraAim.lookAt(cameraLook);
+      camera.quaternion.slerp(cameraAim.quaternion, 1 - Math.pow(0.0005, delta));
+    } else if (controlsEnabled) {
       const cameraHeight = mobile ? 7.15 : 6.4;
       const cameraDistance = mobile ? 11.8 : 9.8;
-      camera.position.lerp(new THREE.Vector3(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance), 1 - Math.pow(0.002, delta));
-      camera.lookAt(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
+      cameraGoal.set(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance);
+      cameraLook.set(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
+      camera.position.lerp(cameraGoal, 1 - Math.pow(0.002, delta));
+      cameraAim.position.copy(camera.position);
+      cameraAim.lookAt(cameraLook);
+      camera.quaternion.slerp(cameraAim.quaternion, 1 - Math.pow(0.0012, delta));
     }
   });
 
   return (
     <group ref={ref} position={[SPAWN.x, 0.95, SPAWN.z]}>
-      <TravelerAvatar moving={moving} />
+      <TravelerAvatar moving={moving && !conversationTarget} />
     </group>
   );
 }
 
-function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled, suitcaseProximity, pickupAnimating, picoEntering }) {
+function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled, suitcaseProximity, pickupAnimating, picoEntering, quizOpen, npcQuestion }) {
+  const engagedQuestionId = npcQuestion
+    || (activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null);
+  const conversationTarget = quizOpen
+    ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: -1 }
+    : npcQuestion
+      ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: npcQuestion === 'gate' ? 1 : -1 }
+      : null;
+
   return (
-    <>
-      <color attach="background" args={['#718fa3']} />
-      <fog attach="fog" args={['#aebfc9', 22, 56]} />
-      <HeathrowLighting />
-      <RainyWindowAtmosphere />
-      <ArrivalCutsceneCamera active={cutsceneActive} />
-      <Terminal />
-      <AirportNPCs
-        employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE}
-        questionActiveId={activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null}
-      />
-      <Suitcase
-        visible={!mission.suitcaseCollected}
-        active={activeTarget === 'suitcase'}
-        proximity={suitcaseProximity}
-        collecting={pickupAnimating}
-      />
-      <Underground active={activeTarget === 'underground'} />
-      <Player inputRef={inputRef} resetToken={resetToken} reportPosition={reportPosition} controlsEnabled={gameplayEnabled} />
-      <Pico
-        target={cutsceneActive ? SUITCASE : playerPosition}
-        visible={cutsceneActive || mission.suitcaseCollected}
-        celebrating={!cutsceneActive && mission.step === HEATHROW_STEPS.COMPLETE}
-        entering={picoEntering}
-      />
-      {mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && <Float speed={1.4} floatIntensity={0.25}><Text position={[0, 6.7, 11]} fontSize={0.58} color="#13213b" anchorX="center">Follow the yellow path</Text></Float>}
-    </>
+    <Selection>
+      <>
+        <color attach="background" args={['#718fa3']} />
+        <fog attach="fog" args={['#aebfc9', 22, 56]} />
+        <HeathrowLighting />
+        <RainyWindowAtmosphere />
+        <ArrivalCutsceneCamera active={cutsceneActive} />
+        <Terminal />
+        <AirportNPCs
+          employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE}
+          employeeEngaged={activeTarget === 'employee' || quizOpen}
+          questionActiveId={engagedQuestionId}
+          playerPosition={playerPosition}
+        />
+        <Suitcase
+          visible={!mission.suitcaseCollected}
+          active={activeTarget === 'suitcase'}
+          proximity={suitcaseProximity}
+          collecting={pickupAnimating}
+        />
+        <Underground active={activeTarget === 'underground'} />
+        <Player
+          inputRef={inputRef}
+          resetToken={resetToken}
+          reportPosition={reportPosition}
+          controlsEnabled={gameplayEnabled}
+          conversationTarget={conversationTarget}
+        />
+        <Pico
+          target={cutsceneActive ? SUITCASE : playerPosition}
+          visible={cutsceneActive || mission.suitcaseCollected}
+          celebrating={!cutsceneActive && mission.step === HEATHROW_STEPS.COMPLETE}
+          entering={picoEntering}
+        />
+        {mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && (
+          <Select enabled>
+            <Float speed={1.4} floatIntensity={0.25}>
+              <Text position={[0, 6.7, 11]} fontSize={0.58} color="#f7d65c" anchorX="center" outlineWidth={0.018} outlineColor="#17213b">Follow the yellow path</Text>
+            </Float>
+          </Select>
+        )}
+        <CinematicBloom />
+      </>
+    </Selection>
   );
 }
 
@@ -613,9 +700,9 @@ export default function HeathrowPlayableSpine() {
       ? 'employee'
       : mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && nearUnderground
         ? 'underground'
-        : nearGateTraveler
+        : mission.step !== HEATHROW_STEPS.MEET_PICO && nearGateTraveler
           ? 'gate_question'
-          : nearRestroomTraveler
+          : mission.step !== HEATHROW_STEPS.MEET_PICO && nearRestroomTraveler
             ? 'restroom_question'
             : null;
 
@@ -825,6 +912,8 @@ export default function HeathrowPlayableSpine() {
           suitcaseProximity={mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? suitcaseProximity : 0}
           pickupAnimating={pickupAnimating}
           picoEntering={picoEntering}
+          quizOpen={quizOpen}
+          npcQuestion={npcQuestion}
         />
       </Canvas>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/28 via-transparent to-slate-950/42" />
@@ -867,8 +956,8 @@ export default function HeathrowPlayableSpine() {
       {!cutsceneActive && picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
 
       {quizOpen && (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/25 bg-white p-5 text-slate-900 shadow-2xl sm:p-7">
+        <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/45 bg-white/96 p-5 text-slate-900 shadow-2xl backdrop-blur-xl sm:p-7">
             <div className="text-xs font-black tracking-[.18em] text-violet-600">FIRST ENGLISH MOMENT</div>
             <h2 className="mt-2 text-2xl font-black tracking-tight">What should you say?</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">Choose the polite sentence to ask the airport employee for directions.</p>
@@ -904,8 +993,8 @@ export default function HeathrowPlayableSpine() {
       )}
 
       {npcQuestionData && (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/25 bg-white p-5 text-slate-900 shadow-2xl sm:p-7">
+        <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/45 bg-white/96 p-5 text-slate-900 shadow-2xl backdrop-blur-xl sm:p-7">
             <div className="text-xs font-black tracking-[.18em] text-sky-700">{npcQuestionData.eyebrow}</div>
             <h2 className="mt-2 text-2xl font-black tracking-tight">{npcQuestionData.title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">Choose the clearest helpful answer.</p>

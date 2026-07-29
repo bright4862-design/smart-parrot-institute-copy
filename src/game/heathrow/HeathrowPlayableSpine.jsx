@@ -25,6 +25,10 @@ const SUITCASE_GLOW_RADIUS = 8;
 const SUITCASE_HOLD_MS = 1050;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+const dampAngle = (current, target, smoothing, delta) => (
+  current + normalizeAngle(target - current) * (1 - Math.exp(-smoothing * delta))
+);
 
 function useInput(inputRef, onInteractPress, onInteractRelease) {
   useEffect(() => {
@@ -499,9 +503,13 @@ function ArrivalCutsceneCamera({ active }) {
   return null;
 }
 
-function Player({ inputRef, resetToken, reportPosition, controlsEnabled }) {
+function Player({ inputRef, resetToken, reportPosition, controlsEnabled, conversationTarget = null }) {
   const ref = useRef();
   const velocity = useRef(new THREE.Vector3());
+  const cameraGoal = useMemo(() => new THREE.Vector3(), []);
+  const cameraLook = useMemo(() => new THREE.Vector3(), []);
+  const toSpeaker = useMemo(() => new THREE.Vector3(), []);
+  const cameraSide = useMemo(() => new THREE.Vector3(), []);
   const [moving, setMoving] = useState(false);
   const { camera, size } = useThree();
 
@@ -519,22 +527,56 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled }) {
     ref.current.position.addScaledVector(velocity.current, delta);
     ref.current.position.x = clamp(ref.current.position.x, -20, 20);
     ref.current.position.z = clamp(ref.current.position.z, -13, 12);
+
     const isMoving = velocity.current.lengthSq() > 0.35;
-    if (isMoving) ref.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.z);
+    if (conversationTarget) {
+      const speakerYaw = Math.atan2(
+        conversationTarget.x - ref.current.position.x,
+        conversationTarget.z - ref.current.position.z,
+      );
+      ref.current.rotation.y = dampAngle(ref.current.rotation.y, speakerYaw, 7.2, delta);
+    } else if (isMoving) {
+      ref.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.z);
+    }
+
     setMoving((current) => (current === isMoving ? current : isMoving));
     reportPosition(ref.current.position.x, ref.current.position.z);
-    if (controlsEnabled) {
-      const mobile = size.width < 640;
+
+    const mobile = size.width < 640;
+    if (conversationTarget) {
+      toSpeaker.set(
+        conversationTarget.x - ref.current.position.x,
+        0,
+        conversationTarget.z - ref.current.position.z,
+      );
+      const speakerDistance = Math.max(toSpeaker.length(), 0.001);
+      toSpeaker.multiplyScalar(1 / speakerDistance);
+      cameraSide.set(-toSpeaker.z, 0, toSpeaker.x).multiplyScalar(conversationTarget.cameraSide ?? 1);
+
+      cameraLook.set(
+        (ref.current.position.x + conversationTarget.x) * 0.5,
+        1.48,
+        (ref.current.position.z + conversationTarget.z) * 0.5,
+      );
+      cameraGoal.copy(cameraLook)
+        .addScaledVector(cameraSide, mobile ? 5.5 : 4.8)
+        .addScaledVector(toSpeaker, mobile ? -0.75 : -0.55);
+      cameraGoal.y = mobile ? 4.65 : 4.05;
+
+      camera.position.lerp(cameraGoal, 1 - Math.pow(0.0008, delta));
+      camera.lookAt(cameraLook);
+    } else if (controlsEnabled) {
       const cameraHeight = mobile ? 7.15 : 6.4;
       const cameraDistance = mobile ? 11.8 : 9.8;
-      camera.position.lerp(new THREE.Vector3(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance), 1 - Math.pow(0.002, delta));
+      cameraGoal.set(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance);
+      camera.position.lerp(cameraGoal, 1 - Math.pow(0.002, delta));
       camera.lookAt(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
     }
   });
 
   return (
     <group ref={ref} position={[SPAWN.x, 0.95, SPAWN.z]}>
-      <TravelerAvatar moving={moving} />
+      <TravelerAvatar moving={moving && !conversationTarget} />
     </group>
   );
 }
@@ -542,6 +584,11 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled }) {
 function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled, suitcaseProximity, pickupAnimating, picoEntering, quizOpen, npcQuestion }) {
   const engagedQuestionId = npcQuestion
     || (activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null);
+  const conversationTarget = quizOpen
+    ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: -1 }
+    : npcQuestion
+      ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: npcQuestion === 'gate' ? 1 : -1 }
+      : null;
 
   return (
     <Selection>
@@ -565,7 +612,13 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
           collecting={pickupAnimating}
         />
         <Underground active={activeTarget === 'underground'} />
-        <Player inputRef={inputRef} resetToken={resetToken} reportPosition={reportPosition} controlsEnabled={gameplayEnabled} />
+        <Player
+          inputRef={inputRef}
+          resetToken={resetToken}
+          reportPosition={reportPosition}
+          controlsEnabled={gameplayEnabled}
+          conversationTarget={conversationTarget}
+        />
         <Pico
           target={cutsceneActive ? SUITCASE : playerPosition}
           visible={cutsceneActive || mission.suitcaseCollected}
@@ -897,8 +950,8 @@ export default function HeathrowPlayableSpine() {
       {!cutsceneActive && picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
 
       {quizOpen && (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/25 bg-white p-5 text-slate-900 shadow-2xl sm:p-7">
+        <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/45 bg-white/96 p-5 text-slate-900 shadow-2xl backdrop-blur-xl sm:p-7">
             <div className="text-xs font-black tracking-[.18em] text-violet-600">FIRST ENGLISH MOMENT</div>
             <h2 className="mt-2 text-2xl font-black tracking-tight">What should you say?</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">Choose the polite sentence to ask the airport employee for directions.</p>
@@ -934,8 +987,8 @@ export default function HeathrowPlayableSpine() {
       )}
 
       {npcQuestionData && (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/25 bg-white p-5 text-slate-900 shadow-2xl sm:p-7">
+        <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/45 bg-white/96 p-5 text-slate-900 shadow-2xl backdrop-blur-xl sm:p-7">
             <div className="text-xs font-black tracking-[.18em] text-sky-700">{npcQuestionData.eyebrow}</div>
             <h2 className="mt-2 text-2xl font-black tracking-tight">{npcQuestionData.title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">Choose the clearest helpful answer.</p>

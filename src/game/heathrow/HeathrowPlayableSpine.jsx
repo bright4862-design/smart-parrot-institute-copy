@@ -762,7 +762,19 @@ export default function HeathrowPlayableSpine() {
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
-        <World inputRef={inputRef} mission={mission} resetToken={resetToken} reportPosition={reportPosition} playerPosition={playerPosition} activeTarget={activeTarget} cutsceneActive={cutsceneActive} gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion} />
+        <World
+          inputRef={inputRef}
+          mission={mission}
+          resetToken={resetToken}
+          reportPosition={reportPosition}
+          playerPosition={playerPosition}
+          activeTarget={activeTarget}
+          cutsceneActive={cutsceneActive}
+          gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion && !pickupAnimating && !picoEntering}
+          suitcaseProximity={mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? suitcaseProximity : 0}
+          pickupAnimating={pickupAnimating}
+          picoEntering={picoEntering}
+        />
       </Canvas>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/28 via-transparent to-slate-950/42" />
       <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_rgba(15,23,42,.3)]" />

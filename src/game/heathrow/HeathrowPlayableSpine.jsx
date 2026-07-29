@@ -1,3 +1,4 @@
+import '@/game/r3fSafeDataProps';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Float, Lightformer, RoundedBox, Text } from '@react-three/drei';

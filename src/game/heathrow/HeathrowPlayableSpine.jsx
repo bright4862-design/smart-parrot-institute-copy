@@ -13,7 +13,7 @@ import {
   saveCheckpoint,
 } from './missionState';
 import TravelerAvatar from './TravelerAvatar';
-import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION } from './AirportNPCs';
+import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from './AirportNPCs';
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
@@ -105,6 +105,16 @@ function Terminal() {
         <meshStandardMaterial color="#815036" roughness={0.42} />
       </RoundedBox>
       <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
+
+      <RoundedBox args={[4.2, 1.2, 0.24]} radius={0.14} position={[-3.8, 4.3, -5.7]} castShadow>
+        <meshStandardMaterial color="#17365F" roughness={0.42} />
+      </RoundedBox>
+      <Text position={[-3.8, 4.3, -5.55]} fontSize={0.34} color="#FFFFFF" anchorX="center">GATE A12 →</Text>
+
+      <RoundedBox args={[3.8, 1.2, 0.24]} radius={0.14} position={[9.5, 4.25, -4.8]} castShadow>
+        <meshStandardMaterial color="#17365F" roughness={0.42} />
+      </RoundedBox>
+      <Text position={[9.5, 4.25, -4.65]} fontSize={0.3} color="#FFFFFF" anchorX="center">RESTROOMS →</Text>
 
       <mesh position={[0, 0.03, 4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[3.2, 16]} />
@@ -400,7 +410,10 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
       <RainyWindowAtmosphere />
       <ArrivalCutsceneCamera active={cutsceneActive} />
       <Terminal />
-      <AirportNPCs employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE} />
+      <AirportNPCs
+        employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE}
+        questionActiveId={activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null}
+      />
       <Suitcase visible={!mission.suitcaseCollected} active={activeTarget === 'suitcase'} />
       <Underground active={activeTarget === 'underground'} />
       <Player inputRef={inputRef} resetToken={resetToken} reportPosition={reportPosition} controlsEnabled={gameplayEnabled} />
@@ -424,6 +437,8 @@ export default function HeathrowPlayableSpine() {
   const [picoLine, setPicoLine] = useState('');
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizFeedback, setQuizFeedback] = useState('');
+  const [npcQuestion, setNpcQuestion] = useState(null);
+  const [npcQuestionFeedback, setNpcQuestionFeedback] = useState('');
   const [cutsceneActive, setCutsceneActive] = useState(() => mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && !mission.suitcaseCollected);
   const [cutsceneBeat, setCutsceneBeat] = useState(0);
 
@@ -436,13 +451,19 @@ export default function HeathrowPlayableSpine() {
   const nearSuitcase = distance(playerPosition, SUITCASE) < 2.8;
   const nearEmployee = distance(playerPosition, AIRPORT_EMPLOYEE_POSITION) < 3.2;
   const nearUnderground = distance(playerPosition, UNDERGROUND) < 3.8;
+  const nearGateTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.gate) < 2.8;
+  const nearRestroomTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.restroom) < 2.8;
   const activeTarget = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && nearSuitcase
     ? 'suitcase'
     : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && nearEmployee
       ? 'employee'
       : mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && nearUnderground
         ? 'underground'
-        : null;
+        : nearGateTraveler
+          ? 'gate_question'
+          : nearRestroomTraveler
+            ? 'restroom_question'
+            : null;
 
   const interact = useCallback(() => {
     const position = positionRef.current;
@@ -459,6 +480,14 @@ export default function HeathrowPlayableSpine() {
     } else if (mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && distance(position, UNDERGROUND) < 3.8) {
       dispatch({ type: 'FIND_UNDERGROUND' });
       setPicoLine('Pico: “You found it. London is waiting.”');
+    } else if (distance(position, QUESTION_NPC_POSITIONS.gate) < 2.8) {
+      inputRef.current = { forward: false, backward: false, left: false, right: false };
+      setNpcQuestionFeedback('');
+      setNpcQuestion('gate');
+    } else if (distance(position, QUESTION_NPC_POSITIONS.restroom) < 2.8) {
+      inputRef.current = { forward: false, backward: false, left: false, right: false };
+      setNpcQuestionFeedback('');
+      setNpcQuestion('restroom');
     }
   }, [mission.step]);
 
@@ -485,6 +514,8 @@ export default function HeathrowPlayableSpine() {
     setPicoLine('');
     setQuizOpen(false);
     setQuizFeedback('');
+    setNpcQuestion(null);
+    setNpcQuestionFeedback('');
     setCutsceneActive(true);
     setCutsceneBeat(0);
     dispatch({ type: 'RESET' });
@@ -505,7 +536,26 @@ export default function HeathrowPlayableSpine() {
       ? 'Say hello to Pico'
       : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE
         ? 'Ask airport staff'
-        : 'Enter Underground';
+        : activeTarget === 'gate_question' || activeTarget === 'restroom_question'
+          ? 'Talk to traveler'
+          : 'Enter Underground';
+  const npcQuestionData = npcQuestion === 'gate'
+    ? {
+        eyebrow: 'TRAVELER QUESTION',
+        title: '“Excuse me, which gate are we in?”',
+        answers: ['We are at Gate A12.', 'We are in the restroom.', 'The gate is coffee.'],
+        correctIndex: 0,
+        success: 'Exactly — we are at Gate A12.',
+      }
+    : npcQuestion === 'restroom'
+      ? {
+          eyebrow: 'TRAVELER QUESTION',
+          title: '“Excuse me, where is the restroom?”',
+          answers: ['It is next to the coffee shop.', 'It is Gate A12.', 'I am a suitcase.'],
+          correctIndex: 0,
+          success: 'Perfect — it is next to the coffee shop.',
+        }
+      : null;
   const cutsceneCopy = [
     { eyebrow: 'SMART PARROT ADVENTURE', title: 'London Heathrow', body: 'A new city. A new language. One very important suitcase.' },
     { eyebrow: 'TERMINAL 5', title: 'Arrivals', body: 'Follow the signs through the busy terminal.' },
@@ -526,7 +576,7 @@ export default function HeathrowPlayableSpine() {
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
-        <World inputRef={inputRef} mission={mission} resetToken={resetToken} reportPosition={reportPosition} playerPosition={playerPosition} activeTarget={activeTarget} cutsceneActive={cutsceneActive} gameplayEnabled={!cutsceneActive && !quizOpen} />
+        <World inputRef={inputRef} mission={mission} resetToken={resetToken} reportPosition={reportPosition} playerPosition={playerPosition} activeTarget={activeTarget} cutsceneActive={cutsceneActive} gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion} />
       </Canvas>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/28 via-transparent to-slate-950/42" />
       <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_rgba(15,23,42,.3)]" />
@@ -604,7 +654,39 @@ export default function HeathrowPlayableSpine() {
         </div>
       )}
 
-      {!cutsceneActive && (
+      {npcQuestionData && (
+        <div className="absolute inset-0 z-40 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/25 bg-white p-5 text-slate-900 shadow-2xl sm:p-7">
+            <div className="text-xs font-black tracking-[.18em] text-sky-700">{npcQuestionData.eyebrow}</div>
+            <h2 className="mt-2 text-2xl font-black tracking-tight">{npcQuestionData.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Choose the clearest helpful answer.</p>
+            <div className="mt-5 grid gap-3">
+              {npcQuestionData.answers.map((answer, index) => (
+                <button
+                  key={answer}
+                  type="button"
+                  onClick={() => {
+                    if (index === npcQuestionData.correctIndex) {
+                      setNpcQuestionFeedback(npcQuestionData.success);
+                      setPicoLine('Pico: “Helpful, polite, and no one boarded the wrong plane. Excellent.”');
+                      window.setTimeout(() => setNpcQuestion(null), 900);
+                    } else {
+                      setNpcQuestionFeedback('Not quite — look at the airport signs and choose the complete sentence.');
+                    }
+                  }}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold transition hover:border-sky-300 hover:bg-sky-50 active:scale-[0.99]"
+                >
+                  {answer}
+                </button>
+              ))}
+            </div>
+            {npcQuestionFeedback && <p className="mt-4 rounded-2xl bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">{npcQuestionFeedback}</p>}
+            <button type="button" onClick={() => setNpcQuestion(null)} className="mt-4 text-sm font-bold text-slate-500">Close</button>
+          </div>
+        </div>
+      )}
+
+      {!cutsceneActive && !npcQuestion && (
         <>
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] left-4 z-20 grid grid-cols-3 gap-1.5 sm:hidden"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[52%] sm:bottom-5 sm:right-5 sm:max-w-[58%]">

@@ -688,6 +688,8 @@ export default function HeathrowPlayableSpine() {
 
   const restart = () => {
     clearCheckpoint();
+    clearInteractionTimers();
+    pickupAnimatingRef.current = false;
     inputRef.current = { forward: false, backward: false, left: false, right: false };
     positionRef.current = { ...SPAWN };
     setPlayerPosition({ ...SPAWN });
@@ -696,6 +698,10 @@ export default function HeathrowPlayableSpine() {
     setQuizFeedback('');
     setNpcQuestion(null);
     setNpcQuestionFeedback('');
+    setHoldingSuitcase(false);
+    setHoldProgress(0);
+    setPickupAnimating(false);
+    setPicoEntering(false);
     setCutsceneActive(true);
     setCutsceneBeat(0);
     dispatch({ type: 'RESET' });

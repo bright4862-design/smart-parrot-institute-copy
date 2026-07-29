@@ -1,16 +1,18 @@
 export const HEATHROW_STEPS = Object.freeze({
   COLLECT_SUITCASE: 'collect_suitcase',
   MEET_PICO: 'meet_pico',
+  ASK_EMPLOYEE: 'ask_employee',
   FIND_UNDERGROUND: 'find_underground',
   COMPLETE: 'complete',
 });
 
-export const HEATHROW_CHECKPOINT_KEY = 'smart-parrot:heathrow-checkpoint:v1';
+export const HEATHROW_CHECKPOINT_KEY = 'smart-parrot:heathrow-checkpoint:v2';
 
 export const INITIAL_MISSION_STATE = Object.freeze({
   step: HEATHROW_STEPS.COLLECT_SUITCASE,
   suitcaseCollected: false,
   picoMet: false,
+  phraseAnswered: false,
   undergroundFound: false,
 });
 
@@ -27,8 +29,15 @@ export function reduceMission(state, event) {
       if (state.step !== HEATHROW_STEPS.MEET_PICO) return state;
       return {
         ...state,
-        step: HEATHROW_STEPS.FIND_UNDERGROUND,
+        step: HEATHROW_STEPS.ASK_EMPLOYEE,
         picoMet: true,
+      };
+    case 'ANSWER_PHRASE':
+      if (state.step !== HEATHROW_STEPS.ASK_EMPLOYEE) return state;
+      return {
+        ...state,
+        step: HEATHROW_STEPS.FIND_UNDERGROUND,
+        phraseAnswered: true,
       };
     case 'FIND_UNDERGROUND':
       if (state.step !== HEATHROW_STEPS.FIND_UNDERGROUND) return state;
@@ -50,8 +59,10 @@ export function objectiveCopy(step) {
       return 'Find your purple suitcase at the luggage carousel.';
     case HEATHROW_STEPS.MEET_PICO:
       return 'Say hello to the little parrot on your suitcase.';
+    case HEATHROW_STEPS.ASK_EMPLOYEE:
+      return 'Find an airport employee and ask for directions.';
     case HEATHROW_STEPS.FIND_UNDERGROUND:
-      return 'Follow the signs and find the Underground.';
+      return 'Follow Pico and the yellow route to the Underground.';
     case HEATHROW_STEPS.COMPLETE:
       return 'Route unlocked — continue toward the Underground.';
     default:

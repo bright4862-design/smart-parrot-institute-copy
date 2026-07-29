@@ -563,7 +563,7 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   const velocity = useRef(new THREE.Vector3());
   const cameraGoal = useMemo(() => new THREE.Vector3(), []);
   const cameraLook = useMemo(() => new THREE.Vector3(), []);
-  const cameraAim = useMemo(() => new THREE.Object3D(), []);
+  const cameraAim = useMemo(() => new THREE.PerspectiveCamera(), []);
   const toSpeaker = useMemo(() => new THREE.Vector3(), []);
   const cameraSide = useMemo(() => new THREE.Vector3(), []);
   const moveVector = useMemo(() => new THREE.Vector3(), []);

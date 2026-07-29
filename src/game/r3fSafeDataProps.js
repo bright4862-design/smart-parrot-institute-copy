@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as POSTPROCESSING from 'postprocessing';
 
 // The preview injects dashed attributes (data-source-location, data-dynamic-content)
 // into every JSX element. react-three-fiber resolves dashed prop names as nested

@@ -558,7 +558,7 @@ function ArrivalCutsceneCamera({ active }) {
   return null;
 }
 
-function Player({ inputRef, resetToken, reportPosition, controlsEnabled, conversationTarget = null }) {
+function Player({ inputRef, resetToken, reportPosition, controlsEnabled, conversationTarget = null, cameraFollowEnabled = true, mobileRenderer = false }) {
   const ref = useRef();
   const velocity = useRef(new THREE.Vector3());
   const cameraGoal = useMemo(() => new THREE.Vector3(), []);
@@ -566,8 +566,10 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   const cameraAim = useMemo(() => new THREE.Object3D(), []);
   const toSpeaker = useMemo(() => new THREE.Vector3(), []);
   const cameraSide = useMemo(() => new THREE.Vector3(), []);
+  const moveVector = useMemo(() => new THREE.Vector3(), []);
+  const cameraMode = useRef('follow');
   const [moving, setMoving] = useState(false);
-  const { camera, size } = useThree();
+  const { camera } = useThree();
 
   useEffect(() => {
     ref.current?.position.set(SPAWN.x, 0.95, SPAWN.z);
@@ -577,9 +579,9 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   useFrame((_, delta) => {
     if (!ref.current) return;
     const input = controlsEnabled ? inputRef.current : { forward: false, backward: false, left: false, right: false };
-    const move = new THREE.Vector3((input.right ? 1 : 0) - (input.left ? 1 : 0), 0, (input.backward ? 1 : 0) - (input.forward ? 1 : 0));
-    if (move.lengthSq()) move.normalize();
-    velocity.current.lerp(move.multiplyScalar(controlsEnabled ? 5.2 : 0), 1 - Math.pow(0.001, delta));
+    moveVector.set((input.right ? 1 : 0) - (input.left ? 1 : 0), 0, (input.backward ? 1 : 0) - (input.forward ? 1 : 0));
+    if (moveVector.lengthSq()) moveVector.normalize();
+    velocity.current.lerp(moveVector.multiplyScalar(controlsEnabled ? 5.2 : 0), 1 - Math.pow(0.001, delta));
     ref.current.position.addScaledVector(velocity.current, delta);
     ref.current.position.x = clamp(ref.current.position.x, -20, 20);
     ref.current.position.z = clamp(ref.current.position.z, -13, 12);
@@ -598,7 +600,7 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
     setMoving((current) => (current === isMoving ? current : isMoving));
     reportPosition(ref.current.position.x, ref.current.position.z);
 
-    const mobile = size.width < 640;
+    const previousCameraMode = cameraMode.current;
     if (conversationTarget) {
       toSpeaker.set(
         conversationTarget.x - ref.current.position.x,
@@ -615,24 +617,44 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
         (ref.current.position.z + conversationTarget.z) * 0.5,
       );
       cameraGoal.copy(cameraLook)
-        .addScaledVector(cameraSide, mobile ? 5.5 : 4.8)
-        .addScaledVector(toSpeaker, mobile ? -0.75 : -0.55);
-      cameraGoal.y = mobile ? 4.65 : 4.05;
+        .addScaledVector(cameraSide, mobileRenderer ? 5.1 : 4.8)
+        .addScaledVector(toSpeaker, mobileRenderer ? -0.65 : -0.55);
+      cameraGoal.y = mobileRenderer ? 4.45 : 4.05;
 
-      camera.position.lerp(cameraGoal, 1 - Math.pow(0.0008, delta));
+      const dialoguePositionAlpha = 1 - Math.exp(-(mobileRenderer ? 10.5 : 8.5) * delta);
+      const dialogueRotationAlpha = 1 - Math.exp(-(mobileRenderer ? 12 : 10) * delta);
+      camera.position.lerp(cameraGoal, dialoguePositionAlpha);
       cameraAim.position.copy(camera.position);
       cameraAim.lookAt(cameraLook);
-      camera.quaternion.slerp(cameraAim.quaternion, 1 - Math.pow(0.0005, delta));
-    } else if (controlsEnabled) {
-      const cameraHeight = mobile ? 7.15 : 6.4;
-      const cameraDistance = mobile ? 11.8 : 9.8;
+      camera.quaternion.slerp(cameraAim.quaternion, dialogueRotationAlpha);
+      cameraMode.current = 'conversation';
+    } else if (cameraFollowEnabled) {
+      const cameraHeight = mobileRenderer ? 6.65 : 6.4;
+      const cameraDistance = mobileRenderer ? 9.35 : 9.8;
+      const forwardLook = mobileRenderer ? 0.9 : 1.4;
       cameraGoal.set(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance);
-      cameraLook.set(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
-      camera.position.lerp(cameraGoal, 1 - Math.pow(0.002, delta));
+      cameraLook.set(ref.current.position.x, 1.2, ref.current.position.z - forwardLook);
+
+      const returningToFollow = previousCameraMode !== 'follow';
+      const followStrength = mobileRenderer ? 12.5 : 9.5;
+      const rotationStrength = mobileRenderer ? 14 : 11;
+      const positionAlpha = 1 - Math.exp(-(returningToFollow ? followStrength * 1.6 : followStrength) * delta);
+      const rotationAlpha = 1 - Math.exp(-(returningToFollow ? rotationStrength * 1.5 : rotationStrength) * delta);
+
+      if (camera.position.distanceToSquared(cameraGoal) > 400) {
+        camera.position.copy(cameraGoal);
+      } else {
+        camera.position.lerp(cameraGoal, positionAlpha);
+      }
       cameraAim.position.copy(camera.position);
       cameraAim.lookAt(cameraLook);
-      camera.quaternion.slerp(cameraAim.quaternion, 1 - Math.pow(0.0012, delta));
+      camera.quaternion.slerp(cameraAim.quaternion, rotationAlpha);
+      cameraMode.current = 'follow';
+    } else {
+      cameraMode.current = 'held';
     }
+
+    camera.updateMatrixWorld();
   });
 
   return (
@@ -679,6 +701,8 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
           reportPosition={reportPosition}
           controlsEnabled={gameplayEnabled}
           conversationTarget={conversationTarget}
+          cameraFollowEnabled={!cutsceneActive}
+          mobileRenderer={mobileRenderer}
         />
         <Pico
           target={cutsceneActive ? SUITCASE : playerPosition}

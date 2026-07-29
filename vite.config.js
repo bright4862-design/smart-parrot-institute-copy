@@ -33,5 +33,9 @@ export default defineConfig({
   ],
   optimizeDeps: {
     include: ['@react-three/fiber', '@react-three/drei', 'three']
+  },
+  build: {
+    target: ['es2019', 'safari13', 'chrome80'],
+    cssTarget: 'safari13',
   }
 });

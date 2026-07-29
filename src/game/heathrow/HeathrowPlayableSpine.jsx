@@ -255,7 +255,6 @@ function UndergroundSpot() {
 
 function HeathrowLighting() {
   const keyLight = useRef();
-  const movingLight = useRef();
 
   useEffect(() => {
     const light = keyLight.current;
@@ -273,31 +272,67 @@ function HeathrowLighting() {
   }, []);
 
   useFrame(({ clock }) => {
-    const time = clock.elapsedTime;
-    if (keyLight.current) keyLight.current.intensity = 3.05 + Math.sin(time * 0.22) * 0.08;
-    if (movingLight.current) {
-      movingLight.current.position.x = -18 + ((time * 1.7) % 36);
-      movingLight.current.intensity = 5.5 + Math.sin(time * 1.25) * 0.7;
-    }
+    if (keyLight.current) keyLight.current.intensity = 2.8 + Math.sin(clock.elapsedTime * 0.22) * 0.06;
   });
 
   return (
     <>
-      <ambientLight intensity={0.32} color="#cfdfeb" />
-      <hemisphereLight args={['#d8edfa', '#675c52', 0.72]} />
+      <Environment background={false} resolution={128} frames={1} environmentIntensity={0.82}>
+        <Lightformer
+          form="rect"
+          intensity={4.2}
+          color="#f7e2c5"
+          position={[0, 9, -3]}
+          rotation={[Math.PI / 2, 0, 0]}
+          scale={[22, 8, 1]}
+        />
+        <Lightformer
+          form="rect"
+          intensity={2.4}
+          color="#9dd8ff"
+          position={[0, 6, -13]}
+          rotation={[0, 0, 0]}
+          scale={[28, 8, 1]}
+        />
+        <Lightformer
+          form="ring"
+          intensity={1.4}
+          color="#c6b7ff"
+          position={[10, 5, 5]}
+          rotation={[0, -Math.PI / 2, 0]}
+          scale={[5, 5, 1]}
+        />
+      </Environment>
+      <ambientLight intensity={0.18} color="#cfdfeb" />
+      <hemisphereLight args={['#d8edfa', '#625a55', 0.58]} />
       <directionalLight
         ref={keyLight}
         position={[-10, 16, -10]}
         color="#f7e8d3"
-        intensity={3.05}
+        intensity={2.8}
         castShadow
       />
-      <directionalLight position={[9, 9, 4]} color="#86b9e8" intensity={0.62} />
-      <directionalLight position={[0, 12, -6]} color="#cce8f6" intensity={0.85} />
-      <pointLight position={[12, 4.2, -5.5]} color="#ffbd74" intensity={26} distance={12} decay={2.1} />
-      <pointLight position={[-10.5, 3.6, -6.8]} color="#b5ccff" intensity={18} distance={10} decay={2.1} />
       <UndergroundSpot />
-      <pointLight ref={movingLight} position={[-18, 1.2, -10]} color="#91d7ff" intensity={5.5} distance={10} decay={2} />
+    </>
+  );
+}
+
+function CinematicBloom() {
+  const bloomLight = useRef();
+
+  return (
+    <>
+      <directionalLight ref={bloomLight} position={[8, 10, 6]} color="#b9d9ff" intensity={0.44} />
+      <EffectComposer multisampling={0} resolutionScale={0.72}>
+        <SelectiveBloom
+          lights={[bloomLight]}
+          intensity={1.18}
+          luminanceThreshold={0.34}
+          luminanceSmoothing={0.48}
+          mipmapBlur
+          ignoreBackground
+        />
+      </EffectComposer>
     </>
   );
 }

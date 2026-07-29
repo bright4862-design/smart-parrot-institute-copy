@@ -4,10 +4,10 @@ import { Float, RoundedBox, Text } from '@react-three/drei';
 import { Select } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
-export const AIRPORT_EMPLOYEE_POSITION = Object.freeze({ x: 5.8, z: 1.6 });
+export const AIRPORT_EMPLOYEE_POSITION = Object.freeze({ x: 6.2, z: 10.2 });
 export const QUESTION_NPC_POSITIONS = Object.freeze({
-  gate: Object.freeze({ x: -3.8, z: -2.7 }),
-  restroom: Object.freeze({ x: 8.7, z: -1.1 }),
+  gate: Object.freeze({ x: -21, z: 5.8 }),
+  restroom: Object.freeze({ x: 21, z: 6.8 }),
 });
 
 const SKIN_TONES = ['#F2C3A0', '#D89B74', '#A96F50', '#6F4635'];
@@ -362,6 +362,8 @@ export default function AirportNPCs({
       <Passenger position={[9.3, 0.7, 7.8]} rotation={2.6} phase={2.7} phone paletteIndex={5} />
       <Passenger position={[-16.8, 0.7, -8.8]} phase={4.2} walking axis="x" range={1.8} suitcase paletteIndex={2} />
       <Passenger position={[16.2, 0.7, -9.5]} rotation={-2.4} phase={5.1} paletteIndex={1} />
+      <Passenger position={[-25.5, 0.7, 12.5]} phase={1.8} walking axis="z" range={2.6} phone paletteIndex={4} />
+      <Passenger position={[25.5, 0.7, 13.2]} phase={3.7} walking axis="x" range={2.2} suitcase paletteIndex={5} />
     </group>
   );
 }

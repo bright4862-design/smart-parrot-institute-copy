@@ -524,6 +524,13 @@ export default function HeathrowPlayableSpine() {
   const [npcQuestionFeedback, setNpcQuestionFeedback] = useState('');
   const [cutsceneActive, setCutsceneActive] = useState(() => mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && !mission.suitcaseCollected);
   const [cutsceneBeat, setCutsceneBeat] = useState(0);
+  const [holdingSuitcase, setHoldingSuitcase] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [pickupAnimating, setPickupAnimating] = useState(false);
+  const [picoEntering, setPicoEntering] = useState(false);
+  const canHoldSuitcaseRef = useRef(false);
+  const pickupAnimatingRef = useRef(false);
+  const interactionTimersRef = useRef([]);
 
   const reportPosition = useCallback((x, z) => {
     positionRef.current.x = x;

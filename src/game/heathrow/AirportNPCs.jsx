@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Float, RoundedBox, Text } from '@react-three/drei';
+import { Billboard, Float, RoundedBox, Text } from '@react-three/drei';
 import { Select } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
@@ -70,19 +70,21 @@ function QuestionMarker({ questionId, highlighted }) {
   return (
     <Float speed={1.8} floatIntensity={0.1}>
       <group position={[0, 2.45, 0]}>
-        <Select enabled={highlighted}>
-          <RoundedBox args={[1.05, 0.38, 0.12]} radius={0.12} castShadow>
-            <meshStandardMaterial
-              color={highlighted ? '#F8D65C' : '#FFFFFF'}
-              emissive={highlighted ? '#7C5C00' : '#000000'}
-              emissiveIntensity={highlighted ? 0.9 : 0}
-              roughness={0.35}
-            />
-          </RoundedBox>
-        </Select>
-        <Text position={[0, 0, 0.075]} fontSize={0.13} color="#17213B" anchorX="center" anchorY="middle">
-          {copy}
-        </Text>
+        <Billboard follow>
+          <Select enabled={highlighted}>
+            <RoundedBox args={[1.05, 0.38, 0.12]} radius={0.12} castShadow>
+              <meshStandardMaterial
+                color={highlighted ? '#F8D65C' : '#FFFFFF'}
+                emissive={highlighted ? '#7C5C00' : '#000000'}
+                emissiveIntensity={highlighted ? 0.9 : 0}
+                roughness={0.35}
+              />
+            </RoundedBox>
+          </Select>
+          <Text position={[0, 0, 0.075]} fontSize={0.13} color="#17213B" anchorX="center" anchorY="middle">
+            {copy}
+          </Text>
+        </Billboard>
       </group>
     </Float>
   );
@@ -313,7 +315,9 @@ function AirportEmployee({ active, engaged, playerPosition }) {
                 <meshBasicMaterial color="#F8D65C" transparent opacity={0.88} toneMapped={false} />
               </mesh>
             </Select>
-            <Text position={[0, 0.45, 0]} fontSize={0.18} color="#17213B" anchorX="center" outlineWidth={0.018} outlineColor="#FFFFFF">ASK FOR HELP</Text>
+            <Billboard position={[0, 0.45, 0]} follow>
+              <Text fontSize={0.18} color="#17213B" anchorX="center" outlineWidth={0.018} outlineColor="#FFFFFF">ASK FOR HELP</Text>
+            </Billboard>
           </group>
         </Float>
       )}

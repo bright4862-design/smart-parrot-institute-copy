@@ -13,6 +13,7 @@ import {
   saveCheckpoint,
 } from './missionState';
 import TravelerAvatar from './TravelerAvatar';
+import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION } from './AirportNPCs';
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
@@ -338,6 +339,7 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
       <HeathrowLighting />
       <RainyWindowAtmosphere />
       <Terminal />
+      <AirportNPCs employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE} />
       <Suitcase visible={!mission.suitcaseCollected} active={activeTarget === 'suitcase'} />
       <Underground active={activeTarget === 'underground'} />
       <Player inputRef={inputRef} resetToken={resetToken} reportPosition={reportPosition} />
@@ -359,6 +361,8 @@ export default function HeathrowPlayableSpine() {
   const [mission, dispatch] = useReducer(reduceMission, INITIAL_MISSION_STATE, loadCheckpoint);
   const [resetToken, setResetToken] = useState(0);
   const [picoLine, setPicoLine] = useState('');
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [quizFeedback, setQuizFeedback] = useState('');
 
   const reportPosition = useCallback((x, z) => {
     positionRef.current.x = x;
@@ -366,9 +370,16 @@ export default function HeathrowPlayableSpine() {
     setPlayerPosition((current) => (Math.abs(current.x - x) > 0.08 || Math.abs(current.z - z) > 0.08 ? { x, z } : current));
   }, []);
 
-  const nearSuitcase = distance(playerPosition, SUITCASE) < 2.4;
-  const nearUnderground = distance(playerPosition, UNDERGROUND) < 3.4;
-  const activeTarget = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && nearSuitcase ? 'suitcase' : mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && nearUnderground ? 'underground' : null;
+  const nearSuitcase = distance(playerPosition, SUITCASE) < 2.8;
+  const nearEmployee = distance(playerPosition, AIRPORT_EMPLOYEE_POSITION) < 3.2;
+  const nearUnderground = distance(playerPosition, UNDERGROUND) < 3.8;
+  const activeTarget = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && nearSuitcase
+    ? 'suitcase'
+    : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && nearEmployee
+      ? 'employee'
+      : mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && nearUnderground
+        ? 'underground'
+        : null;
 
   const interact = useCallback(() => {
     const position = positionRef.current;
@@ -377,8 +388,12 @@ export default function HeathrowPlayableSpine() {
       setPicoLine('Pico: “There you are! Ready for London?”');
     } else if (mission.step === HEATHROW_STEPS.MEET_PICO) {
       dispatch({ type: 'MEET_PICO' });
-      setPicoLine('Pico: “Underground. Follow the yellow path!”');
-    } else if (mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && distance(position, UNDERGROUND) < 3.4) {
+      setPicoLine('Pico: “I know the way. Mostly. Let’s ask the human in the smart jacket.”');
+    } else if (mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && distance(position, AIRPORT_EMPLOYEE_POSITION) < 3.2) {
+      inputRef.current = { forward: false, backward: false, left: false, right: false };
+      setQuizFeedback('');
+      setQuizOpen(true);
+    } else if (mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && distance(position, UNDERGROUND) < 3.8) {
       dispatch({ type: 'FIND_UNDERGROUND' });
       setPicoLine('Pico: “You found it. London is waiting.”');
     }
@@ -393,13 +408,27 @@ export default function HeathrowPlayableSpine() {
     positionRef.current = { ...SPAWN };
     setPlayerPosition({ ...SPAWN });
     setPicoLine('');
+    setQuizOpen(false);
+    setQuizFeedback('');
     dispatch({ type: 'RESET' });
     setResetToken((value) => value + 1);
   };
 
-  const progress = { collect_suitcase: 'w-1/4', meet_pico: 'w-2/4', find_underground: 'w-3/4', complete: 'w-full' }[mission.step];
+  const progress = {
+    collect_suitcase: 'w-1/5',
+    meet_pico: 'w-2/5',
+    ask_employee: 'w-3/5',
+    find_underground: 'w-4/5',
+    complete: 'w-full',
+  }[mission.step];
   const canInteract = activeTarget || mission.step === HEATHROW_STEPS.MEET_PICO;
-  const label = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? 'Collect suitcase' : mission.step === HEATHROW_STEPS.MEET_PICO ? 'Say hello to Pico' : 'Enter Underground';
+  const label = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
+    ? 'Collect suitcase'
+    : mission.step === HEATHROW_STEPS.MEET_PICO
+      ? 'Say hello to Pico'
+      : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE
+        ? 'Ask airport staff'
+        : 'Enter Underground';
 
   return (
     <main className="relative h-[100dvh] min-h-[560px] overflow-hidden bg-slate-950 text-white [touch-action:none]">
@@ -431,6 +460,44 @@ export default function HeathrowPlayableSpine() {
         </div>
       </header>
       {picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
+
+      {quizOpen && (
+        <div className="absolute inset-0 z-40 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/25 bg-white p-5 text-slate-900 shadow-2xl sm:p-7">
+            <div className="text-xs font-black tracking-[.18em] text-violet-600">FIRST ENGLISH MOMENT</div>
+            <h2 className="mt-2 text-2xl font-black tracking-tight">What should you say?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Choose the polite sentence to ask the airport employee for directions.</p>
+            <div className="mt-5 grid gap-3">
+              {[
+                'Excuse me, where is the Underground?',
+                'You take me Underground now.',
+                'Underground is where?',
+              ].map((answer, index) => (
+                <button
+                  key={answer}
+                  type="button"
+                  onClick={() => {
+                    if (index === 0) {
+                      dispatch({ type: 'ANSWER_PHRASE' });
+                      setQuizFeedback('Perfect! The employee points you toward the yellow route.');
+                      setPicoLine('Pico: “Excellent manners. I was going to say: train, please!”');
+                      window.setTimeout(() => setQuizOpen(false), 850);
+                    } else {
+                      setQuizFeedback('Almost — choose the polite complete sentence beginning with “Excuse me”.');
+                    }
+                  }}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold transition hover:border-violet-300 hover:bg-violet-50 active:scale-[0.99]"
+                >
+                  {answer}
+                </button>
+              ))}
+            </div>
+            {quizFeedback && <p className="mt-4 rounded-2xl bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800">{quizFeedback}</p>}
+            <button type="button" onClick={() => setQuizOpen(false)} className="mt-4 text-sm font-bold text-slate-500">Close</button>
+          </div>
+        </div>
+      )}
+
       <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] left-4 z-20 grid grid-cols-3 gap-1.5 sm:hidden"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
       <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[52%] sm:bottom-5 sm:right-5 sm:max-w-[58%]">
         {canInteract ? <button onClick={interact} className="min-h-12 rounded-full bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button> : mission.step === HEATHROW_STEPS.COMPLETE ? <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div> : <div className="hidden rounded-full border border-white/30 bg-slate-950/60 px-5 py-3 text-sm font-bold backdrop-blur sm:block">Move with WASD or arrow keys</div>}

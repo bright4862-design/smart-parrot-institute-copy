@@ -17,8 +17,50 @@ const ANIMATION_LABELS = {
   hero_celebrate_once: "Celebrate",
 };
 
+const MOBILE_BREAKPOINT = 768;
+const MIN_DPR = 1;
+const FPS_SAMPLE_WINDOW = 90;
+
 function isOneShot(name) {
   return name.endsWith("_once");
+}
+
+function getInitialQuality() {
+  const mobile = window.innerWidth < MOBILE_BREAKPOINT;
+  const deviceMemory = navigator.deviceMemory || 4;
+  const cpuCores = navigator.hardwareConcurrency || 4;
+  const constrained = deviceMemory <= 4 || cpuCores <= 4;
+
+  return {
+    mobile,
+    maxDpr: mobile ? (constrained ? 1.5 : 2) : 2,
+    minDpr: MIN_DPR,
+    shadowSize: mobile ? (constrained ? 1024 : 2048) : 2048,
+    targetFps: mobile ? 55 : 58,
+  };
+}
+
+function prepareModelTextures(model, renderer) {
+  const maxAnisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+
+  model.traverse((node) => {
+    if (!node.isMesh) return;
+
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.filter(Boolean).forEach((material) => {
+      Object.values(material).forEach((value) => {
+        if (!value?.isTexture) return;
+
+        value.anisotropy = maxAnisotropy;
+        value.minFilter = THREE.LinearMipmapLinearFilter;
+        value.magFilter = THREE.LinearFilter;
+        value.generateMipmaps = true;
+        value.needsUpdate = true;
+      });
+
+      material.needsUpdate = true;
+    });
+  });
 }
 
 export default function HeroStage({ modelUrl = HERO_MODEL_URL, className = "" }) {
@@ -41,7 +83,12 @@ export default function HeroStage({ modelUrl = HERO_MODEL_URL, className = "" })
 
     let disposed = false;
     let animationFrameId = 0;
+    let frameCount = 0;
+    let sampleStartedAt = performance.now();
+    let currentDpr = 1;
+    let pageVisible = !document.hidden;
 
+    const quality = getInitialQuality();
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#f4f1ff");
     scene.fog = new THREE.Fog("#f4f1ff", 6, 14);
@@ -49,13 +96,32 @@ export default function HeroStage({ modelUrl = HERO_MODEL_URL, className = "" })
     const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
     camera.position.set(3.2, 2.25, 5.8);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance",
+      preserveDrawingBuffer: false,
+    });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
+    renderer.domElement.style.display = "block";
+    renderer.domElement.style.imageRendering = "auto";
+    renderer.domElement.setAttribute("aria-hidden", "true");
+
+    const applyDpr = (nextDpr) => {
+      const clamped = THREE.MathUtils.clamp(nextDpr, quality.minDpr, quality.maxDpr);
+      if (Math.abs(clamped - currentDpr) < 0.05) return;
+      currentDpr = clamped;
+      renderer.setPixelRatio(currentDpr);
+      renderer.setSize(Math.max(mount.clientWidth, 1), Math.max(mount.clientHeight, 1), false);
+    };
+
+    applyDpr(Math.min(window.devicePixelRatio || 1, quality.maxDpr));
     mount.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -72,13 +138,15 @@ export default function HeroStage({ modelUrl = HERO_MODEL_URL, className = "" })
     const keyLight = new THREE.DirectionalLight("#fff4df", 3.2);
     keyLight.position.set(4, 7, 5);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.mapSize.set(quality.shadowSize, quality.shadowSize);
     keyLight.shadow.camera.near = 0.1;
     keyLight.shadow.camera.far = 20;
     keyLight.shadow.camera.left = -4;
     keyLight.shadow.camera.right = 4;
     keyLight.shadow.camera.top = 4;
     keyLight.shadow.camera.bottom = -4;
+    keyLight.shadow.bias = -0.00015;
+    keyLight.shadow.normalBias = 0.02;
     scene.add(keyLight);
 
     const rimLight = new THREE.DirectionalLight("#806cff", 2.2);
@@ -111,14 +179,44 @@ export default function HeroStage({ modelUrl = HERO_MODEL_URL, className = "" })
     resizeObserver.observe(mount);
     resize();
 
-    const renderLoop = () => {
+    const tuneResolution = (now) => {
+      frameCount += 1;
+      if (frameCount < FPS_SAMPLE_WINDOW) return;
+
+      const elapsedSeconds = (now - sampleStartedAt) / 1000;
+      const fps = frameCount / Math.max(elapsedSeconds, 0.001);
+
+      if (fps < quality.targetFps - 8 && currentDpr > quality.minDpr) {
+        applyDpr(currentDpr - 0.2);
+      } else if (fps > quality.targetFps + 2 && currentDpr < quality.maxDpr) {
+        applyDpr(currentDpr + 0.1);
+      }
+
+      frameCount = 0;
+      sampleStartedAt = now;
+    };
+
+    const renderLoop = (now) => {
       animationFrameId = window.requestAnimationFrame(renderLoop);
+      if (!pageVisible) return;
+
       const delta = Math.min(clock.getDelta(), 0.05);
       runtimeRef.current?.update(delta);
       controls.update();
       renderer.render(scene, camera);
+      tuneResolution(now);
     };
-    renderLoop();
+    renderLoop(performance.now());
+
+    const onVisibilityChange = () => {
+      pageVisible = !document.hidden;
+      if (pageVisible) {
+        clock.getDelta();
+        frameCount = 0;
+        sampleStartedAt = performance.now();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     const loadHero = async () => {
       setStatus("loading");
@@ -135,6 +233,8 @@ export default function HeroStage({ modelUrl = HERO_MODEL_URL, className = "" })
         }
 
         const model = result.model;
+        prepareModelTextures(model, renderer);
+
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
@@ -169,6 +269,7 @@ export default function HeroStage({ modelUrl = HERO_MODEL_URL, className = "" })
     return () => {
       disposed = true;
       window.cancelAnimationFrame(animationFrameId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       resizeObserver.disconnect();
       controls.dispose();
       runtimeRef.current?.dispose();
@@ -176,6 +277,7 @@ export default function HeroStage({ modelUrl = HERO_MODEL_URL, className = "" })
       platform.geometry.dispose();
       platform.material.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
       renderer.domElement.remove();
     };
   }, [modelUrl]);

@@ -32,6 +32,38 @@ const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 const dampAngle = (current, target, smoothing, delta) => (
   current + normalizeAngle(target - current) * (1 - Math.exp(-smoothing * delta))
 );
+const TRAVELER_QUESTIONS = Object.freeze({
+  gate: Object.freeze({
+    eyebrow: 'GATE A12 · TRAVELLER',
+    title: '“Excuse me — is this Gate A12?”',
+    prompt: 'Use the blue gate sign to choose a helpful reply.',
+    answers: Object.freeze([
+      'Yes, this is Gate A12.',
+      'No, this is baggage reclaim.',
+      'The restrooms are over there.',
+    ]),
+    correctIndex: 0,
+    completionEvent: 'HELP_GATE_TRAVELER',
+    success: '“Thank you! I’m in the right place.”',
+    retry: 'Look at the blue gate sign. Read the letter and number together.',
+    picoSuccess: 'Pico: “Nice work — you used the sign to help someone. Now let’s ask airport staff for directions.”',
+  }),
+  restroom: Object.freeze({
+    eyebrow: 'SERVICES · TRAVELLER',
+    title: '“Excuse me — where are the restrooms?”',
+    prompt: 'Use the airport signs to choose a helpful reply.',
+    answers: Object.freeze([
+      'They are next to the coffee shop.',
+      'This is Gate A12.',
+      'I am a suitcase.',
+    ]),
+    correctIndex: 0,
+    completionEvent: 'HELP_RESTROOM_TRAVELER',
+    success: '“Thank you! I can find them now.”',
+    retry: 'Look at the services sign and choose the complete direction.',
+    picoSuccess: 'Pico: “Clear directions. No interpretive dance required.”',
+  }),
+});
 
 const readMobileRenderProfile = () => {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
@@ -118,13 +150,18 @@ function RendererFallback({ onRetry }) {
   );
 }
 
-function useInput(inputRef, onInteractPress, onInteractRelease) {
+function useInput(inputRef, onInteractPress, onInteractRelease, enabled = true) {
   useEffect(() => {
     const bindings = {
       KeyW: 'forward', ArrowUp: 'forward', KeyS: 'backward', ArrowDown: 'backward',
       KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
     };
+    const isUiTarget = (target) => (
+      target instanceof HTMLElement
+      && Boolean(target.closest('button, a, input, select, textarea, [contenteditable="true"], [role="button"]'))
+    );
     const keydown = (event) => {
+      if (!enabled || isUiTarget(event.target)) return;
       const action = bindings[event.code];
       if (action) {
         event.preventDefault();
@@ -136,6 +173,7 @@ function useInput(inputRef, onInteractPress, onInteractRelease) {
       }
     };
     const keyup = (event) => {
+      if (!enabled || isUiTarget(event.target)) return;
       const action = bindings[event.code];
       if (action) {
         event.preventDefault();
@@ -150,6 +188,7 @@ function useInput(inputRef, onInteractPress, onInteractRelease) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
       onInteractRelease();
     };
+    if (!enabled) blur();
     window.addEventListener('keydown', keydown);
     window.addEventListener('keyup', keyup);
     window.addEventListener('blur', blur);
@@ -158,7 +197,7 @@ function useInput(inputRef, onInteractPress, onInteractRelease) {
       window.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
     };
-  }, [inputRef, onInteractPress, onInteractRelease]);
+  }, [enabled, inputRef, onInteractPress, onInteractRelease]);
 }
 
 function Terminal() {
@@ -794,8 +833,11 @@ function AdaptiveRenderQuality({ dpr, minDpr, maxDpr, mobile, onDprChange }) {
 }
 
 export default function HeathrowPlayableSpine() {
+  const gameRootRef = useRef(null);
   const inputRef = useRef({ forward: false, backward: false, left: false, right: false });
   const positionRef = useRef({ ...SPAWN });
+  const firstNpcAnswerRef = useRef(null);
+  const npcContinueRef = useRef(null);
   const [playerPosition, setPlayerPosition] = useState({ ...SPAWN });
   const [mission, dispatch] = useReducer(reduceMission, INITIAL_MISSION_STATE, loadCheckpoint);
   const [resetToken, setResetToken] = useState(0);
@@ -869,8 +911,21 @@ export default function HeathrowPlayableSpine() {
             : mission.step === HEATHROW_STEPS.HELP_RESTROOM_TRAVELER && nearRestroomTraveler
               ? 'restroom_question'
               : null;
+  const npcQuestionData = TRAVELER_QUESTIONS[npcQuestion] ?? null;
+  const npcQuestionComplete = npcQuestion === 'gate'
+    ? mission.gateTravelerHelped
+    : npcQuestion === 'restroom'
+      ? mission.restroomTravelerHelped
+      : false;
+  const gameplayEnabled = !cutsceneActive
+    && !quizOpen
+    && !npcQuestion
+    && !focusedSignId
+    && !pickupAnimating
+    && !picoEntering;
 
   const interact = useCallback(() => {
+    if (quizOpen || npcQuestion || focusedSignId) return;
     const position = positionRef.current;
     if (mission.step === HEATHROW_STEPS.MEET_PICO) {
       dispatch({ type: 'MEET_PICO' });
@@ -904,7 +959,7 @@ export default function HeathrowPlayableSpine() {
       setNpcQuestionFeedback('');
       setNpcQuestion('restroom');
     }
-  }, [inspectedSignIds, mission.step]);
+  }, [focusedSignId, inspectedSignIds, mission.step, npcQuestion, quizOpen]);
 
   useEffect(() => {
     if (
@@ -924,6 +979,49 @@ export default function HeathrowPlayableSpine() {
     interactionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     interactionTimersRef.current = [];
   }, []);
+
+  const closeNpcQuestion = useCallback(() => {
+    setNpcQuestion(null);
+    setNpcQuestionFeedback('');
+    window.requestAnimationFrame(() => gameRootRef.current?.focus({ preventScroll: true }));
+  }, []);
+
+  useEffect(() => {
+    if (!npcQuestion) return undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      firstNpcAnswerRef.current?.focus({ preventScroll: true });
+    });
+    const onDialogKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeNpcQuestion();
+    };
+    window.addEventListener('keydown', onDialogKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('keydown', onDialogKeyDown);
+    };
+  }, [closeNpcQuestion, npcQuestion]);
+
+  useEffect(() => {
+    if (!npcQuestionComplete) return undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      npcContinueRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [npcQuestionComplete]);
+
+  const answerNpcQuestion = useCallback((answerIndex) => {
+    if (!npcQuestionData || npcQuestionComplete) return;
+    if (answerIndex !== npcQuestionData.correctIndex) {
+      setNpcQuestionFeedback(npcQuestionData.retry);
+      return;
+    }
+
+    dispatch({ type: npcQuestionData.completionEvent });
+    setNpcQuestionFeedback(npcQuestionData.success);
+    setPicoLine(npcQuestionData.picoSuccess);
+  }, [npcQuestionComplete, npcQuestionData]);
 
   const beginSuitcaseHold = useCallback(() => {
     if (!canHoldSuitcaseRef.current || pickupAnimatingRef.current) return;
@@ -950,7 +1048,7 @@ export default function HeathrowPlayableSpine() {
     endSuitcaseHold();
   }, [endSuitcaseHold]);
 
-  useInput(inputRef, onInteractPress, onInteractRelease);
+  useInput(inputRef, onInteractPress, onInteractRelease, gameplayEnabled);
 
   useEffect(() => {
     if (!holdingSuitcase) return undefined;
@@ -1046,7 +1144,7 @@ export default function HeathrowPlayableSpine() {
   const label = activeTarget?.startsWith('sign:')
     ? 'Inspect sign'
     : activeTarget === 'gate_question' || activeTarget === 'restroom_question'
-    ? 'Talk to traveler'
+    ? 'Talk to traveller'
     : mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
       ? 'Collect suitcase'
       : mission.step === HEATHROW_STEPS.MEET_PICO
@@ -1055,23 +1153,6 @@ export default function HeathrowPlayableSpine() {
           ? 'Ask airport staff'
           : 'Enter Underground';
   const focusedSignData = getAirportSign(focusedSignId);
-  const npcQuestionData = npcQuestion === 'gate'
-    ? {
-        eyebrow: 'TRAVELER QUESTION',
-        title: '“Excuse me, which gate are we in?”',
-        answers: ['We are at Gate A12.', 'We are in the restroom.', 'The gate is coffee.'],
-        correctIndex: 0,
-        success: 'Exactly — we are at Gate A12.',
-      }
-    : npcQuestion === 'restroom'
-      ? {
-          eyebrow: 'TRAVELER QUESTION',
-          title: '“Excuse me, where is the restroom?”',
-          answers: ['It is next to the coffee shop.', 'It is Gate A12.', 'I am a suitcase.'],
-          correctIndex: 0,
-          success: 'Perfect — it is next to the coffee shop.',
-        }
-      : null;
   const cutsceneCopy = [
     { eyebrow: 'SMART PARROT ADVENTURE', title: 'London Heathrow', body: 'A new city. A new language. One very important suitcase.' },
     { eyebrow: 'TERMINAL 5', title: 'Arrivals', body: 'Follow the signs through the busy terminal.' },
@@ -1088,6 +1169,8 @@ export default function HeathrowPlayableSpine() {
 
   return (
     <main
+      ref={gameRootRef}
+      tabIndex={-1}
       className="relative h-screen h-[100dvh] overflow-hidden bg-slate-950 text-white [touch-action:none]"
       style={{ minHeight: renderProfile.mobile ? 0 : 560 }}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
@@ -1139,7 +1222,7 @@ export default function HeathrowPlayableSpine() {
               playerPosition={playerPosition}
               activeTarget={activeTarget}
               cutsceneActive={cutsceneActive}
-              gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion && !focusedSignId && !pickupAnimating && !picoEntering}
+              gameplayEnabled={gameplayEnabled}
               suitcaseProximity={mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? suitcaseProximity : 0}
               pickupAnimating={pickupAnimating}
               picoEntering={picoEntering}
@@ -1261,34 +1344,62 @@ export default function HeathrowPlayableSpine() {
       )}
 
       {npcQuestionData && (
-        <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/45 bg-white/96 p-5 text-slate-900 shadow-2xl backdrop-blur-xl sm:p-7">
-            <div className="text-xs font-black tracking-[.18em] text-sky-700">{npcQuestionData.eyebrow}</div>
-            <h2 className="mt-2 text-2xl font-black tracking-tight">{npcQuestionData.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Choose the clearest helpful answer.</p>
-            <div className="mt-5 grid gap-3">
+        <div className="absolute inset-0 z-40 flex items-end justify-end bg-slate-950/[0.18] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="traveller-dialog-title"
+            className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[26px] border border-sky-100/50 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl [touch-action:pan-y] sm:max-h-[calc(100dvh-3rem)] sm:p-6"
+          >
+            <div className="text-[10px] font-black tracking-[.18em] text-sky-300 sm:text-xs">{npcQuestionData.eyebrow}</div>
+            <h2 id="traveller-dialog-title" className="mt-2 text-xl font-black tracking-tight sm:text-2xl">{npcQuestionData.title}</h2>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-300 sm:text-sm sm:leading-6">{npcQuestionData.prompt}</p>
+            <div className="mt-4 grid gap-2.5 sm:mt-5 sm:gap-3">
               {npcQuestionData.answers.map((answer, index) => (
                 <button
                   key={answer}
+                  ref={index === 0 ? firstNpcAnswerRef : null}
                   type="button"
-                  onClick={() => {
-                    if (index === npcQuestionData.correctIndex) {
-                      setNpcQuestionFeedback(npcQuestionData.success);
-                      setPicoLine('Pico: “Helpful, polite, and no one boarded the wrong plane. Excellent.”');
-                      window.setTimeout(() => setNpcQuestion(null), 900);
-                    } else {
-                      setNpcQuestionFeedback('Not quite — look at the airport signs and choose the complete sentence.');
-                    }
+                  disabled={npcQuestionComplete}
+                  onClick={() => answerNpcQuestion(index)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    answerNpcQuestion(index);
                   }}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold transition hover:border-sky-300 hover:bg-sky-50 active:scale-[0.99]"
+                  className="min-h-12 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-left text-sm font-bold text-white transition hover:border-sky-200/70 hover:bg-sky-300/[0.15] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 active:scale-[0.99] disabled:cursor-default disabled:opacity-55"
                 >
                   {answer}
                 </button>
               ))}
             </div>
-            {npcQuestionFeedback && <p className="mt-4 rounded-2xl bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">{npcQuestionFeedback}</p>}
-            <button type="button" onClick={() => setNpcQuestion(null)} className="mt-4 text-sm font-bold text-slate-500">Close</button>
-          </div>
+            {npcQuestionFeedback && (
+              <p
+                role="status"
+                aria-live="polite"
+                className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-semibold ${
+                  npcQuestionComplete
+                    ? 'border-emerald-300/40 bg-emerald-400/[0.12] text-emerald-100'
+                    : 'border-amber-300/40 bg-amber-300/[0.12] text-amber-100'
+                }`}
+              >
+                <span className="font-black">{npcQuestionComplete ? 'Correct. ' : 'Try again. '}</span>
+                {npcQuestionFeedback}
+              </p>
+            )}
+            <button
+              ref={npcContinueRef}
+              type="button"
+              onClick={closeNpcQuestion}
+              className={`mt-4 min-h-12 w-full rounded-full px-5 py-3 text-sm font-black transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 active:scale-[0.98] ${
+                npcQuestionComplete
+                  ? 'bg-amber-300 text-slate-950'
+                  : 'border border-white/25 bg-white/[0.08] text-slate-200'
+              }`}
+            >
+              {npcQuestionComplete ? 'Continue' : 'Close'}
+            </button>
+          </section>
         </div>
       )}
 

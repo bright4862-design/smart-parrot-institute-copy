@@ -369,19 +369,22 @@ function Suitcase({ visible, active, proximity = 0, collecting = false }) {
   return (
     <>
       <Float speed={active ? 2.4 : 1 + proximity} floatIntensity={active ? 0.2 : 0.04 + proximity * 0.08} rotationIntensity={0.04}>
-        <group ref={groupRef} position={[SUITCASE.x, 1.12, SUITCASE.z]}>
-          <RoundedBox args={[1.45, 1.75, 0.7]} radius={0.18} castShadow>
-            <meshStandardMaterial color="#7655d7" emissive="#3d1f84" emissiveIntensity={glowStrength} roughness={0.32} />
-          </RoundedBox>
-          <mesh position={[0, 1.08, 0]} castShadow><torusGeometry args={[0.35, 0.08, 12, 24, Math.PI]} /><meshStandardMaterial color="#292334" metalness={0.65} /></mesh>
-          <Text position={[0, 0, 0.39]} fontSize={0.22} color="white" anchorX="center">LONDON</Text>
-          <pointLight position={[0, 0.4, 1]} color="#a98cff" intensity={2 + proximity * 10 + (active ? 5 : 0)} distance={4.5 + proximity * 2.5} decay={2} />
-        </group>
+        <Select enabled>
+          <group ref={groupRef} position={[SUITCASE.x, 1.12, SUITCASE.z]}>
+            <RoundedBox args={[1.45, 1.75, 0.7]} radius={0.18} castShadow>
+              <meshStandardMaterial color="#7655d7" emissive="#3d1f84" emissiveIntensity={glowStrength} roughness={0.32} />
+            </RoundedBox>
+            <mesh position={[0, 1.08, 0]} castShadow><torusGeometry args={[0.35, 0.08, 12, 24, Math.PI]} /><meshStandardMaterial color="#292334" metalness={0.65} /></mesh>
+            <Text position={[0, 0, 0.39]} fontSize={0.22} color="white" anchorX="center">LONDON</Text>
+          </group>
+        </Select>
       </Float>
-      <mesh position={[SUITCASE.x, 0.035, SUITCASE.z]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.72, 1.15 + proximity * 0.18, 48]} />
-        <meshBasicMaterial color="#a98cff" transparent opacity={floorGlow} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
-      </mesh>
+      <Select enabled={active || proximity > 0.28}>
+        <mesh position={[SUITCASE.x, 0.035, SUITCASE.z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.72, 1.15 + proximity * 0.18, 48]} />
+          <meshBasicMaterial color="#a98cff" transparent opacity={floorGlow} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+        </mesh>
+      </Select>
     </>
   );
 }

@@ -21,7 +21,7 @@ const UNDERGROUND = Object.freeze({ x: 0, z: 10.4 });
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
-function useInput(inputRef, interact) {
+function useInput(inputRef, onInteractPress, onInteractRelease) {
   useEffect(() => {
     const bindings = {
       KeyW: 'forward', ArrowUp: 'forward', KeyS: 'backward', ArrowDown: 'backward',
@@ -35,22 +35,33 @@ function useInput(inputRef, interact) {
       }
       if (!event.repeat && (event.code === 'KeyE' || event.code === 'Space')) {
         event.preventDefault();
-        interact();
+        onInteractPress();
       }
     };
     const keyup = (event) => {
       const action = bindings[event.code];
-      if (!action) return;
-      event.preventDefault();
-      inputRef.current[action] = false;
+      if (action) {
+        event.preventDefault();
+        inputRef.current[action] = false;
+      }
+      if (event.code === 'KeyE' || event.code === 'Space') {
+        event.preventDefault();
+        onInteractRelease();
+      }
+    };
+    const blur = () => {
+      inputRef.current = { forward: false, backward: false, left: false, right: false };
+      onInteractRelease();
     };
     window.addEventListener('keydown', keydown);
     window.addEventListener('keyup', keyup);
+    window.addEventListener('blur', blur);
     return () => {
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
+      window.removeEventListener('blur', blur);
     };
-  }, [inputRef, interact]);
+  }, [inputRef, onInteractPress, onInteractRelease]);
 }
 
 function Terminal() {

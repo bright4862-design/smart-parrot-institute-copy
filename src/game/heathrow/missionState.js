@@ -39,6 +39,18 @@ export const INITIAL_MISSION_STATE = Object.freeze({
   undergroundReached: false,
 });
 
+const COMPLETION_FLAGS = Object.freeze([
+  'suitcaseCollected',
+  'picoMet',
+  'signsInspected',
+  'gateTravelerHelped',
+  'employeeDirectionsAnswered',
+  'ticketPurchased',
+  'restroomTravelerHelped',
+  'yellowRouteFollowed',
+  'undergroundReached',
+]);
+
 const MISSION_TRANSITIONS = Object.freeze({
   [HEATHROW_STEPS.COLLECT_SUITCASE]: Object.freeze({
     event: 'COLLECT_SUITCASE',
@@ -121,10 +133,17 @@ export function loadCheckpoint() {
   if (typeof window === 'undefined') return { ...INITIAL_MISSION_STATE };
   try {
     const saved = JSON.parse(window.localStorage.getItem(HEATHROW_CHECKPOINT_KEY));
-    if (!saved || !HEATHROW_SEQUENCE.includes(saved.step)) {
+    const stepIndex = HEATHROW_SEQUENCE.indexOf(saved?.step);
+    if (stepIndex === -1) {
       return { ...INITIAL_MISSION_STATE };
     }
-    return { ...INITIAL_MISSION_STATE, ...saved };
+    return {
+      ...INITIAL_MISSION_STATE,
+      step: saved.step,
+      ...Object.fromEntries(
+        COMPLETION_FLAGS.map((flag, flagIndex) => [flag, flagIndex < stepIndex]),
+      ),
+    };
   } catch {
     return { ...INITIAL_MISSION_STATE };
   }

@@ -53,18 +53,102 @@ function useInput(inputRef, interact) {
 
 function Terminal() {
   const columns = useMemo(() => Array.from({ length: 8 }, (_, i) => -21 + i * 6), []);
+  const ceilingLights = useMemo(() => Array.from({ length: 7 }, (_, i) => -18 + i * 6), []);
+
   return (
     <group>
-      <mesh receiveShadow position={[0, -0.12, 0]}><boxGeometry args={[48, 0.2, 34]} /><meshStandardMaterial color="#d9dde4" roughness={0.34} metalness={0.12} /></mesh>
-      <mesh position={[0, 7.8, -15.5]} receiveShadow><boxGeometry args={[48, 16, 0.45]} /><meshStandardMaterial color="#b7d7e7" transparent opacity={0.64} roughness={0.1} metalness={0.25} /></mesh>
-      {columns.map((x) => <mesh key={x} position={[x, 4, -14.9]} castShadow><boxGeometry args={[0.45, 8, 0.45]} /><meshStandardMaterial color="#f7f8fa" metalness={0.6} roughness={0.24} /></mesh>)}
-      <mesh position={[0, 8.5, 0]} receiveShadow><boxGeometry args={[48, 0.35, 34]} /><meshStandardMaterial color="#eef1f5" roughness={0.55} /></mesh>
-      <RoundedBox args={[11, 2.2, 3.2]} radius={0.45} position={[-10.5, 1.05, -8]} castShadow><meshStandardMaterial color="#343b45" metalness={0.7} roughness={0.32} /></RoundedBox>
+      <mesh receiveShadow position={[0, -0.12, 0]}>
+        <boxGeometry args={[48, 0.2, 34]} />
+        <meshStandardMaterial color="#cfd5dc" roughness={0.24} metalness={0.18} />
+      </mesh>
+
+      <mesh position={[0, 7.8, -15.5]} receiveShadow>
+        <boxGeometry args={[48, 16, 0.45]} />
+        <meshPhysicalMaterial color="#8fc5df" transparent opacity={0.52} roughness={0.08} metalness={0.08} transmission={0.18} />
+      </mesh>
+
+      <mesh position={[0, 7.8, -15.28]}>
+        <planeGeometry args={[46, 14]} />
+        <meshBasicMaterial color="#b6ddf0" transparent opacity={0.18} toneMapped={false} />
+      </mesh>
+
+      {columns.map((x) => (
+        <mesh key={x} position={[x, 4, -14.9]} castShadow receiveShadow>
+          <boxGeometry args={[0.45, 8, 0.45]} />
+          <meshStandardMaterial color="#f7f8fa" metalness={0.62} roughness={0.2} />
+        </mesh>
+      ))}
+
+      <mesh position={[0, 8.5, 0]} receiveShadow>
+        <boxGeometry args={[48, 0.35, 34]} />
+        <meshStandardMaterial color="#e6e9ed" roughness={0.62} />
+      </mesh>
+
+      {ceilingLights.map((x) => (
+        <group key={x} position={[x, 8.28, -0.5]}>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[3.8, 0.85]} />
+            <meshBasicMaterial color="#fff4d6" toneMapped={false} />
+          </mesh>
+          <pointLight color="#ffe9bd" intensity={8} distance={8} decay={2.2} />
+        </group>
+      ))}
+
+      <RoundedBox args={[11, 2.2, 3.2]} radius={0.45} position={[-10.5, 1.05, -8]} castShadow receiveShadow>
+        <meshStandardMaterial color="#2d333d" metalness={0.72} roughness={0.28} />
+      </RoundedBox>
       <Text position={[-10.5, 2.7, -6.25]} fontSize={0.62} color="#17233d" anchorX="center">BAGGAGE RECLAIM</Text>
-      <RoundedBox args={[7.2, 3.2, 2.2]} radius={0.25} position={[12, 1.6, -7]} castShadow><meshStandardMaterial color="#8f5f3f" roughness={0.5} /></RoundedBox>
+
+      <RoundedBox args={[7.2, 3.2, 2.2]} radius={0.25} position={[12, 1.6, -7]} castShadow receiveShadow>
+        <meshStandardMaterial color="#815036" roughness={0.42} />
+      </RoundedBox>
       <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
-      <mesh position={[0, 0.03, 4]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[3.2, 16]} /><meshStandardMaterial color="#f5c84b" roughness={0.52} /></mesh>
+
+      <mesh position={[0, 0.03, 4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[3.2, 16]} />
+        <meshStandardMaterial color="#f4c847" roughness={0.4} />
+      </mesh>
     </group>
+  );
+}
+
+function HeathrowLighting() {
+  const keyLight = useRef();
+
+  useFrame(({ clock }) => {
+    if (!keyLight.current) return;
+    keyLight.current.intensity = 3.35 + Math.sin(clock.elapsedTime * 0.22) * 0.08;
+  });
+
+  return (
+    <>
+      <ambientLight intensity={0.38} color="#d7e9f6" />
+      <hemisphereLight args={['#dff3ff', '#7d6650', 0.82]} />
+
+      <directionalLight
+        ref={keyLight}
+        position={[-10, 16, -10]}
+        color="#fff1d4"
+        intensity={3.35}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-left={-24}
+        shadow-camera-right={24}
+        shadow-camera-top={24}
+        shadow-camera-bottom={-24}
+        shadow-camera-near={1}
+        shadow-camera-far={50}
+        shadow-bias={-0.00018}
+        shadow-normalBias={0.025}
+      />
+
+      <directionalLight position={[9, 9, 4]} color="#9ccfff" intensity={0.72} />
+      <rectAreaLight position={[0, 7.8, -8]} rotation={[-Math.PI / 2.2, 0, 0]} width={28} height={8} color="#d8efff" intensity={2.3} />
+      <pointLight position={[12, 4.2, -5.5]} color="#ffbd74" intensity={26} distance={12} decay={2.1} />
+      <pointLight position={[-10.5, 3.6, -6.8]} color="#b5ccff" intensity={18} distance={10} decay={2.1} />
+      <spotLight position={[0, 9, 9]} target-position={[0, 0, 11]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={24} decay={2} />
+    </>
   );
 }
 
@@ -73,9 +157,12 @@ function Suitcase({ visible, active }) {
   return (
     <Float speed={active ? 2 : 1} floatIntensity={active ? 0.16 : 0.04} rotationIntensity={0.05}>
       <group position={[SUITCASE.x, 1.12, SUITCASE.z]}>
-        <RoundedBox args={[1.45, 1.75, 0.7]} radius={0.18} castShadow><meshStandardMaterial color="#7655d7" emissive={active ? '#2d175f' : '#000'} emissiveIntensity={active ? 0.9 : 0} /></RoundedBox>
-        <mesh position={[0, 1.08, 0]}><torusGeometry args={[0.35, 0.08, 12, 24, Math.PI]} /><meshStandardMaterial color="#292334" metalness={0.65} /></mesh>
+        <RoundedBox args={[1.45, 1.75, 0.7]} radius={0.18} castShadow>
+          <meshStandardMaterial color="#7655d7" emissive={active ? '#2d175f' : '#000'} emissiveIntensity={active ? 0.9 : 0} roughness={0.32} />
+        </RoundedBox>
+        <mesh position={[0, 1.08, 0]} castShadow><torusGeometry args={[0.35, 0.08, 12, 24, Math.PI]} /><meshStandardMaterial color="#292334" metalness={0.65} /></mesh>
         <Text position={[0, 0, 0.39]} fontSize={0.22} color="white" anchorX="center">LONDON</Text>
+        {active && <pointLight position={[0, 0.4, 1]} color="#a98cff" intensity={7} distance={4.5} decay={2} />}
       </group>
     </Float>
   );
@@ -87,7 +174,8 @@ function Underground({ active }) {
       <mesh castShadow><torusGeometry args={[1.45, 0.34, 20, 48]} /><meshStandardMaterial color={active ? '#ff4c55' : '#db2c37'} emissive={active ? '#7a0910' : '#230000'} emissiveIntensity={active ? 1.8 : 0.5} /></mesh>
       <mesh position={[0, 0, 0.2]} castShadow><boxGeometry args={[4.2, 0.62, 0.35]} /><meshStandardMaterial color="#163f8f" emissive="#09245a" emissiveIntensity={active ? 1.1 : 0.35} /></mesh>
       <Text position={[0, 0, 0.41]} fontSize={0.42} color="white" anchorX="center">UNDERGROUND</Text>
-      <mesh position={[0, -2.45, 0]}><boxGeometry args={[0.35, 3.7, 0.35]} /><meshStandardMaterial color="#39414c" metalness={0.65} /></mesh>
+      <mesh position={[0, -2.45, 0]} castShadow><boxGeometry args={[0.35, 3.7, 0.35]} /><meshStandardMaterial color="#39414c" metalness={0.65} /></mesh>
+      {active && <pointLight position={[0, 0, 1.8]} color="#ff6c65" intensity={12} distance={7} decay={2} />}
     </group>
   );
 }
@@ -102,10 +190,11 @@ function Pico({ target, visible, celebrating }) {
   if (!visible) return null;
   return (
     <group ref={ref}>
-      <mesh castShadow scale={[0.72, 0.9, 0.72]}><sphereGeometry args={[0.7, 24, 24]} /><meshStandardMaterial color="#28b67a" /></mesh>
-      <mesh position={[0.58, 0.08, 0]} rotation={[0, 0, -0.2]}><coneGeometry args={[0.34, 0.75, 18]} /><meshStandardMaterial color="#f3bd37" /></mesh>
-      <mesh position={[0.22, 0.28, 0.55]}><sphereGeometry args={[0.12, 16, 16]} /><meshStandardMaterial color="#121722" /></mesh>
-      <mesh position={[-0.45, -0.1, 0]} rotation={[0, 0, 0.55]}><capsuleGeometry args={[0.22, 0.8, 6, 12]} /><meshStandardMaterial color="#148f68" /></mesh>
+      <mesh castShadow scale={[0.72, 0.9, 0.72]}><sphereGeometry args={[0.7, 24, 24]} /><meshStandardMaterial color="#28b67a" roughness={0.5} /></mesh>
+      <mesh position={[0.58, 0.08, 0]} rotation={[0, 0, -0.2]} castShadow><coneGeometry args={[0.34, 0.75, 18]} /><meshStandardMaterial color="#f3bd37" /></mesh>
+      <mesh position={[0.22, 0.28, 0.55]}><sphereGeometry args={[0.12, 16, 16]} /><meshStandardMaterial color="#121722" roughness={0.15} /></mesh>
+      <mesh position={[-0.45, -0.1, 0]} rotation={[0, 0, 0.55]} castShadow><capsuleGeometry args={[0.22, 0.8, 6, 12]} /><meshStandardMaterial color="#148f68" /></mesh>
+      <pointLight position={[0, 0.7, 0.6]} color="#8fffd0" intensity={2.5} distance={3.5} decay={2} />
     </group>
   );
 }
@@ -137,9 +226,9 @@ function Player({ inputRef, resetToken, reportPosition }) {
 
   return (
     <group ref={ref} position={[SPAWN.x, 0.95, SPAWN.z]}>
-      <mesh castShadow><capsuleGeometry args={[0.48, 1.2, 8, 16]} /><meshStandardMaterial color="#7c5ce7" /></mesh>
-      <mesh position={[0, 1.05, 0]}><sphereGeometry args={[0.43, 24, 24]} /><meshStandardMaterial color="#f0bd99" /></mesh>
-      <mesh position={[0, 1.28, 0]} scale={[1.08, 0.55, 1.08]}><sphereGeometry args={[0.45, 20, 20]} /><meshStandardMaterial color="#493225" /></mesh>
+      <mesh castShadow><capsuleGeometry args={[0.48, 1.2, 8, 16]} /><meshStandardMaterial color="#7c5ce7" roughness={0.42} /></mesh>
+      <mesh position={[0, 1.05, 0]} castShadow><sphereGeometry args={[0.43, 24, 24]} /><meshStandardMaterial color="#f0bd99" roughness={0.54} /></mesh>
+      <mesh position={[0, 1.28, 0]} scale={[1.08, 0.55, 1.08]} castShadow><sphereGeometry args={[0.45, 20, 20]} /><meshStandardMaterial color="#493225" roughness={0.7} /></mesh>
     </group>
   );
 }
@@ -147,9 +236,12 @@ function Player({ inputRef, resetToken, reportPosition }) {
 function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget }) {
   return (
     <>
-      <color attach="background" args={['#a7d7ef']} /><fog attach="fog" args={['#cfe6f2', 28, 62]} />
-      <ambientLight intensity={1.55} /><directionalLight position={[-9, 16, -8]} intensity={2.8} castShadow /><hemisphereLight args={['#e7f6ff', '#b99b74', 1.1]} />
-      <Terminal /><Suitcase visible={!mission.suitcaseCollected} active={activeTarget === 'suitcase'} /><Underground active={activeTarget === 'underground'} />
+      <color attach="background" args={['#8dbbd2']} />
+      <fog attach="fog" args={['#bfd5df', 24, 58]} />
+      <HeathrowLighting />
+      <Terminal />
+      <Suitcase visible={!mission.suitcaseCollected} active={activeTarget === 'suitcase'} />
+      <Underground active={activeTarget === 'underground'} />
       <Player inputRef={inputRef} resetToken={resetToken} reportPosition={reportPosition} />
       <Pico target={playerPosition} visible={mission.suitcaseCollected} celebrating={mission.step === HEATHROW_STEPS.COMPLETE} />
       {mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && <Float speed={1.4} floatIntensity={0.25}><Text position={[0, 6.7, 11]} fontSize={0.58} color="#13213b" anchorX="center">Follow the yellow path</Text></Float>}
@@ -213,10 +305,21 @@ export default function HeathrowPlayableSpine() {
 
   return (
     <main className="relative h-screen min-h-[640px] overflow-hidden bg-slate-950 text-white">
-      <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 6.2, 0], fov: 48, near: 0.1, far: 120 }} gl={{ antialias: true, powerPreference: 'high-performance' }}>
+      <Canvas
+        shadows
+        dpr={[1, 1.5]}
+        camera={{ position: [0, 6.2, 0], fov: 48, near: 0.1, far: 120 }}
+        gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.08 }}
+        onCreated={({ gl }) => {
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.shadowMap.enabled = true;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        }}
+      >
         <World inputRef={inputRef} mission={mission} resetToken={resetToken} reportPosition={reportPosition} playerPosition={playerPosition} activeTarget={activeTarget} />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/25 via-transparent to-slate-950/30" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/20 via-transparent to-slate-950/35" />
+      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(15,23,42,.22)]" />
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-6">
         <div className="pointer-events-auto max-w-sm rounded-[24px] border border-white/35 bg-slate-950/68 p-4 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center gap-2 text-xs font-black tracking-[.18em] text-amber-300"><Sparkles className="h-4 w-4" /> LONDON · A1</div>

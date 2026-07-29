@@ -16,5 +16,8 @@ export default defineConfig({
       visualEditAgent: true
     }),
     react(),
-  ]
+  ],
+  optimizeDeps: {
+    include: ['@react-three/fiber', '@react-three/drei', 'three']
+  }
 });

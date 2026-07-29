@@ -348,13 +348,41 @@ function Underground({ active }) {
   );
 }
 
-function Pico({ target, visible, celebrating }) {
+function Pico({ target, visible, celebrating, entering = false }) {
   const ref = useRef();
+  const entranceStartedAt = useRef(null);
+
+  useEffect(() => {
+    if (visible && entering) entranceStartedAt.current = null;
+  }, [visible, entering]);
+
   useFrame(({ clock }) => {
     if (!ref.current || !visible) return;
-    ref.current.position.lerp(new THREE.Vector3(target.x - 0.9, (celebrating ? 2.25 : 1.9) + Math.sin(clock.elapsedTime * 3) * 0.11, target.z - 0.8), 0.055);
-    ref.current.rotation.z = celebrating ? Math.sin(clock.elapsedTime * 6) * 0.22 : 0;
+    const destination = new THREE.Vector3(
+      target.x - 0.9,
+      (celebrating ? 2.25 : 1.9) + Math.sin(clock.elapsedTime * 3) * 0.11,
+      target.z - 0.8,
+    );
+
+    if (entering) {
+      if (entranceStartedAt.current === null) {
+        entranceStartedAt.current = clock.elapsedTime;
+        ref.current.position.set(target.x - 4.2, 5.4, target.z - 3.2);
+      }
+      const raw = clamp((clock.elapsedTime - entranceStartedAt.current) / 1.25, 0, 1);
+      const eased = 1 - Math.pow(1 - raw, 3);
+      ref.current.position.lerp(destination, 0.06 + eased * 0.12);
+      ref.current.rotation.y = (1 - eased) * Math.PI * 3;
+      ref.current.rotation.z = Math.sin(raw * Math.PI * 2) * (1 - eased) * 0.45;
+      ref.current.scale.setScalar(0.28 + eased * 0.2);
+    } else {
+      ref.current.position.lerp(destination, 0.055);
+      ref.current.rotation.y = 0;
+      ref.current.rotation.z = celebrating ? Math.sin(clock.elapsedTime * 6) * 0.22 : 0;
+      ref.current.scale.setScalar(0.48);
+    }
   });
+
   if (!visible) return null;
   return (
     <group ref={ref} scale={0.48}>
@@ -362,7 +390,7 @@ function Pico({ target, visible, celebrating }) {
       <mesh position={[0.58, 0.08, 0]} rotation={[0, 0, -0.2]} castShadow><coneGeometry args={[0.34, 0.75, 18]} /><meshStandardMaterial color="#f3bd37" /></mesh>
       <mesh position={[0.22, 0.28, 0.55]}><sphereGeometry args={[0.12, 16, 16]} /><meshStandardMaterial color="#121722" roughness={0.15} /></mesh>
       <mesh position={[-0.45, -0.1, 0]} rotation={[0, 0, 0.55]} castShadow><capsuleGeometry args={[0.22, 0.8, 6, 12]} /><meshStandardMaterial color="#148f68" /></mesh>
-      <pointLight position={[0, 0.7, 0.6]} color="#8fffd0" intensity={2.5} distance={3.5} decay={2} />
+      <pointLight position={[0, 0.7, 0.6]} color="#8fffd0" intensity={entering ? 5.5 : 2.5} distance={entering ? 5 : 3.5} decay={2} />
     </group>
   );
 }

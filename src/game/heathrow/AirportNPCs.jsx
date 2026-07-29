@@ -1,6 +1,8 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Float, RoundedBox, Text } from '@react-three/drei';
+import { Select } from '@react-three/postprocessing';
+import * as THREE from 'three';
 
 export const AIRPORT_EMPLOYEE_POSITION = Object.freeze({ x: 5.8, z: 1.6 });
 export const QUESTION_NPC_POSITIONS = Object.freeze({
@@ -13,9 +15,14 @@ const TOPS = ['#556B8C', '#8B5E83', '#3D7B72', '#B06C4E', '#4B5E7A', '#6F5B91'];
 const BOTTOMS = ['#27364C', '#3A4655', '#57483F', '#2F4A5B'];
 const HAIR = ['#564033', '#30231F', '#211915', '#704A31'];
 
-function Face({ skin, hair, friendly = true }) {
+const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+const dampAngle = (current, target, smoothing, delta) => (
+  current + normalizeAngle(target - current) * (1 - Math.exp(-smoothing * delta))
+);
+
+function Face({ skin, hair, friendly = true, faceRef }) {
   return (
-    <group position={[0, 1.28, 0]}>
+    <group ref={faceRef} position={[0, 1.28, 0]}>
       <RoundedBox args={[0.56, 0.55, 0.5]} radius={0.2} castShadow>
         <meshStandardMaterial color={skin} roughness={0.58} />
       </RoundedBox>
@@ -92,8 +99,11 @@ function Passenger({
   paletteIndex = 0,
   questionId = null,
   questionHighlighted = false,
+  engaged = false,
+  playerPosition = null,
 }) {
   const root = useRef();
+  const face = useRef();
   const leftLeg = useRef();
   const rightLeg = useRef();
   const leftArm = useRef();
@@ -104,7 +114,7 @@ function Passenger({
   const bottoms = BOTTOMS[paletteIndex % BOTTOMS.length];
   const hair = HAIR[paletteIndex % HAIR.length];
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     if (!root.current) return;
     const t = clock.elapsedTime + phase;
     const stride = walking ? Math.sin(t * 5.2) * 0.42 : Math.sin(t * 1.5) * 0.025;
@@ -123,6 +133,23 @@ function Passenger({
       } else {
         root.current.position.z = base.z + travel;
         root.current.rotation.y = Math.cos(t * speed) >= 0 ? 0 : Math.PI;
+      }
+    } else {
+      const desiredYaw = engaged && playerPosition
+        ? Math.atan2(playerPosition.x - root.current.position.x, playerPosition.z - root.current.position.z)
+        : rotation;
+      root.current.rotation.y = dampAngle(root.current.rotation.y, desiredYaw, engaged ? 5.6 : 3.2, delta);
+
+      if (face.current) {
+        const remainingYaw = normalizeAngle(desiredYaw - root.current.rotation.y);
+        const headYaw = engaged ? THREE.MathUtils.clamp(remainingYaw * 1.45, -0.52, 0.52) : 0;
+        face.current.rotation.y = dampAngle(face.current.rotation.y, headYaw, 8.5, delta);
+        face.current.rotation.x = THREE.MathUtils.damp(
+          face.current.rotation.x,
+          engaged ? -0.025 + Math.sin(t * 1.7) * 0.018 : 0,
+          7,
+          delta,
+        );
       }
     }
   });
@@ -181,7 +208,7 @@ function Passenger({
         </RoundedBox>
       </group>
 
-      <Face skin={skin} hair={hair} />
+      <Face skin={skin} hair={hair} faceRef={face} />
 
       {suitcase && (
         <group position={[-0.56, 0.04, 0.14]}>
@@ -200,16 +227,43 @@ function Passenger({
   );
 }
 
-function AirportEmployee({ active }) {
+function AirportEmployee({ active, engaged, playerPosition }) {
   const root = useRef();
+  const facing = useRef();
+  const face = useRef();
+  const baseRotation = -2.45;
 
-  useFrame(({ clock }) => {
-    if (!root.current) return;
-    root.current.position.y = Math.sin(clock.elapsedTime * 1.6) * 0.018;
+  useFrame(({ clock }, delta) => {
+    if (root.current) root.current.position.y = Math.sin(clock.elapsedTime * 1.6) * 0.018;
+    if (!facing.current) return;
+
+    const desiredYaw = engaged && playerPosition
+      ? Math.atan2(
+          playerPosition.x - AIRPORT_EMPLOYEE_POSITION.x,
+          playerPosition.z - AIRPORT_EMPLOYEE_POSITION.z,
+        )
+      : baseRotation;
+    facing.current.rotation.y = dampAngle(facing.current.rotation.y, desiredYaw, engaged ? 5.8 : 3.2, delta);
+
+    if (face.current) {
+      const remainingYaw = normalizeAngle(desiredYaw - facing.current.rotation.y);
+      face.current.rotation.y = dampAngle(
+        face.current.rotation.y,
+        engaged ? THREE.MathUtils.clamp(remainingYaw * 1.5, -0.5, 0.5) : 0,
+        8.5,
+        delta,
+      );
+      face.current.rotation.x = THREE.MathUtils.damp(
+        face.current.rotation.x,
+        engaged ? -0.03 + Math.sin(clock.elapsedTime * 1.55) * 0.016 : 0,
+        7,
+        delta,
+      );
+    }
   });
 
   return (
-    <group position={[AIRPORT_EMPLOYEE_POSITION.x, 0.68, AIRPORT_EMPLOYEE_POSITION.z]} rotation={[0, -2.45, 0]} scale={1.12}>
+    <group ref={facing} position={[AIRPORT_EMPLOYEE_POSITION.x, 0.68, AIRPORT_EMPLOYEE_POSITION.z]} rotation={[0, baseRotation, 0]} scale={1.12}>
       <group ref={root}>
         <RoundedBox args={[0.72, 0.9, 0.42]} radius={0.14} position={[0, 0.62, 0]} castShadow>
           <meshStandardMaterial color="#17365F" roughness={0.58} />
@@ -245,16 +299,18 @@ function AirportEmployee({ active }) {
           </group>
         ))}
 
-        <Face skin="#D89B74" hair="#2A211E" />
+        <Face skin="#D89B74" hair="#2A211E" faceRef={face} />
       </group>
 
       {active && (
         <Float speed={2} floatIntensity={0.14}>
           <group position={[0, 2.35, 0]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[0.28, 0.42, 32]} />
-              <meshBasicMaterial color="#F8D65C" transparent opacity={0.88} toneMapped={false} />
-            </mesh>
+            <Select enabled={engaged}>
+              <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.28, 0.42, 32]} />
+                <meshBasicMaterial color="#F8D65C" transparent opacity={0.88} toneMapped={false} />
+              </mesh>
+            </Select>
             <Text position={[0, 0.45, 0]} fontSize={0.18} color="#17213B" anchorX="center" outlineWidth={0.018} outlineColor="#FFFFFF">ASK FOR HELP</Text>
           </group>
         </Float>
@@ -263,10 +319,15 @@ function AirportEmployee({ active }) {
   );
 }
 
-export default function AirportNPCs({ employeeActive = false, questionActiveId = null }) {
+export default function AirportNPCs({
+  employeeActive = false,
+  employeeEngaged = false,
+  questionActiveId = null,
+  playerPosition = null,
+}) {
   return (
     <group>
-      <AirportEmployee active={employeeActive} />
+      <AirportEmployee active={employeeActive} engaged={employeeEngaged} playerPosition={playerPosition} />
 
       <Passenger
         position={[QUESTION_NPC_POSITIONS.gate.x, 0.7, QUESTION_NPC_POSITIONS.gate.z]}
@@ -276,6 +337,8 @@ export default function AirportNPCs({ employeeActive = false, questionActiveId =
         suitcase
         questionId="gate"
         questionHighlighted={questionActiveId === 'gate'}
+        engaged={questionActiveId === 'gate'}
+        playerPosition={playerPosition}
       />
       <Passenger
         position={[QUESTION_NPC_POSITIONS.restroom.x, 0.7, QUESTION_NPC_POSITIONS.restroom.z]}
@@ -285,6 +348,8 @@ export default function AirportNPCs({ employeeActive = false, questionActiveId =
         phone
         questionId="restroom"
         questionHighlighted={questionActiveId === 'restroom'}
+        engaged={questionActiveId === 'restroom'}
+        playerPosition={playerPosition}
       />
 
       <Passenger position={[-7.2, 0.7, -3.5]} phase={0.2} walking axis="z" range={2.2} suitcase paletteIndex={2} />

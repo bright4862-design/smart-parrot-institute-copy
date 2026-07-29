@@ -49,6 +49,18 @@ const readMobileRenderProfile = () => {
   };
 };
 
+function readDprRange(mobile) {
+  const deviceDpr = typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1);
+  const maxDpr = Math.max(1, Math.min(deviceDpr, mobile ? 1.5 : 2));
+  const minDpr = Math.min(maxDpr, mobile ? 1 : 1.15);
+
+  return {
+    minDpr,
+    maxDpr,
+    initialDpr: Math.min(maxDpr, mobile ? 1.25 : 1.5),
+  };
+}
+
 function useMobileRenderProfile() {
   const [profile, setProfile] = useState(readMobileRenderProfile);
 
@@ -728,6 +740,51 @@ function DirectionButton({ label, action, inputRef }) {
   return <button aria-label={label} onPointerDown={(e) => { e.preventDefault(); set(true); }} onPointerUp={() => set(false)} onPointerCancel={() => set(false)} onPointerLeave={() => set(false)} className="grid h-[52px] w-[52px] select-none place-items-center rounded-2xl border border-white/40 bg-slate-950/62 text-lg font-black text-white shadow-xl backdrop-blur active:scale-95">{label}</button>;
 }
 
+function AdaptiveRenderQuality({ dpr, minDpr, maxDpr, mobile, onDprChange }) {
+  const sampleRef = useRef({ elapsed: 0, frames: 0, strongSamples: 0 });
+  const lastChangeRef = useRef(-10);
+
+  useFrame((state, delta) => {
+    if (typeof document !== 'undefined' && document.hidden) return;
+
+    const sample = sampleRef.current;
+    sample.elapsed += Math.min(delta, 0.12);
+    sample.frames += 1;
+
+    if (sample.elapsed < 2.5) return;
+
+    const fps = sample.frames / sample.elapsed;
+    sample.elapsed = 0;
+    sample.frames = 0;
+
+    if (state.clock.elapsedTime - lastChangeRef.current < 4) return;
+
+    const lowFps = mobile ? 42 : 50;
+    const highFps = mobile ? 55 : 58;
+
+    if (fps < lowFps && dpr > minDpr + 0.04) {
+      sample.strongSamples = 0;
+      lastChangeRef.current = state.clock.elapsedTime;
+      onDprChange(Math.max(minDpr, Number((dpr - 0.15).toFixed(2))));
+      return;
+    }
+
+    if (fps > highFps && dpr < maxDpr - 0.04) {
+      sample.strongSamples += 1;
+      if (sample.strongSamples >= 2) {
+        sample.strongSamples = 0;
+        lastChangeRef.current = state.clock.elapsedTime;
+        onDprChange(Math.min(maxDpr, Number((dpr + 0.1).toFixed(2))));
+      }
+      return;
+    }
+
+    sample.strongSamples = 0;
+  });
+
+  return null;
+}
+
 export default function HeathrowPlayableSpine() {
   const inputRef = useRef({ forward: false, backward: false, left: false, right: false });
   const positionRef = useRef({ ...SPAWN });
@@ -746,11 +803,17 @@ export default function HeathrowPlayableSpine() {
   const [pickupAnimating, setPickupAnimating] = useState(false);
   const [picoEntering, setPicoEntering] = useState(false);
   const renderProfile = useMobileRenderProfile();
+  const renderRange = useMemo(() => readDprRange(renderProfile.mobile), [renderProfile.mobile]);
+  const [adaptiveDpr, setAdaptiveDpr] = useState(() => readDprRange(readMobileRenderProfile().mobile).initialDpr);
   const [rendererFailure, setRendererFailure] = useState('');
   const [rendererKey, setRendererKey] = useState(0);
   const canHoldSuitcaseRef = useRef(false);
   const pickupAnimatingRef = useRef(false);
   const interactionTimersRef = useRef([]);
+
+  useEffect(() => {
+    setAdaptiveDpr(renderRange.initialDpr);
+  }, [renderRange]);
 
   const reportPosition = useCallback((x, z) => {
     positionRef.current.x = x;
@@ -981,6 +1044,7 @@ export default function HeathrowPlayableSpine() {
       className="relative h-screen h-[100dvh] overflow-hidden bg-slate-950 text-white [touch-action:none]"
       style={{ minHeight: renderProfile.mobile ? 0 : 560 }}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
+      data-render-dpr={adaptiveDpr.toFixed(2)}
       data-mobile-platform={renderProfile.ios ? 'ios' : renderProfile.android ? 'android' : 'other'}
     >
       {rendererFailure ? rendererFallback : (
@@ -989,7 +1053,7 @@ export default function HeathrowPlayableSpine() {
             key={`${rendererKey}-${renderProfile.mobile ? 'mobile' : 'desktop'}`}
             fallback={rendererFallback}
             shadows={!renderProfile.mobile}
-            dpr={renderProfile.mobile ? 1 : [1, 1.5]}
+            dpr={adaptiveDpr}
             camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: renderProfile.mobile ? 80 : 120 }}
             gl={{
               antialias: !renderProfile.mobile,
@@ -1013,6 +1077,13 @@ export default function HeathrowPlayableSpine() {
               }, { once: true });
             }}
           >
+            <AdaptiveRenderQuality
+              dpr={adaptiveDpr}
+              minDpr={renderRange.minDpr}
+              maxDpr={renderRange.maxDpr}
+              mobile={renderProfile.mobile}
+              onDprChange={setAdaptiveDpr}
+            />
             <World
               inputRef={inputRef}
               mission={mission}

@@ -13,7 +13,7 @@ export default defineConfig({
       hmrNotifier: true,
       navigationNotifier: true,
       analyticsTracker: true,
-      visualEditAgent: true
+      visualEditAgent: false
     }),
     react(),
   ],

@@ -1,0 +1,37 @@
+{
+  "character": "smart-parrot-hero",
+  "version": "1.0.0",
+  "status": "production-foundation",
+  "runtimeFormat": "glb",
+  "units": "meters",
+  "folders": {
+    "concepts": "../concepts",
+    "references": "../references",
+    "models": "../models",
+    "textures": "../textures",
+    "materials": "../materials",
+    "rig": "../rig",
+    "animations": "../animations",
+    "audio": "../audio",
+    "icons": "../icons"
+  },
+  "requiredRuntimeAssets": [
+    "models/hero.glb",
+    "icons/portrait.webp"
+  ],
+  "requiredAnimationClips": [
+    "idle",
+    "walk",
+    "run",
+    "wave",
+    "celebrate",
+    "suitcase_pull",
+    "listen",
+    "repeat_word"
+  ],
+  "signatureElements": [
+    "purple_hoodie",
+    "purple_suitcase",
+    "pico_companion"
+  ]
+}

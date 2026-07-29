@@ -591,7 +591,87 @@ export default function HeathrowPlayableSpine() {
     }
   }, [mission.step]);
 
-  useInput(inputRef, interact);
+  const clearInteractionTimers = useCallback(() => {
+    interactionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    interactionTimersRef.current = [];
+  }, []);
+
+  const beginSuitcaseHold = useCallback(() => {
+    if (!canHoldSuitcaseRef.current || pickupAnimatingRef.current) return;
+    setPicoLine('');
+    setHoldProgress(0);
+    setHoldingSuitcase(true);
+  }, []);
+
+  const endSuitcaseHold = useCallback(() => {
+    if (pickupAnimatingRef.current) return;
+    setHoldingSuitcase(false);
+    setHoldProgress(0);
+  }, []);
+
+  const onInteractPress = useCallback(() => {
+    if (canHoldSuitcaseRef.current) {
+      beginSuitcaseHold();
+      return;
+    }
+    interact();
+  }, [beginSuitcaseHold, interact]);
+
+  const onInteractRelease = useCallback(() => {
+    endSuitcaseHold();
+  }, [endSuitcaseHold]);
+
+  useInput(inputRef, onInteractPress, onInteractRelease);
+
+  useEffect(() => {
+    if (!holdingSuitcase) return undefined;
+    const startedAt = performance.now();
+    let frameId;
+
+    const tick = (now) => {
+      if (!canHoldSuitcaseRef.current) {
+        setHoldingSuitcase(false);
+        setHoldProgress(0);
+        return;
+      }
+
+      const nextProgress = clamp((now - startedAt) / SUITCASE_HOLD_MS, 0, 1);
+      setHoldProgress(nextProgress);
+
+      if (nextProgress >= 1) {
+        setHoldingSuitcase(false);
+        setHoldProgress(1);
+        pickupAnimatingRef.current = true;
+        setPickupAnimating(true);
+        inputRef.current = { forward: false, backward: false, left: false, right: false };
+
+        const pickupTimer = window.setTimeout(() => {
+          dispatch({ type: 'COLLECT_SUITCASE' });
+          pickupAnimatingRef.current = false;
+          setPickupAnimating(false);
+          setHoldProgress(0);
+          setPicoEntering(true);
+
+          const lineTimer = window.setTimeout(() => {
+            setPicoLine('Pico: “Nice! Found it. You’re better at this than most humans.”');
+          }, 620);
+          const entranceTimer = window.setTimeout(() => {
+            setPicoEntering(false);
+          }, 1450);
+          interactionTimersRef.current.push(lineTimer, entranceTimer);
+        }, 520);
+        interactionTimersRef.current.push(pickupTimer);
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [holdingSuitcase]);
+
+  useEffect(() => () => clearInteractionTimers(), [clearInteractionTimers]);
   useEffect(() => saveCheckpoint(mission), [mission]);
   useEffect(() => {
     if (!cutsceneActive) return undefined;

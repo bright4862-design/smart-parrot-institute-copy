@@ -530,14 +530,14 @@ export default function HeathrowPlayableSpine() {
     complete: 'w-full',
   }[mission.step];
   const canInteract = activeTarget || mission.step === HEATHROW_STEPS.MEET_PICO;
-  const label = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
-    ? 'Collect suitcase'
-    : mission.step === HEATHROW_STEPS.MEET_PICO
-      ? 'Say hello to Pico'
-      : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE
-        ? 'Ask airport staff'
-        : activeTarget === 'gate_question' || activeTarget === 'restroom_question'
-          ? 'Talk to traveler'
+  const label = activeTarget === 'gate_question' || activeTarget === 'restroom_question'
+    ? 'Talk to traveler'
+    : mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
+      ? 'Collect suitcase'
+      : mission.step === HEATHROW_STEPS.MEET_PICO
+        ? 'Say hello to Pico'
+        : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE
+          ? 'Ask airport staff'
           : 'Enter Underground';
   const npcQuestionData = npcQuestion === 'gate'
     ? {

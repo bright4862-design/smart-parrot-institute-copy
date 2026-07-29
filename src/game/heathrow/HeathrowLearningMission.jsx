@@ -1,11 +1,13 @@
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   Check,
   CheckCircle2,
   Clock3,
+  CreditCard,
   Headphones,
   MapPin,
+  MessageCircle,
   RotateCcw,
   Sparkles,
   Volume2,
@@ -13,6 +15,8 @@ import {
 import { clearCheckpoint, HEATHROW_CHECKPOINT_KEY, HEATHROW_STEPS } from './missionState';
 
 const HeathrowPlayableSpine = lazy(() => import('./HeathrowPlayableSpine'));
+
+const PRACTICE_STEP_COUNT = 6;
 
 const LISTENING_OPTIONS = [
   'Excuse me, where is the Underground?',
@@ -34,10 +38,52 @@ const SIGN_CHALLENGES = [
     correctIndex: 1,
   },
   {
+    sign: 'RESTROOMS →',
+    question: 'Which sign should you follow if you need the toilet?',
+    options: ['Baggage reclaim', 'Restrooms', 'Customs'],
+    correctIndex: 1,
+  },
+  {
     sign: 'UNDERGROUND',
     question: 'Which sign leads toward the London train?',
     options: ['Baggage reclaim', 'Coffee', 'Underground'],
     correctIndex: 2,
+  },
+];
+
+const TICKET_STEPS = [
+  {
+    prompt: 'Where are you travelling?',
+    helper: 'Pico wants to reach the centre of London.',
+    options: ['Central London', 'Gate A12', 'Baggage reclaim'],
+    correctIndex: 0,
+  },
+  {
+    prompt: 'Which ticket do you need for one journey?',
+    helper: 'You are travelling to London once today.',
+    options: ['A single ticket', 'A return ticket', 'A boarding pass'],
+    correctIndex: 0,
+  },
+  {
+    prompt: 'What is the most natural sentence at the machine?',
+    helper: 'Use a complete, polite request.',
+    options: ['One single ticket, please.', 'Ticket now.', 'Give London.'],
+    correctIndex: 0,
+  },
+];
+
+const TRAVELER_DIALOGUES = [
+  {
+    speaker: 'Traveller near the departure sign',
+    line: '“Excuse me, which gate is this?”',
+    options: ['This is Gate A12.', 'The restroom is purple.', 'I am a suitcase.'],
+    correctIndex: 0,
+  },
+  {
+    speaker: 'Traveller near the coffee shop',
+    line: '“Excuse me, where are the restrooms?”',
+    options: ['They are next to the coffee shop.', 'This is the Underground.', 'The gate is a suitcase.'],
+    correctIndex: 0,
   },
 ];
 
@@ -54,6 +100,16 @@ const RECAP_QUESTIONS = [
     question: 'Which sentence is the most polite?',
     options: ['Underground now.', 'Excuse me, where is the Underground?', 'You show train.'],
     correctIndex: 1,
+  },
+  {
+    question: 'What is a “single ticket”?',
+    options: ['A ticket for one journey', 'A ticket for two people', 'An airport boarding pass'],
+    correctIndex: 0,
+  },
+  {
+    question: 'How should you answer “Which gate is this?”',
+    options: ['This is Gate A12.', 'It is baggage reclaim.', 'I need a suitcase.'],
+    correctIndex: 0,
   },
   {
     question: 'What did the yellow route help you find?',
@@ -78,7 +134,7 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
-function ProgressDots({ current, total }) {
+function ProgressDots({ current, total = PRACTICE_STEP_COUNT }) {
   return (
     <div className="flex items-center gap-1.5" aria-label={`Practice step ${current + 1} of ${total}`}>
       {Array.from({ length: total }, (_, index) => (
@@ -105,13 +161,13 @@ function PracticeShell({ step, children, title, eyebrow, copy, onBack }) {
             </div>
           </div>
           <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-slate-200 backdrop-blur-xl">
-            <Clock3 className="h-3.5 w-3.5 text-amber-300" /> About 5 minutes
+            <Clock3 className="h-3.5 w-3.5 text-amber-300" /> 5–10 minutes
           </div>
         </header>
 
         <section className="my-auto py-8 sm:py-12">
           <div className="mb-6 flex items-center justify-between gap-4">
-            <ProgressDots current={step} total={4} />
+            <ProgressDots current={step} />
             {onBack && (
               <button type="button" onClick={onBack} className="text-xs font-bold text-slate-400 transition hover:text-white">
                 Back
@@ -144,13 +200,14 @@ function Briefing({ onNext }) {
       step={0}
       eyebrow="MISSION BRIEFING"
       title="Arrive ready to speak."
-      copy="Before entering Terminal 5, learn the three phrases and signs you will actually use inside the level."
+      copy="This is a complete five-to-ten-minute chapter. Learn the language first, then use it while exploring Terminal 5."
     >
       <div className="grid gap-3">
         {[
           ['🧳', 'Find your suitcase', 'Look for BAGGAGE RECLAIM and identify the purple case.'],
-          ['💬', 'Ask politely', 'Use “Excuse me…” before asking an airport employee for help.'],
-          ['🚇', 'Follow the route', 'Read the signs and reach the Underground.'],
+          ['💬', 'Talk to people', 'Ask airport staff and help two travellers using complete sentences.'],
+          ['🎫', 'Choose a ticket', 'Select the destination, ticket type, and polite request.'],
+          ['🚇', 'Navigate to London', 'Read signs and follow the yellow route to the Underground.'],
         ].map(([icon, title, body]) => (
           <div key={title} className="flex gap-4 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/10 text-xl">{icon}</div>
@@ -162,7 +219,7 @@ function Briefing({ onNext }) {
         ))}
       </div>
       <button type="button" onClick={onNext} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-300 px-5 py-4 text-sm font-black text-slate-950 shadow-lg shadow-amber-950/20 transition hover:-translate-y-0.5 active:scale-[.99]">
-        Begin airport practice <ArrowRight className="h-4 w-4" />
+        Begin Heathrow chapter <ArrowRight className="h-4 w-4" />
       </button>
     </PracticeShell>
   );
@@ -255,6 +312,109 @@ function SignPractice({ onNext, onBack }) {
   );
 }
 
+function TicketPractice({ onNext, onBack }) {
+  const [challengeIndex, setChallengeIndex] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const challenge = TICKET_STEPS[challengeIndex];
+
+  const choose = (index) => {
+    if (index !== challenge.correctIndex) {
+      setFeedback('Not quite. Use the travel information in the prompt.');
+      return;
+    }
+
+    setFeedback('Ticket choice confirmed.');
+    window.setTimeout(() => {
+      if (challengeIndex === TICKET_STEPS.length - 1) {
+        onNext();
+      } else {
+        setChallengeIndex((value) => value + 1);
+        setFeedback('');
+      }
+    }, 550);
+  };
+
+  return (
+    <PracticeShell
+      step={3}
+      eyebrow={`TICKET MACHINE · ${challengeIndex + 1}/${TICKET_STEPS.length}`}
+      title="Buy the right ticket."
+      copy="Make the same choices you would make at a London ticket machine."
+      onBack={onBack}
+    >
+      <div className="rounded-[24px] border border-cyan-300/25 bg-cyan-950/45 p-4 shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-300 text-cyan-950"><CreditCard className="h-5 w-5" /></div>
+          <div>
+            <div className="text-xs font-black tracking-[.16em] text-cyan-200">HEATHROW TICKET MACHINE</div>
+            <div className="mt-1 text-sm font-semibold text-slate-300">{challenge.helper}</div>
+          </div>
+        </div>
+      </div>
+      <p className="mt-4 text-lg font-black leading-7 text-white">{challenge.prompt}</p>
+      <div className="mt-3 grid gap-2.5">
+        {challenge.options.map((option, index) => (
+          <button key={option} type="button" onClick={() => choose(index)} className="rounded-2xl border border-white/12 bg-slate-950/45 px-4 py-3.5 text-left text-sm font-bold transition hover:border-cyan-300/60 hover:bg-white/10 active:scale-[.99]">
+            {option}
+          </button>
+        ))}
+      </div>
+      {feedback && <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-bold ${feedback.startsWith('Ticket') ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-300/15 text-amber-200'}`}>{feedback}</div>}
+    </PracticeShell>
+  );
+}
+
+function TravelerPractice({ onNext, onBack }) {
+  const [dialogueIndex, setDialogueIndex] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const dialogue = TRAVELER_DIALOGUES[dialogueIndex];
+
+  const choose = (index) => {
+    if (index !== dialogue.correctIndex) {
+      setFeedback('Try again. Answer the traveller with a clear, complete sentence.');
+      return;
+    }
+
+    setFeedback('Helpful and natural!');
+    window.setTimeout(() => {
+      if (dialogueIndex === TRAVELER_DIALOGUES.length - 1) {
+        onNext();
+      } else {
+        setDialogueIndex((value) => value + 1);
+        setFeedback('');
+      }
+    }, 600);
+  };
+
+  return (
+    <PracticeShell
+      step={4}
+      eyebrow={`TRAVELLER CONVERSATION · ${dialogueIndex + 1}/${TRAVELER_DIALOGUES.length}`}
+      title="Help someone in English."
+      copy="The airport feels alive when people need you. Choose the response that is both useful and natural."
+      onBack={onBack}
+    >
+      <div className="rounded-[24px] border border-violet-300/25 bg-violet-950/45 p-4">
+        <div className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-400 text-violet-950"><MessageCircle className="h-5 w-5" /></div>
+          <div>
+            <div className="text-xs font-black tracking-[.14em] text-violet-200">{dialogue.speaker}</div>
+            <div className="mt-1 text-lg font-black text-white">{dialogue.line}</div>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2.5">
+        {dialogue.options.map((option, index) => (
+          <button key={option} type="button" onClick={() => choose(index)} className="rounded-2xl border border-white/12 bg-slate-950/45 px-4 py-3.5 text-left text-sm font-bold transition hover:border-violet-300/60 hover:bg-white/10 active:scale-[.99]">
+            {option}
+          </button>
+        ))}
+      </div>
+      {feedback && <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-bold ${feedback.startsWith('Helpful') ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-300/15 text-amber-200'}`}>{feedback}</div>}
+    </PracticeShell>
+  );
+}
+
 function SentencePractice({ onEnterMission, onBack }) {
   const [selected, setSelected] = useState([]);
   const [feedback, setFeedback] = useState('');
@@ -271,7 +431,7 @@ function SentencePractice({ onEnterMission, onBack }) {
 
   return (
     <PracticeShell
-      step={3}
+      step={5}
       eyebrow="SPEAKING PATTERN"
       title="Build the sentence yourself."
       copy="Put the words in the correct order. This phrase will unlock the route inside Heathrow."
@@ -337,7 +497,7 @@ function Recap({ elapsed, onRestart }) {
 
   const choose = (index) => {
     const correct = index === question.correctIndex;
-    setFeedback(correct ? 'Correct!' : 'Not quite — try the phrase or sign you used in the terminal.');
+    setFeedback(correct ? 'Correct!' : 'Not quite — think about the phrase or sign you used in the terminal.');
     if (!correct) return;
 
     setCorrectAnswers((value) => value + 1);
@@ -371,10 +531,10 @@ function Recap({ elapsed, onRestart }) {
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/30"><CheckCircle2 className="h-8 w-8" /></div>
             <div className="mt-5 text-xs font-black tracking-[.18em] text-emerald-300">HEATHROW A1 COMPLETE</div>
             <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">You learned it by living it.</h2>
-            <p className="mx-auto mt-3 max-w-md text-sm font-semibold leading-6 text-slate-300">You practised airport signs, polite questions, directions, and a complete London travel phrase.</p>
+            <p className="mx-auto mt-3 max-w-md text-sm font-semibold leading-6 text-slate-300">You practised airport signs, polite questions, traveller conversations, ticket choices, directions, and a complete London travel phrase.</p>
             <div className="mx-auto mt-5 grid max-w-sm grid-cols-2 gap-3">
               <div className="rounded-2xl bg-white/5 p-4"><div className="text-2xl font-black text-amber-300">{correctAnswers}/{RECAP_QUESTIONS.length}</div><div className="mt-1 text-xs font-bold text-slate-400">Recap score</div></div>
-              <div className="rounded-2xl bg-white/5 p-4"><div className="text-2xl font-black text-sky-300">{formatElapsed(elapsed)}</div><div className="mt-1 text-xs font-bold text-slate-400">Session time</div></div>
+              <div className="rounded-2xl bg-white/5 p-4"><div className="text-2xl font-black text-sky-300">{formatElapsed(elapsed)}</div><div className="mt-1 text-xs font-bold text-slate-400">Chapter time</div></div>
             </div>
             <button type="button" onClick={onRestart} className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-300 px-6 py-4 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 active:scale-[.99]">
               <RotateCcw className="h-4 w-4" /> Play Heathrow again
@@ -389,22 +549,14 @@ function Recap({ elapsed, onRestart }) {
 export default function HeathrowLearningMission() {
   const [phase, setPhase] = useState('briefing');
   const [elapsed, setElapsed] = useState(0);
-  const startedAtRef = useRef(null);
-
-  const practiceStep = useMemo(() => ({ briefing: 0, listening: 1, signs: 2, sentence: 3 }[phase] ?? 0), [phase]);
+  const startedAtRef = useRef(Date.now());
 
   useEffect(() => {
-    if (phase === 'briefing') {
-      startedAtRef.current = Date.now();
-      setElapsed(0);
-    }
-
-    if (!startedAtRef.current) return undefined;
     const timer = window.setInterval(() => {
       setElapsed(Math.max(0, Math.floor((Date.now() - startedAtRef.current) / 1000)));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [phase === 'briefing']);
+  }, []);
 
   useEffect(() => {
     if (phase !== 'mission') return undefined;
@@ -437,8 +589,10 @@ export default function HeathrowLearningMission() {
 
   if (phase === 'briefing') return <Briefing onNext={() => setPhase('listening')} />;
   if (phase === 'listening') return <ListeningPractice onNext={() => setPhase('signs')} onBack={() => setPhase('briefing')} />;
-  if (phase === 'signs') return <SignPractice onNext={() => setPhase('sentence')} onBack={() => setPhase('listening')} />;
-  if (phase === 'sentence') return <SentencePractice onEnterMission={enterMission} onBack={() => setPhase('signs')} />;
+  if (phase === 'signs') return <SignPractice onNext={() => setPhase('ticket')} onBack={() => setPhase('listening')} />;
+  if (phase === 'ticket') return <TicketPractice onNext={() => setPhase('travelers')} onBack={() => setPhase('signs')} />;
+  if (phase === 'travelers') return <TravelerPractice onNext={() => setPhase('sentence')} onBack={() => setPhase('ticket')} />;
+  if (phase === 'sentence') return <SentencePractice onEnterMission={enterMission} onBack={() => setPhase('travelers')} />;
 
   return (
     <main className="fixed inset-0 min-h-[100svh] overflow-hidden bg-slate-950">

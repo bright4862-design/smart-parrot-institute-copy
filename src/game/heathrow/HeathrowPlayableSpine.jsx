@@ -59,17 +59,17 @@ function Terminal() {
     <group>
       <mesh receiveShadow position={[0, -0.12, 0]}>
         <boxGeometry args={[48, 0.2, 34]} />
-        <meshStandardMaterial color="#cfd5dc" roughness={0.24} metalness={0.18} />
+        <meshStandardMaterial color="#cfd5dc" roughness={0.2} metalness={0.2} />
       </mesh>
 
       <mesh position={[0, 7.8, -15.5]} receiveShadow>
         <boxGeometry args={[48, 16, 0.45]} />
-        <meshPhysicalMaterial color="#8fc5df" transparent opacity={0.52} roughness={0.08} metalness={0.08} transmission={0.18} />
+        <meshPhysicalMaterial color="#789fba" transparent opacity={0.48} roughness={0.12} metalness={0.08} transmission={0.18} />
       </mesh>
 
       <mesh position={[0, 7.8, -15.28]}>
         <planeGeometry args={[46, 14]} />
-        <meshBasicMaterial color="#b6ddf0" transparent opacity={0.18} toneMapped={false} />
+        <meshBasicMaterial color="#a8c8d8" transparent opacity={0.13} toneMapped={false} />
       </mesh>
 
       {columns.map((x) => (
@@ -112,24 +112,116 @@ function Terminal() {
   );
 }
 
-function HeathrowLighting() {
-  const keyLight = useRef();
+function RainyWindowAtmosphere() {
+  const rainRef = useRef();
+  const runwayGlowRef = useRef();
+  const shadowRef = useRef();
+  const aircraftRef = useRef();
+
+  const drops = useMemo(() => Array.from({ length: 72 }, (_, index) => ({
+    x: -22 + ((index * 7.13) % 44),
+    y: 1 + ((index * 3.71) % 13),
+    length: 0.25 + ((index * 0.17) % 0.75),
+    speed: 0.35 + ((index * 0.11) % 0.8),
+  })), []);
+
+  const runwayLights = useMemo(() => Array.from({ length: 18 }, (_, index) => ({
+    x: -21 + index * 2.5,
+    color: index % 5 === 0 ? '#ff8b55' : index % 2 === 0 ? '#8fd3ff' : '#fff0a8',
+  })), []);
 
   useFrame(({ clock }) => {
-    if (!keyLight.current) return;
-    keyLight.current.intensity = 3.35 + Math.sin(clock.elapsedTime * 0.22) * 0.08;
+    const time = clock.elapsedTime;
+    if (rainRef.current) {
+      rainRef.current.children.forEach((drop, index) => {
+        const data = drops[index];
+        drop.position.y = 1 + ((data.y - time * data.speed + 26) % 13);
+      });
+    }
+    if (aircraftRef.current) {
+      aircraftRef.current.position.x = -25 + ((time * 2.15) % 50);
+      aircraftRef.current.position.y = 2.2 + Math.sin(time * 0.34) * 0.18;
+    }
+    if (runwayGlowRef.current) {
+      runwayGlowRef.current.position.x = -19 + ((time * 3.1) % 38);
+      runwayGlowRef.current.material.opacity = 0.2 + Math.sin(time * 1.7) * 0.05;
+    }
+    if (shadowRef.current) {
+      shadowRef.current.position.x = -18 + ((time * 1.45) % 36);
+      shadowRef.current.rotation.z = -0.16 + Math.sin(time * 0.3) * 0.035;
+      shadowRef.current.material.opacity = 0.035 + Math.sin(time * 0.55) * 0.012;
+    }
+  });
+
+  return (
+    <group>
+      <group ref={rainRef} position={[0, 0, -15.03]}>
+        {drops.map((drop, index) => (
+          <mesh key={index} position={[drop.x, drop.y, 0]} rotation={[0, 0, -0.08]}>
+            <planeGeometry args={[0.025, drop.length]} />
+            <meshBasicMaterial color="#d8f1ff" transparent opacity={0.32} depthWrite={false} toneMapped={false} />
+          </mesh>
+        ))}
+      </group>
+
+      <group position={[0, 0, -16.2]}>
+        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[54, 12]} />
+          <meshStandardMaterial color="#344552" roughness={0.22} metalness={0.28} />
+        </mesh>
+        {runwayLights.map((light, index) => (
+          <mesh key={index} position={[light.x, 0.07, 0.6 + (index % 3) * 1.15]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.09, 12]} />
+            <meshBasicMaterial color={light.color} toneMapped={false} />
+          </mesh>
+        ))}
+        <mesh ref={aircraftRef} position={[-22, 2.2, -1]}>
+          <boxGeometry args={[4.4, 0.32, 0.7]} />
+          <meshStandardMaterial color="#dbe4ea" roughness={0.36} metalness={0.52} />
+          <mesh position={[0, 0.12, 0]} rotation={[0, 0, -0.03]}>
+            <boxGeometry args={[1.2, 0.08, 5]} />
+            <meshStandardMaterial color="#ccd7de" roughness={0.38} metalness={0.46} />
+          </mesh>
+          <pointLight position={[-2.2, 0, 0]} color="#ff665a" intensity={18} distance={7} decay={2} />
+          <pointLight position={[2.2, 0, 0]} color="#72dcff" intensity={18} distance={7} decay={2} />
+        </mesh>
+      </group>
+
+      <mesh ref={runwayGlowRef} position={[-19, 0.015, -7]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[7, 1.1]} />
+        <meshBasicMaterial color="#86cfff" transparent opacity={0.2} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+      </mesh>
+
+      <mesh ref={shadowRef} position={[-18, 0.022, -1]} rotation={[-Math.PI / 2, 0, -0.16]}>
+        <planeGeometry args={[13, 3.2]} />
+        <meshBasicMaterial color="#102132" transparent opacity={0.04} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function HeathrowLighting() {
+  const keyLight = useRef();
+  const movingLight = useRef();
+
+  useFrame(({ clock }) => {
+    const time = clock.elapsedTime;
+    if (keyLight.current) keyLight.current.intensity = 3.05 + Math.sin(time * 0.22) * 0.08;
+    if (movingLight.current) {
+      movingLight.current.position.x = -18 + ((time * 1.7) % 36);
+      movingLight.current.intensity = 5.5 + Math.sin(time * 1.25) * 0.7;
+    }
   });
 
   return (
     <>
-      <ambientLight intensity={0.38} color="#d7e9f6" />
-      <hemisphereLight args={['#dff3ff', '#7d6650', 0.82]} />
-
+      <ambientLight intensity={0.32} color="#cfdfeb" />
+      <hemisphereLight args={['#d8edfa', '#675c52', 0.72]} />
       <directionalLight
         ref={keyLight}
         position={[-10, 16, -10]}
-        color="#fff1d4"
-        intensity={3.35}
+        color="#f7e8d3"
+        intensity={3.05}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -142,12 +234,12 @@ function HeathrowLighting() {
         shadow-bias={-0.00018}
         shadow-normalBias={0.025}
       />
-
-      <directionalLight position={[9, 9, 4]} color="#9ccfff" intensity={0.72} />
-      <rectAreaLight position={[0, 7.8, -8]} rotation={[-Math.PI / 2.2, 0, 0]} width={28} height={8} color="#d8efff" intensity={2.3} />
+      <directionalLight position={[9, 9, 4]} color="#86b9e8" intensity={0.62} />
+      <rectAreaLight position={[0, 7.8, -8]} rotation={[-Math.PI / 2.2, 0, 0]} width={28} height={8} color="#cce8f6" intensity={1.9} />
       <pointLight position={[12, 4.2, -5.5]} color="#ffbd74" intensity={26} distance={12} decay={2.1} />
       <pointLight position={[-10.5, 3.6, -6.8]} color="#b5ccff" intensity={18} distance={10} decay={2.1} />
       <spotLight position={[0, 9, 9]} target-position={[0, 0, 11]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={24} decay={2} />
+      <pointLight ref={movingLight} position={[-18, 1.2, -10]} color="#91d7ff" intensity={5.5} distance={10} decay={2} />
     </>
   );
 }
@@ -236,9 +328,10 @@ function Player({ inputRef, resetToken, reportPosition }) {
 function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget }) {
   return (
     <>
-      <color attach="background" args={['#8dbbd2']} />
-      <fog attach="fog" args={['#bfd5df', 24, 58]} />
+      <color attach="background" args={['#718fa3']} />
+      <fog attach="fog" args={['#aebfc9', 22, 56]} />
       <HeathrowLighting />
+      <RainyWindowAtmosphere />
       <Terminal />
       <Suitcase visible={!mission.suitcaseCollected} active={activeTarget === 'suitcase'} />
       <Underground active={activeTarget === 'underground'} />
@@ -309,7 +402,7 @@ export default function HeathrowPlayableSpine() {
         shadows
         dpr={[1, 1.5]}
         camera={{ position: [0, 6.2, 0], fov: 48, near: 0.1, far: 120 }}
-        gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.08 }}
+        gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.02 }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.shadowMap.enabled = true;
@@ -318,8 +411,8 @@ export default function HeathrowPlayableSpine() {
       >
         <World inputRef={inputRef} mission={mission} resetToken={resetToken} reportPosition={reportPosition} playerPosition={playerPosition} activeTarget={activeTarget} />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/20 via-transparent to-slate-950/35" />
-      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(15,23,42,.22)]" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/28 via-transparent to-slate-950/42" />
+      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_rgba(15,23,42,.3)]" />
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-6">
         <div className="pointer-events-auto max-w-sm rounded-[24px] border border-white/35 bg-slate-950/68 p-4 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center gap-2 text-xs font-black tracking-[.18em] text-amber-300"><Sparkles className="h-4 w-4" /> LONDON · A1</div>

@@ -471,7 +471,7 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled }) {
   );
 }
 
-function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled }) {
+function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled, suitcaseProximity, pickupAnimating, picoEntering }) {
   return (
     <>
       <color attach="background" args={['#718fa3']} />
@@ -484,10 +484,20 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
         employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE}
         questionActiveId={activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null}
       />
-      <Suitcase visible={!mission.suitcaseCollected} active={activeTarget === 'suitcase'} />
+      <Suitcase
+        visible={!mission.suitcaseCollected}
+        active={activeTarget === 'suitcase'}
+        proximity={suitcaseProximity}
+        collecting={pickupAnimating}
+      />
       <Underground active={activeTarget === 'underground'} />
       <Player inputRef={inputRef} resetToken={resetToken} reportPosition={reportPosition} controlsEnabled={gameplayEnabled} />
-      <Pico target={cutsceneActive ? SUITCASE : playerPosition} visible={cutsceneActive || mission.suitcaseCollected} celebrating={!cutsceneActive && mission.step === HEATHROW_STEPS.COMPLETE} />
+      <Pico
+        target={cutsceneActive ? SUITCASE : playerPosition}
+        visible={cutsceneActive || mission.suitcaseCollected}
+        celebrating={!cutsceneActive && mission.step === HEATHROW_STEPS.COMPLETE}
+        entering={picoEntering}
+      />
       {mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && <Float speed={1.4} floatIntensity={0.25}><Text position={[0, 6.7, 11]} fontSize={0.58} color="#13213b" anchorX="center">Follow the yellow path</Text></Float>}
     </>
   );

@@ -506,6 +506,12 @@ export default function HeathrowPlayableSpine() {
       : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE
         ? 'Ask airport staff'
         : 'Enter Underground';
+  const cutsceneCopy = [
+    { eyebrow: 'SMART PARROT ADVENTURE', title: 'London Heathrow', body: 'A new city. A new language. One very important suitcase.' },
+    { eyebrow: 'TERMINAL 5', title: 'Arrivals', body: 'Follow the signs through the busy terminal.' },
+    { eyebrow: 'FIRST OBJECTIVE', title: 'Find your purple suitcase', body: 'It should be waiting at baggage reclaim.' },
+    { eyebrow: 'PICO', title: '“Purple suitcase. Very fashionable.”', body: '“Also, apparently, very easy to lose.”' },
+  ][cutsceneBeat];
 
   return (
     <main className="relative h-[100dvh] min-h-[560px] overflow-hidden bg-slate-950 text-white [touch-action:none]">
@@ -524,7 +530,30 @@ export default function HeathrowPlayableSpine() {
       </Canvas>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/28 via-transparent to-slate-950/42" />
       <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_rgba(15,23,42,.3)]" />
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:gap-3 sm:p-6">
+
+      {cutsceneActive && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex flex-col justify-between">
+          <div className="h-[11vh] min-h-14 bg-slate-950/92" />
+          <button
+            type="button"
+            onClick={() => setCutsceneActive(false)}
+            className="pointer-events-auto absolute right-4 top-[calc(env(safe-area-inset-top)_+_1rem)] rounded-full border border-white/25 bg-slate-950/60 px-4 py-2 text-xs font-black tracking-wide text-white backdrop-blur-xl active:scale-95 sm:right-6"
+          >
+            Skip
+          </button>
+          <div className="mx-auto mb-6 w-[min(88vw,620px)] text-center drop-shadow-2xl sm:mb-10">
+            <div className="text-[10px] font-black tracking-[.26em] text-amber-300 sm:text-xs">{cutsceneCopy.eyebrow}</div>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-5xl">{cutsceneCopy.title}</h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm font-semibold leading-6 text-slate-200 sm:mt-3 sm:text-base">{cutsceneCopy.body}</p>
+            <div className="mx-auto mt-4 flex w-fit gap-1.5">
+              {[0, 1, 2, 3].map((beat) => <span key={beat} className={`h-1.5 rounded-full transition-all ${beat === cutsceneBeat ? 'w-8 bg-amber-300' : 'w-2 bg-white/35'}`} />)}
+            </div>
+          </div>
+          <div className="h-[11vh] min-h-14 bg-slate-950/92" />
+        </div>
+      )}
+
+      {!cutsceneActive && <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:gap-3 sm:p-6">
         <div className="pointer-events-auto w-[calc(100%_-_6rem)] max-w-sm rounded-[20px] border border-white/35 bg-slate-950/72 p-3 shadow-2xl backdrop-blur-xl sm:w-auto sm:rounded-[24px] sm:p-4">
           <div className="flex items-center gap-1.5 text-[10px] font-black tracking-[.16em] text-amber-300 sm:text-xs"><Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> LONDON · A1</div>
           <h1 className="mt-0.5 text-base font-black sm:mt-1 sm:text-xl">Heathrow Terminal 5</h1>
@@ -535,8 +564,8 @@ export default function HeathrowPlayableSpine() {
           <button aria-label="Show help" onClick={() => setPicoLine('Pico: “Look for the softly glowing object.”')} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><HelpCircle className="h-[18px] w-[18px] sm:h-5 sm:w-5" /></button>
           <button aria-label="Restart mission" onClick={restart} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><RotateCcw className="h-[18px] w-[18px] sm:h-5 sm:w-5" /></button>
         </div>
-      </header>
-      {picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
+      </header>}
+      {!cutsceneActive && picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
 
       {quizOpen && (
         <div className="absolute inset-0 z-40 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
@@ -575,10 +604,14 @@ export default function HeathrowPlayableSpine() {
         </div>
       )}
 
-      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] left-4 z-20 grid grid-cols-3 gap-1.5 sm:hidden"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
-      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[52%] sm:bottom-5 sm:right-5 sm:max-w-[58%]">
-        {canInteract ? <button onClick={interact} className="min-h-12 rounded-full bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button> : mission.step === HEATHROW_STEPS.COMPLETE ? <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div> : <div className="hidden rounded-full border border-white/30 bg-slate-950/60 px-5 py-3 text-sm font-bold backdrop-blur sm:block">Move with WASD or arrow keys</div>}
-      </div>
+      {!cutsceneActive && (
+        <>
+          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] left-4 z-20 grid grid-cols-3 gap-1.5 sm:hidden"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
+          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[52%] sm:bottom-5 sm:right-5 sm:max-w-[58%]">
+            {canInteract ? <button onClick={interact} className="min-h-12 rounded-full bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button> : mission.step === HEATHROW_STEPS.COMPLETE ? <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div> : <div className="hidden rounded-full border border-white/30 bg-slate-950/60 px-5 py-3 text-sm font-bold backdrop-blur sm:block">Move with WASD or arrow keys</div>}
+          </div>
+        </>
+      )}
     </main>
   );
 }

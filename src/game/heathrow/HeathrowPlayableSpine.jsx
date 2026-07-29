@@ -289,18 +289,49 @@ function HeathrowLighting() {
   );
 }
 
-function Suitcase({ visible, active }) {
+function Suitcase({ visible, active, proximity = 0, collecting = false }) {
+  const groupRef = useRef();
+  const startedAt = useRef(null);
+
+  useEffect(() => {
+    startedAt.current = null;
+  }, [collecting]);
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current || !visible) return;
+    if (collecting) {
+      if (startedAt.current === null) startedAt.current = clock.elapsedTime;
+      const raw = clamp((clock.elapsedTime - startedAt.current) / 0.52, 0, 1);
+      const eased = 1 - Math.pow(1 - raw, 3);
+      const scale = Math.max(0.12, 1 - eased * 0.88);
+      groupRef.current.position.set(SUITCASE.x, 1.12 + eased * 1.35, SUITCASE.z);
+      groupRef.current.rotation.set(eased * -0.2, eased * 2.2, eased * 0.35);
+      groupRef.current.scale.setScalar(scale);
+    } else {
+      groupRef.current.position.set(SUITCASE.x, 1.12, SUITCASE.z);
+      groupRef.current.rotation.set(0, 0, 0);
+      groupRef.current.scale.setScalar(1);
+    }
+  });
+
   if (!visible) return null;
+  const glowStrength = 0.12 + proximity * 1.55 + (active ? 0.55 : 0) + (collecting ? 1.1 : 0);
+  const floorGlow = clamp(0.12 + proximity * 0.6 + (active ? 0.2 : 0), 0.12, 0.92);
+
   return (
-    <Float speed={active ? 2 : 1} floatIntensity={active ? 0.16 : 0.04} rotationIntensity={0.05}>
-      <group position={[SUITCASE.x, 1.12, SUITCASE.z]}>
+    <Float speed={active ? 2.4 : 1 + proximity} floatIntensity={active ? 0.2 : 0.04 + proximity * 0.08} rotationIntensity={0.04}>
+      <group ref={groupRef} position={[SUITCASE.x, 1.12, SUITCASE.z]}>
         <RoundedBox args={[1.45, 1.75, 0.7]} radius={0.18} castShadow>
-          <meshStandardMaterial color="#7655d7" emissive={active ? '#2d175f' : '#000'} emissiveIntensity={active ? 0.9 : 0} roughness={0.32} />
+          <meshStandardMaterial color="#7655d7" emissive="#3d1f84" emissiveIntensity={glowStrength} roughness={0.32} />
         </RoundedBox>
         <mesh position={[0, 1.08, 0]} castShadow><torusGeometry args={[0.35, 0.08, 12, 24, Math.PI]} /><meshStandardMaterial color="#292334" metalness={0.65} /></mesh>
         <Text position={[0, 0, 0.39]} fontSize={0.22} color="white" anchorX="center">LONDON</Text>
-        {active && <pointLight position={[0, 0.4, 1]} color="#a98cff" intensity={7} distance={4.5} decay={2} />}
+        <pointLight position={[0, 0.4, 1]} color="#a98cff" intensity={2 + proximity * 10 + (active ? 5 : 0)} distance={4.5 + proximity * 2.5} decay={2} />
       </group>
+      <mesh position={[SUITCASE.x, 0.035, SUITCASE.z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.72, 1.15 + proximity * 0.18, 48]} />
+        <meshBasicMaterial color="#a98cff" transparent opacity={floorGlow} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+      </mesh>
     </Float>
   );
 }

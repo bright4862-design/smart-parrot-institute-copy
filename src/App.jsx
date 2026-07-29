@@ -28,7 +28,6 @@ function RouteLoading() {
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings } = useAuth();
 
-  // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
@@ -37,12 +36,11 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Render the main app
   return (
     <Suspense fallback={<RouteLoading />}>
       <Routes>
+        <Route path="/" element={<LondonMission />} />
         <Route element={<AppLayout />}>
-          <Route path="/" element={<LondonMission />} />
           <Route path="/learn" element={<Learn />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/profile" element={<Profile />} />
@@ -57,9 +55,7 @@ const AuthenticatedApp = () => {
   );
 };
 
-
 function App() {
-
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>

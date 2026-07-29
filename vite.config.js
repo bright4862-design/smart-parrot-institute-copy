@@ -18,6 +18,7 @@ export default defineConfig({
     react(),
   ],
   optimizeDeps: {
-    include: ['@react-three/fiber', '@react-three/drei', 'three']
+    include: ['@react-three/fiber', '@react-three/drei', 'three'],
+    force: true
   }
 });

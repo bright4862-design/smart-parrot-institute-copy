@@ -8,10 +8,16 @@ import { defineConfig } from 'vite'
 const stripR3FSourceAttrs = () => ({
   name: 'strip-r3f-source-attrs',
   apply: 'serve',
+  enforce: 'post',
   transform(code, id) {
     if (!/src\/(game|components\/game)\//.test(id)) return null;
-    if (!/data-(source-location|dynamic-content)=/.test(code)) return null;
-    return { code: code.replace(/\s+data-(?:source-location|dynamic-content)="[^"]*"/g, ''), map: null };
+    if (!/data-(?:source-location|dynamic-content)/.test(code)) return null;
+    const stripped = code
+      // JSX form: <mesh data-source-location="...">
+      .replace(/\s+data-(?:source-location|dynamic-content)="[^"]*"/g, '')
+      // compiled form: { "data-source-location": "...", ... }
+      .replace(/["']data-(?:source-location|dynamic-content)["']\s*:\s*(["'])(?:(?!\1).)*\1\s*,?/g, '');
+    return { code: stripped, map: null };
   },
 });
 

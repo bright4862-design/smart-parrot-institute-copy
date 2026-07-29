@@ -508,6 +508,7 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   const velocity = useRef(new THREE.Vector3());
   const cameraGoal = useMemo(() => new THREE.Vector3(), []);
   const cameraLook = useMemo(() => new THREE.Vector3(), []);
+  const cameraAim = useMemo(() => new THREE.Object3D(), []);
   const toSpeaker = useMemo(() => new THREE.Vector3(), []);
   const cameraSide = useMemo(() => new THREE.Vector3(), []);
   const [moving, setMoving] = useState(false);
@@ -564,13 +565,18 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
       cameraGoal.y = mobile ? 4.65 : 4.05;
 
       camera.position.lerp(cameraGoal, 1 - Math.pow(0.0008, delta));
-      camera.lookAt(cameraLook);
+      cameraAim.position.copy(camera.position);
+      cameraAim.lookAt(cameraLook);
+      camera.quaternion.slerp(cameraAim.quaternion, 1 - Math.pow(0.0005, delta));
     } else if (controlsEnabled) {
       const cameraHeight = mobile ? 7.15 : 6.4;
       const cameraDistance = mobile ? 11.8 : 9.8;
       cameraGoal.set(ref.current.position.x, cameraHeight, ref.current.position.z + cameraDistance);
+      cameraLook.set(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
       camera.position.lerp(cameraGoal, 1 - Math.pow(0.002, delta));
-      camera.lookAt(ref.current.position.x, 1.15, ref.current.position.z - 1.8);
+      cameraAim.position.copy(camera.position);
+      cameraAim.lookAt(cameraLook);
+      camera.quaternion.slerp(cameraAim.quaternion, 1 - Math.pow(0.0012, delta));
     }
   });
 
@@ -694,9 +700,9 @@ export default function HeathrowPlayableSpine() {
       ? 'employee'
       : mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && nearUnderground
         ? 'underground'
-        : nearGateTraveler
+        : mission.step !== HEATHROW_STEPS.MEET_PICO && nearGateTraveler
           ? 'gate_question'
-          : nearRestroomTraveler
+          : mission.step !== HEATHROW_STEPS.MEET_PICO && nearRestroomTraveler
             ? 'restroom_question'
             : null;
 

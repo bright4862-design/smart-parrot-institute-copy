@@ -1,4 +1,12 @@
-import { RoundedBox, Text } from '@react-three/drei';
+import { Billboard, Float, RoundedBox, Text } from '@react-three/drei';
+
+export const TICKET_MACHINE_INTERACTION = Object.freeze({
+  position: Object.freeze({ x: 0, z: 10.5 }),
+  interactionPosition: Object.freeze({ x: 0, z: 12 }),
+  cameraTarget: Object.freeze({ x: 0, y: 1.46, z: 10.95 }),
+  radius: 2.25,
+  cameraSide: 1,
+});
 
 const BENCH_POSITIONS = [
   [-25, -2],
@@ -20,7 +28,7 @@ function ZoneFloor({ position, size, color }) {
   return (
     <mesh position={[position[0], 0.015, position[1]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={size} />
-      <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
+      <meshStandardMaterial color={color} roughness={0.72} metalness={0.02} />
     </mesh>
   );
 }
@@ -83,7 +91,7 @@ function Planter({ position }) {
   );
 }
 
-function TicketMachine({ x }) {
+function TicketMachine({ x, active = false, engaged = false }) {
   return (
     <group position={[x, 1.18, 0]}>
       <RoundedBox args={[1.5, 2.4, 0.85]} radius={0.16} castShadow receiveShadow>
@@ -94,26 +102,47 @@ function TicketMachine({ x }) {
         <meshStandardMaterial
           color="#bcecff"
           emissive="#4db9e8"
-          emissiveIntensity={0.72}
+          emissiveIntensity={engaged ? 1.9 : active ? 1.45 : 0.72}
           roughness={0.22}
         />
       </mesh>
       <Text position={[0, -0.62, 0.46]} fontSize={0.15} color="#ffffff" anchorX="center">
         TICKETS
       </Text>
+      {active && (
+        <Float speed={1.7} floatIntensity={0.08}>
+          <Billboard position={[0, 1.75, 0]} follow>
+            <RoundedBox args={[1.5, 0.42, 0.12]} radius={0.12}>
+              <meshStandardMaterial
+                color="#F8D65C"
+                emissive="#7C5C00"
+                emissiveIntensity={engaged ? 1.1 : 0.7}
+                roughness={0.35}
+              />
+            </RoundedBox>
+            <Text position={[0, 0, 0.07]} fontSize={0.13} color="#17213B" anchorX="center" anchorY="middle">
+              BUY TICKET
+            </Text>
+          </Billboard>
+        </Float>
+      )}
     </group>
   );
 }
 
-export default function TerminalExpansion({ mobileRenderer = false }) {
+export default function TerminalExpansion({
+  mobileRenderer = false,
+  ticketMachineActive = false,
+  ticketMachineEngaged = false,
+}) {
   const visibleBenches = mobileRenderer ? BENCH_POSITIONS.slice(0, 4) : BENCH_POSITIONS;
   const visiblePlanters = mobileRenderer ? PLANTER_POSITIONS.filter((_, index) => index % 2 === 0) : PLANTER_POSITIONS;
 
   return (
     <group>
-      <ZoneFloor position={[-23, 3.5]} size={[18, 22]} color="#c7d6e2" />
-      <ZoneFloor position={[23, 4]} size={[18, 22]} color="#d4ddd8" />
-      <ZoneFloor position={[0, 13]} size={[15, 18]} color="#d8d2e3" />
+      <ZoneFloor position={[-23, 3.5]} size={[18, 22]} color="#7f96a8" />
+      <ZoneFloor position={[23, 4]} size={[18, 22]} color="#849b91" />
+      <ZoneFloor position={[0, 13]} size={[15, 18]} color="#91889e" />
 
       <ConcourseHeader position={[-22, 6.4, -2]} label="GATES A · A12" accent="#4aa3ff" />
       <ConcourseHeader position={[22, 6.4, -1]} label="SERVICES · RESTROOMS" accent="#48d6ba" />
@@ -144,7 +173,14 @@ export default function TerminalExpansion({ mobileRenderer = false }) {
         <RoundedBox args={[8.6, 0.25, 4.8]} radius={0.2} position={[0, 0.12, 0]} receiveShadow>
           <meshStandardMaterial color="#bac5d1" roughness={0.38} metalness={0.22} />
         </RoundedBox>
-        {[-2.2, 0, 2.2].map((x) => <TicketMachine key={x} x={x} />)}
+        {[-2.2, 0, 2.2].map((x) => (
+          <TicketMachine
+            key={x}
+            x={x}
+            active={ticketMachineActive && x === 0}
+            engaged={ticketMachineEngaged && x === 0}
+          />
+        ))}
       </group>
 
       {visibleBenches.map(([x, z]) => <Bench key={`${x}:${z}`} position={[x, z]} />)}

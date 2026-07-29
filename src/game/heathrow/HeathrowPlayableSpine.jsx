@@ -32,7 +32,7 @@ const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 const dampAngle = (current, target, smoothing, delta) => (
   current + normalizeAngle(target - current) * (1 - Math.exp(-smoothing * delta))
 );
-const TRAVELER_QUESTIONS = Object.freeze({
+const NPC_QUESTIONS = Object.freeze({
   gate: Object.freeze({
     eyebrow: 'GATE A12 · TRAVELLER',
     title: '“Excuse me — is this Gate A12?”',
@@ -44,9 +44,26 @@ const TRAVELER_QUESTIONS = Object.freeze({
     ]),
     correctIndex: 0,
     completionEvent: 'HELP_GATE_TRAVELER',
+    completionFlag: 'gateTravelerHelped',
     success: '“Thank you! I’m in the right place.”',
     retry: 'Look at the blue gate sign. Read the letter and number together.',
     picoSuccess: 'Pico: “Nice work — you used the sign to help someone. Now let’s ask airport staff for directions.”',
+  }),
+  employee: Object.freeze({
+    eyebrow: 'AIRPORT STAFF · DIRECTIONS',
+    title: '“Hello. How can I help?”',
+    prompt: 'Choose the polite, complete question.',
+    answers: Object.freeze([
+      'Excuse me, where is the Underground?',
+      'You take me to the Underground now.',
+      'Underground is where?',
+    ]),
+    correctIndex: 0,
+    completionEvent: 'ANSWER_EMPLOYEE',
+    completionFlag: 'employeeDirectionsAnswered',
+    success: '“Of course. Follow the yellow route to the ticket machines.”',
+    retry: 'Start with “Excuse me” and ask a complete question.',
+    picoSuccess: 'Pico: “Excellent manners. The ticket machines are along the yellow route.”',
   }),
   restroom: Object.freeze({
     eyebrow: 'SERVICES · TRAVELLER',
@@ -59,6 +76,7 @@ const TRAVELER_QUESTIONS = Object.freeze({
     ]),
     correctIndex: 0,
     completionEvent: 'HELP_RESTROOM_TRAVELER',
+    completionFlag: 'restroomTravelerHelped',
     success: '“Thank you! I can find them now.”',
     retry: 'Look at the services sign and choose the complete direction.',
     picoSuccess: 'Pico: “Clear directions. No interpretive dance required.”',
@@ -704,7 +722,6 @@ function World({
   suitcaseProximity,
   pickupAnimating,
   picoEntering,
-  quizOpen,
   npcQuestion,
   inspectedSignIds,
   focusedSignId,
@@ -720,8 +737,8 @@ function World({
         lookY: focusedSign.position[1],
         cameraSide: focusedSign.cameraSide,
       }
-    : quizOpen
-      ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: -1 }
+    : npcQuestion === 'employee'
+      ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: 1 }
       : npcQuestion
         ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: npcQuestion === 'gate' ? 1 : -1 }
         : null;
@@ -743,7 +760,7 @@ function World({
         />
         <AirportNPCs
           employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE}
-          employeeEngaged={activeTarget === 'employee' || quizOpen}
+          employeeEngaged={activeTarget === 'employee' || npcQuestion === 'employee'}
           questionActiveId={engagedQuestionId}
           playerPosition={playerPosition}
         />
@@ -842,8 +859,6 @@ export default function HeathrowPlayableSpine() {
   const [mission, dispatch] = useReducer(reduceMission, INITIAL_MISSION_STATE, loadCheckpoint);
   const [resetToken, setResetToken] = useState(0);
   const [picoLine, setPicoLine] = useState('');
-  const [quizOpen, setQuizOpen] = useState(false);
-  const [quizFeedback, setQuizFeedback] = useState('');
   const [npcQuestion, setNpcQuestion] = useState(null);
   const [npcQuestionFeedback, setNpcQuestionFeedback] = useState('');
   const [inspectedSignIds, setInspectedSignIds] = useState([]);
@@ -895,7 +910,6 @@ export default function HeathrowPlayableSpine() {
     && nearSuitcase
     && !pickupAnimating
     && !cutsceneActive
-    && !quizOpen
     && !npcQuestion;
   canHoldSuitcaseRef.current = canHoldSuitcase;
   const activeTarget = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && nearSuitcase
@@ -911,21 +925,18 @@ export default function HeathrowPlayableSpine() {
             : mission.step === HEATHROW_STEPS.HELP_RESTROOM_TRAVELER && nearRestroomTraveler
               ? 'restroom_question'
               : null;
-  const npcQuestionData = TRAVELER_QUESTIONS[npcQuestion] ?? null;
-  const npcQuestionComplete = npcQuestion === 'gate'
-    ? mission.gateTravelerHelped
-    : npcQuestion === 'restroom'
-      ? mission.restroomTravelerHelped
-      : false;
+  const npcQuestionData = NPC_QUESTIONS[npcQuestion] ?? null;
+  const npcQuestionComplete = npcQuestionData
+    ? Boolean(mission[npcQuestionData.completionFlag])
+    : false;
   const gameplayEnabled = !cutsceneActive
-    && !quizOpen
     && !npcQuestion
     && !focusedSignId
     && !pickupAnimating
     && !picoEntering;
 
   const interact = useCallback(() => {
-    if (quizOpen || npcQuestion || focusedSignId) return;
+    if (npcQuestion || focusedSignId) return;
     const position = positionRef.current;
     if (mission.step === HEATHROW_STEPS.MEET_PICO) {
       dispatch({ type: 'MEET_PICO' });
@@ -939,8 +950,8 @@ export default function HeathrowPlayableSpine() {
       setFocusedSignId(sign.id);
     } else if (mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && distance(position, AIRPORT_EMPLOYEE_POSITION) < 3.2) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
-      setQuizFeedback('');
-      setQuizOpen(true);
+      setNpcQuestionFeedback('');
+      setNpcQuestion('employee');
     } else if (mission.step === HEATHROW_STEPS.REACH_UNDERGROUND && distance(position, UNDERGROUND) < 3.8) {
       dispatch({ type: 'REACH_UNDERGROUND' });
       setPicoLine('Pico: “You found it. London is waiting.”');
@@ -959,7 +970,7 @@ export default function HeathrowPlayableSpine() {
       setNpcQuestionFeedback('');
       setNpcQuestion('restroom');
     }
-  }, [focusedSignId, inspectedSignIds, mission.step, npcQuestion, quizOpen]);
+  }, [focusedSignId, inspectedSignIds, mission.step, npcQuestion]);
 
   useEffect(() => {
     if (
@@ -1121,8 +1132,6 @@ export default function HeathrowPlayableSpine() {
     positionRef.current = { ...SPAWN };
     setPlayerPosition({ ...SPAWN });
     setPicoLine('');
-    setQuizOpen(false);
-    setQuizFeedback('');
     setNpcQuestion(null);
     setNpcQuestionFeedback('');
     setInspectedSignIds([]);
@@ -1226,7 +1235,6 @@ export default function HeathrowPlayableSpine() {
               suitcaseProximity={mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? suitcaseProximity : 0}
               pickupAnimating={pickupAnimating}
               picoEntering={picoEntering}
-              quizOpen={quizOpen}
               npcQuestion={npcQuestion}
               inspectedSignIds={inspectedSignIds}
               focusedSignId={focusedSignId}
@@ -1306,53 +1314,16 @@ export default function HeathrowPlayableSpine() {
         </div>
       )}
 
-      {quizOpen && (
-        <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/45 bg-white/96 p-5 text-slate-900 shadow-2xl backdrop-blur-xl sm:p-7">
-            <div className="text-xs font-black tracking-[.18em] text-violet-600">FIRST ENGLISH MOMENT</div>
-            <h2 className="mt-2 text-2xl font-black tracking-tight">What should you say?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Choose the polite sentence to ask the airport employee for directions.</p>
-            <div className="mt-5 grid gap-3">
-              {[
-                'Excuse me, where is the Underground?',
-                'You take me Underground now.',
-                'Underground is where?',
-              ].map((answer, index) => (
-                <button
-                  key={answer}
-                  type="button"
-                  onClick={() => {
-                    if (index === 0) {
-                      dispatch({ type: 'ANSWER_PHRASE' });
-                      setQuizFeedback('Perfect! The employee points you toward the yellow route.');
-                      setPicoLine('Pico: “Excellent manners. I was going to say: train, please!”');
-                      window.setTimeout(() => setQuizOpen(false), 850);
-                    } else {
-                      setQuizFeedback('Almost — choose the polite complete sentence beginning with “Excuse me”.');
-                    }
-                  }}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold transition hover:border-violet-300 hover:bg-violet-50 active:scale-[0.99]"
-                >
-                  {answer}
-                </button>
-              ))}
-            </div>
-            {quizFeedback && <p className="mt-4 rounded-2xl bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800">{quizFeedback}</p>}
-            <button type="button" onClick={() => setQuizOpen(false)} className="mt-4 text-sm font-bold text-slate-500">Close</button>
-          </div>
-        </div>
-      )}
-
       {npcQuestionData && (
         <div className="absolute inset-0 z-40 flex items-end justify-end bg-slate-950/[0.18] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6">
           <section
             role="dialog"
             aria-modal="true"
-            aria-labelledby="traveller-dialog-title"
+            aria-labelledby="npc-dialog-title"
             className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[26px] border border-sky-100/50 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl [touch-action:pan-y] sm:max-h-[calc(100dvh-3rem)] sm:p-6"
           >
             <div className="text-[10px] font-black tracking-[.18em] text-sky-300 sm:text-xs">{npcQuestionData.eyebrow}</div>
-            <h2 id="traveller-dialog-title" className="mt-2 text-xl font-black tracking-tight sm:text-2xl">{npcQuestionData.title}</h2>
+            <h2 id="npc-dialog-title" className="mt-2 text-xl font-black tracking-tight sm:text-2xl">{npcQuestionData.title}</h2>
             <p className="mt-2 text-xs font-semibold leading-5 text-slate-300 sm:text-sm sm:leading-6">{npcQuestionData.prompt}</p>
             <div className="mt-4 grid gap-2.5 sm:mt-5 sm:gap-3">
               {npcQuestionData.answers.map((answer, index) => (

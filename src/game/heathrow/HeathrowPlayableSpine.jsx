@@ -294,6 +294,7 @@ function Pico({ target, visible, celebrating }) {
 function Player({ inputRef, resetToken, reportPosition }) {
   const ref = useRef();
   const velocity = useRef(new THREE.Vector3());
+  const [moving, setMoving] = useState(false);
   const { camera } = useThree();
 
   useEffect(() => {
@@ -310,7 +311,9 @@ function Player({ inputRef, resetToken, reportPosition }) {
     ref.current.position.addScaledVector(velocity.current, delta);
     ref.current.position.x = clamp(ref.current.position.x, -20, 20);
     ref.current.position.z = clamp(ref.current.position.z, -13, 12);
-    if (velocity.current.lengthSq() > 0.04) ref.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.z);
+    const isMoving = velocity.current.lengthSq() > 0.35;
+    if (isMoving) ref.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.z);
+    setMoving((current) => (current === isMoving ? current : isMoving));
     reportPosition(ref.current.position.x, ref.current.position.z);
     camera.position.lerp(new THREE.Vector3(ref.current.position.x, 6.2, ref.current.position.z + 8.5), 1 - Math.pow(0.002, delta));
     camera.lookAt(ref.current.position.x, 1.3, ref.current.position.z - 2.2);
@@ -318,95 +321,9 @@ function Player({ inputRef, resetToken, reportPosition }) {
 
   return (
     <group ref={ref} position={[SPAWN.x, 0.95, SPAWN.z]}>
-      {/* Stylized Smart Parrot traveler fallback. Replace with hero_v1.glb when the final rig is ready. */}
-      <group scale={0.92}>
-        {/* Legs and trainers */}
-        <RoundedBox args={[0.34, 0.72, 0.38]} radius={0.11} position={[-0.21, -0.56, 0]} castShadow>
-          <meshStandardMaterial color="#31547b" roughness={0.72} />
-        </RoundedBox>
-        <RoundedBox args={[0.34, 0.72, 0.38]} radius={0.11} position={[0.21, -0.56, 0]} castShadow>
-          <meshStandardMaterial color="#2b4c73" roughness={0.72} />
-        </RoundedBox>
-        <RoundedBox args={[0.43, 0.2, 0.66]} radius={0.09} position={[-0.21, -0.96, -0.08]} castShadow>
-          <meshStandardMaterial color="#f7f7fb" roughness={0.48} />
-        </RoundedBox>
-        <RoundedBox args={[0.43, 0.2, 0.66]} radius={0.09} position={[0.21, -0.96, -0.08]} castShadow>
-          <meshStandardMaterial color="#f7f7fb" roughness={0.48} />
-        </RoundedBox>
-
-        {/* Navy travel jacket and purple hoodie */}
-        <RoundedBox args={[0.96, 1.08, 0.54]} radius={0.2} position={[0, 0.16, 0]} castShadow>
-          <meshStandardMaterial color="#203a60" roughness={0.58} />
-        </RoundedBox>
-        <RoundedBox args={[0.62, 0.72, 0.58]} radius={0.16} position={[0, 0.28, -0.03]} castShadow>
-          <meshStandardMaterial color="#6f5cff" roughness={0.6} />
-        </RoundedBox>
-        <mesh position={[0, 0.69, 0.04]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-          <torusGeometry args={[0.27, 0.09, 12, 28, Math.PI]} />
-          <meshStandardMaterial color="#806cff" roughness={0.62} />
-        </mesh>
-
-        {/* Backpack, visible from the third-person camera */}
-        <RoundedBox args={[0.66, 0.78, 0.3]} radius={0.14} position={[0, 0.16, 0.38]} castShadow>
-          <meshStandardMaterial color="#7b4b2f" roughness={0.7} />
-        </RoundedBox>
-        <mesh position={[-0.34, 0.2, 0.25]} rotation={[0.08, 0, 0.12]} castShadow>
-          <capsuleGeometry args={[0.065, 0.78, 6, 12]} />
-          <meshStandardMaterial color="#9a623d" roughness={0.68} />
-        </mesh>
-        <mesh position={[0.34, 0.2, 0.25]} rotation={[0.08, 0, -0.12]} castShadow>
-          <capsuleGeometry args={[0.065, 0.78, 6, 12]} />
-          <meshStandardMaterial color="#9a623d" roughness={0.68} />
-        </mesh>
-
-        {/* Arms and hands */}
-        <mesh position={[-0.61, 0.1, 0]} rotation={[0, 0, -0.08]} castShadow>
-          <capsuleGeometry args={[0.13, 0.72, 8, 14]} />
-          <meshStandardMaterial color="#253f66" roughness={0.58} />
-        </mesh>
-        <mesh position={[0.61, 0.1, 0]} rotation={[0, 0, 0.08]} castShadow>
-          <capsuleGeometry args={[0.13, 0.72, 8, 14]} />
-          <meshStandardMaterial color="#253f66" roughness={0.58} />
-        </mesh>
-        <mesh position={[-0.65, -0.34, 0]} castShadow>
-          <sphereGeometry args={[0.16, 18, 18]} />
-          <meshStandardMaterial color="#f0bd99" roughness={0.54} />
-        </mesh>
-        <mesh position={[0.65, -0.34, 0]} castShadow>
-          <sphereGeometry args={[0.16, 18, 18]} />
-          <meshStandardMaterial color="#f0bd99" roughness={0.54} />
-        </mesh>
-
-        {/* Head, ears, hair and simple readable face */}
-        <mesh position={[0, 1.02, 0]} castShadow>
-          <sphereGeometry args={[0.43, 28, 28]} />
-          <meshStandardMaterial color="#f0bd99" roughness={0.54} />
-        </mesh>
-        <mesh position={[-0.42, 1.01, 0]} castShadow>
-          <sphereGeometry args={[0.09, 14, 14]} />
-          <meshStandardMaterial color="#e8a97e" roughness={0.56} />
-        </mesh>
-        <mesh position={[0.42, 1.01, 0]} castShadow>
-          <sphereGeometry args={[0.09, 14, 14]} />
-          <meshStandardMaterial color="#e8a97e" roughness={0.56} />
-        </mesh>
-        <mesh position={[0, 1.28, 0.03]} scale={[1.08, 0.56, 1.08]} castShadow>
-          <sphereGeometry args={[0.45, 24, 24]} />
-          <meshStandardMaterial color="#3b241d" roughness={0.72} />
-        </mesh>
-        <mesh position={[-0.15, 1.06, -0.39]} castShadow>
-          <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color="#182039" roughness={0.2} />
-        </mesh>
-        <mesh position={[0.15, 1.06, -0.39]} castShadow>
-          <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color="#182039" roughness={0.2} />
-        </mesh>
-        <mesh position={[0, 0.9, -0.405]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.12, 0.022, 8, 18, Math.PI]} />
-          <meshStandardMaterial color="#8d4f3a" roughness={0.45} />
-        </mesh>
-      </group>
+      <mesh castShadow><capsuleGeometry args={[0.48, 1.2, 8, 16]} /><meshStandardMaterial color="#7c5ce7" roughness={0.42} /></mesh>
+      <mesh position={[0, 1.05, 0]} castShadow><sphereGeometry args={[0.43, 24, 24]} /><meshStandardMaterial color="#f0bd99" roughness={0.54} /></mesh>
+      <mesh position={[0, 1.28, 0]} scale={[1.08, 0.55, 1.08]} castShadow><sphereGeometry args={[0.45, 20, 20]} /><meshStandardMaterial color="#493225" roughness={0.7} /></mesh>
     </group>
   );
 }

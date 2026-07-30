@@ -120,11 +120,10 @@ const readMobileRenderProfile = () => {
   const ipadDesktopMode = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
   const ios = /iPhone|iPad|iPod/i.test(userAgent) || ipadDesktopMode;
   const android = /Android/i.test(userAgent);
-  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
   const compactViewport = Math.min(window.innerWidth, window.innerHeight) < 900;
 
   return {
-    mobile: ios || android || (coarsePointer && compactViewport),
+    mobile: ios || android || compactViewport,
     ios,
     android,
   };
@@ -133,7 +132,7 @@ const readMobileRenderProfile = () => {
 function readDprRange(mobile) {
   const deviceDpr = typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1);
   const maxDpr = Math.max(1, Math.min(deviceDpr, mobile ? 1.75 : 2));
-  const minDpr = Math.min(maxDpr, mobile ? 1.1 : 1.15);
+  const minDpr = Math.min(maxDpr, mobile ? 1.25 : 1.15);
 
   return {
     minDpr,

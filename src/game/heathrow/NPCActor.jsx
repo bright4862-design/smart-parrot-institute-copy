@@ -34,6 +34,20 @@ function ActorProp({ activity, propRef }) {
       </RoundedBox>
     );
   }
+  if (activity === 'coffee') {
+    return (
+      <group ref={propRef} position={[0, 0.8, 0.5]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[0.11, 0.09, 0.24, 12]} />
+          <meshStandardMaterial color="#F7F1E8" roughness={0.5} />
+        </mesh>
+        <mesh position={[0.11, 0.01, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.065, 0.018, 8, 14, Math.PI * 1.35]} />
+          <meshStandardMaterial color="#F7F1E8" roughness={0.5} />
+        </mesh>
+      </group>
+    );
+  }
   if (activity === 'tray') {
     return (
       <group ref={propRef} position={[0, 0.82, 0.52]}>
@@ -225,6 +239,7 @@ export default function NPCActor({ actor, profile, playerPosition, engaged = fal
       if (actor.activity === 'tablet' || actor.activity === 'scanner' || actor.activity === 'clipboard') {
         prop.current.rotation.z = Math.sin(time * 0.7) * 0.035 * complexityScale;
       }
+      if (actor.activity === 'coffee') prop.current.position.y = 0.8 + Math.sin(time * 1.8) * 0.018;
       if (actor.activity === 'tray') prop.current.position.y = 0.82 + Math.sin(time * 1.4) * 0.012;
       if (actor.activity === 'laptop') prop.current.position.y = 0.88 + Math.sin(time * 1.2) * 0.004;
     }

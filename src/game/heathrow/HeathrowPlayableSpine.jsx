@@ -274,10 +274,29 @@ function Terminal() {
         <meshStandardMaterial color="#2d333d" metalness={0.72} roughness={0.28} />
       </RoundedBox>
 
-      <RoundedBox args={[7.2, 3.2, 2.2]} radius={0.25} position={[12, 1.6, -7]} castShadow receiveShadow>
-        <meshStandardMaterial color="#815036" roughness={0.42} />
-      </RoundedBox>
-      <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
+      <group name="heathrow-arrivals-help-kiosk" position={[12, 0, -7]}>
+        <RoundedBox args={[5.4, 1.35, 1.45]} radius={0.2} position={[0, 0.68, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color="#315A78" roughness={0.38} metalness={0.18} />
+        </RoundedBox>
+        <RoundedBox args={[5.65, 0.14, 1.62]} radius={0.07} position={[0, 1.36, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color="#D6E0E7" roughness={0.28} metalness={0.14} />
+        </RoundedBox>
+        <group position={[0, 2.55, 0.5]}>
+          <RoundedBox args={[4.75, 0.82, 0.14]} radius={0.1} castShadow>
+            <meshStandardMaterial color="#173F68" emissive="#0A294B" emissiveIntensity={0.42} roughness={0.4} />
+          </RoundedBox>
+          <Text position={[0, 0, 0.08]} fontSize={0.29} color="#FFFFFF" anchorX="center" anchorY="middle" outlineWidth={0.008} outlineColor="#07192F">
+            ARRIVALS HELP
+          </Text>
+        </group>
+        <mesh position={[1.55, 1.75, -0.18]} rotation={[-0.18, 0, 0]}>
+          <planeGeometry args={[0.9, 0.58]} />
+          <meshStandardMaterial color="#9EE8F6" emissive="#2C9DBC" emissiveIntensity={0.55} roughness={0.22} />
+        </mesh>
+        <Text position={[-1.15, 1.62, -0.73]} rotation={[0, Math.PI, 0]} fontSize={0.16} color="#EAF6FF" anchorX="center">
+          INFORMATION · DIRECTIONS
+        </Text>
+      </group>
 
       <mesh position={[0, 0.03, 7.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[3.2, 34]} />
@@ -929,7 +948,7 @@ function DirectionButton({ label, action, inputRef }) {
       onLostPointerCapture={release}
       onContextMenu={(event) => event.preventDefault()}
       onClick={(event) => event.preventDefault()}
-      className="grid h-[52px] w-[52px] select-none place-items-center rounded-2xl border border-white/40 bg-slate-950/62 text-lg font-black text-white shadow-xl backdrop-blur active:scale-95"
+      className="grid h-14 w-14 select-none place-items-center rounded-2xl border border-white/55 bg-slate-950/78 text-xl font-black text-white shadow-[0_12px_30px_rgba(2,6,23,.42)] backdrop-blur-md active:scale-95"
       style={{
         touchAction: 'none',
         userSelect: 'none',
@@ -1501,6 +1520,8 @@ export default function HeathrowPlayableSpine() {
         WebkitTouchCallout: 'none',
         WebkitTapHighlightColor: 'transparent',
       }}
+      data-testid="heathrow-ready"
+      data-heathrow-ready={rendererFailure ? 'false' : 'true'}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
       data-render-mode={renderSettings.id}
       data-render-dpr={adaptiveDpr.toFixed(2)}
@@ -1862,7 +1883,21 @@ export default function HeathrowPlayableSpine() {
 
       {!cutsceneActive && !npcQuestion && !ticketMachineOpen && !focusedSignId && !graphicsOpen && !pickupAnimating && !picoEntering && (
         <>
-          {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.75rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>}
+          {renderProfile.mobile && (
+            <div
+              role="group"
+              aria-label="Touch movement controls"
+              data-testid="heathrow-touch-controls"
+              className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] left-3 z-20 grid grid-cols-3 gap-2 rounded-[26px] border border-white/20 bg-slate-950/28 p-2 shadow-[0_18px_50px_rgba(2,6,23,.28)] backdrop-blur-sm sm:left-4"
+            >
+              <div />
+              <DirectionButton label="↑" action="forward" inputRef={inputRef} />
+              <div />
+              <DirectionButton label="←" action="left" inputRef={inputRef} />
+              <DirectionButton label="↓" action="backward" inputRef={inputRef} />
+              <DirectionButton label="→" action="right" inputRef={inputRef} />
+            </div>
+          )}
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_8.25rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">
             {activeTarget === 'suitcase' ? (
               <button
@@ -1903,7 +1938,7 @@ export default function HeathrowPlayableSpine() {
                 </span>
               </button>
             ) : canInteract ? (
-              <button onClick={interact} className="min-h-12 rounded-full bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button>
+              <button data-testid="heathrow-interact" onClick={interact} className="min-h-12 rounded-full border border-amber-100/70 bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button>
             ) : mission.step === HEATHROW_STEPS.COMPLETE ? (
               <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div>
             ) : (

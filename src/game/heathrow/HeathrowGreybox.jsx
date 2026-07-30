@@ -85,10 +85,10 @@ function TerminalShell() {
         <meshStandardMaterial color="#343b45" metalness={0.7} roughness={0.32} />
       </RoundedBox>
       <Text position={[-10.5, 2.7, -6.25]} fontSize={0.62} color="#17233d" anchorX="center">BAGGAGE RECLAIM</Text>
-      <RoundedBox args={[7.2, 3.2, 2.2]} radius={0.25} position={[12, 1.6, -7]} castShadow>
-        <meshStandardMaterial color="#8f5f3f" roughness={0.5} />
+      <RoundedBox args={[5.4, 1.35, 1.45]} radius={0.2} position={[12, 0.68, -7]} castShadow>
+        <meshStandardMaterial color="#315A78" roughness={0.4} metalness={0.16} />
       </RoundedBox>
-      <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
+      <Text position={[12, 2.55, -6.45]} fontSize={0.34} color="#FFFFFF" anchorX="center">ARRIVALS HELP</Text>
       <mesh position={[0, 0.03, 4]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[3.2, 16]} />
         <meshStandardMaterial color="#f5c84b" roughness={0.52} />

@@ -18,9 +18,9 @@ const rectangle = (id, minX, maxX, minZ, maxZ, desktopOnly = false) => Object.fr
 
 export const HEATHROW_COLLIDERS = Object.freeze([
   rectangle('baggage-claim', -16, -5, -9.6, -6.4),
-  rectangle('coffee-counter', 8.4, 15.6, -8.1, -5.9),
+  rectangle('arrivals-help-kiosk', 9.3, 14.7, -7.75, -6.25),
   rectangle('gate-barrier', -28.5, -15.5, 7.55, 8.45),
-  rectangle('services-counter', 15.5, 28.5, 7.15, 8.85),
+  rectangle('canonical-cafe-counter', 16.6, 27.4, 7.3, 8.7),
   rectangle('cafe-seating-west', 16.7, 20.1, 3.75, 5.55),
   rectangle('cafe-seating-east', 23.3, 26.7, 3.75, 5.55),
   rectangle('ticket-machine-island', -4.3, 4.3, 8.1, 12.9),
@@ -33,7 +33,6 @@ export const HEATHROW_COLLIDERS = Object.freeze([
   rectangle('bench-arrivals-east', 17.1, 20.9, -1.525, -0.475),
   rectangle('bench-arrivals-far-east', 23.1, 26.9, -1.525, -0.475),
   rectangle('bench-gates', -25.9, -22.1, 9.475, 10.525, true),
-  rectangle('bench-services', 22.1, 25.9, 9.475, 10.525, true),
 
   rectangle('planter-gates', -29.92, -28.08, 6.08, 7.92),
   rectangle('planter-midwest', -15.92, -14.08, 8.08, 9.92, true),

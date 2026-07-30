@@ -1,4 +1,5 @@
 import { Billboard, Float, RoundedBox, Text } from '@react-three/drei';
+import CanonicalCafe from './CanonicalCafe';
 
 export const TICKET_MACHINE_INTERACTION = Object.freeze({
   position: Object.freeze({ x: 0, z: 10.5 }),
@@ -14,7 +15,6 @@ const BENCH_POSITIONS = [
   [19, -1],
   [25, -1],
   [-24, 10],
-  [24, 10],
 ];
 
 const PLANTER_POSITIONS = [
@@ -171,14 +171,7 @@ export default function TerminalExpansion({
         ))}
       </group>
 
-      <group position={[22, 0, 8]}>
-        <RoundedBox args={[13, 3.2, 1.7]} radius={0.22} position={[0, 1.6, 0]} castShadow receiveShadow>
-          <meshStandardMaterial color="#6a4f3c" roughness={0.48} />
-        </RoundedBox>
-        <Text position={[0, 3.55, 0.9]} fontSize={0.46} color="#fff1d7" anchorX="center">
-          CAFÉ · SERVICES
-        </Text>
-      </group>
+      <CanonicalCafe decorationDensity={decorationDensity} mobileRenderer={mobileRenderer} />
 
       <group position={[0, 0, 10.5]}>
         <RoundedBox args={[8.6, 0.25, 4.8]} radius={0.2} position={[0, 0.12, 0]} receiveShadow>

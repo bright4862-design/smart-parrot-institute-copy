@@ -1,0 +1,196 @@
+name: Release Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+  ARTIFACT_ID: smart-parrot-${{ github.sha }}
+
+jobs:
+  static-contracts:
+    name: Static, lockfile, and shared contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Lockfile validation
+        run: npm ci
+      - name: Lockfile unchanged
+        run: git diff --exit-code -- package-lock.json
+      - name: Lint
+        run: npm run lint
+      - name: Type checking
+        run: npm run typecheck
+      - name: Shared contracts and Heathrow drift
+        run: npm run test:heathrow-compat
+        env:
+          CHECK_BRANCH_DRIFT: 'false'
+      - name: Route contract
+        run: |
+          grep -R "heathrow-mission" src >/dev/null
+          grep -R "london-cafe" src >/dev/null
+          if grep -R "piccadilly-line" src | grep -q "route\|path"; then
+            echo "Piccadilly shared-loader route registered."
+          else
+            echo "Piccadilly /piccadilly-line is pending shared-loader registration; not claimed as passing."
+          fi
+          if grep -R "hotel" src | grep -q "route\|path"; then
+            echo "Hotel route candidate found; Hotel team must confirm readiness marker before smoke eligibility."
+          else
+            echo "Hotel route is pending team registration; not claimed as passing."
+          fi
+
+  build-once:
+    name: Build once and upload immutable artifact
+    needs: static-contracts
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-digest: ${{ steps.identity.outputs.digest }}
+      artifact-id: ${{ env.ARTIFACT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Production build
+        run: npm run build
+      - name: Generate build identity
+        run: node scripts/generate-build-info.mjs
+        env:
+          GIT_SHA: ${{ github.sha }}
+          GIT_REF: ${{ github.ref }}
+          DEPLOY_ENVIRONMENT: ci
+          RELEASE_VERSION: sha-${{ github.sha }}
+      - name: Finalize deployable payload digest
+        id: identity
+        run: |
+          node scripts/finalize-build-artifact.mjs
+          DIGEST=$(cat artifact-digest.txt)
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Validate build identity
+        run: node scripts/validate-build-info.mjs
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ steps.identity.outputs.digest }}
+      - name: Required assets
+        run: |
+          test -f dist/index.html
+          test -f dist/build-info.json
+          test -d dist/assets
+          test "$(find dist/assets -type f | wc -l)" -gt 0
+      - name: Create deterministic deployable archive
+        run: tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner -cf smart-parrot-dist.tar dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_ID }}
+          path: |
+            smart-parrot-dist.tar
+            artifact-digest.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Artifact summary
+        run: |
+          echo "## Immutable artifact" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ID: \`${{ env.ARTIFACT_ID }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Payload digest: \`${{ steps.identity.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Git SHA: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  eligible-route-smoke:
+    name: Eligible route smoke — Heathrow and London Café
+    needs: build-once
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_ID }}
+      - run: tar -xf smart-parrot-dist.tar
+      - name: Install browser test runtime
+        run: npx --yes playwright@1.55.0 install --with-deps chromium webkit
+      - name: Start immutable build
+        run: nohup npx vite preview --host 127.0.0.1 --port 4173 > /tmp/smart-parrot-preview.log 2>&1 &
+      - name: Wait for startup
+        run: |
+          for attempt in {1..60}; do
+            curl --fail --silent http://127.0.0.1:4173/build-info.json >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/smart-parrot-preview.log
+          exit 1
+      - name: Heathrow readiness — /heathrow-mission
+        run: |
+          npx --yes -p playwright@1.55.0 node --input-type=module <<'EOF'
+          import { chromium, webkit } from 'playwright';
+          for (const engine of [chromium, webkit]) {
+            const browser = await engine.launch();
+            for (const viewport of [{width:1440,height:900},{width:390,height:844}]) {
+              const page = await browser.newPage({ viewport });
+              const errors = [];
+              page.on('pageerror', error => errors.push(String(error)));
+              const response = await page.goto('http://127.0.0.1:4173/heathrow-mission', { waitUntil: 'domcontentloaded' });
+              if (!response?.ok()) throw new Error(`Heathrow returned ${response?.status()}`);
+              await page.locator('main[data-render-profile][data-render-mode]').waitFor({ state: 'visible', timeout: 30000 });
+              if (errors.length) throw new Error(errors.join('; '));
+              await page.close();
+            }
+            await browser.close();
+          }
+          EOF
+      - name: London Café readiness — /london-cafe
+        run: |
+          npx --yes -p playwright@1.55.0 node --input-type=module <<'EOF'
+          import { chromium, webkit } from 'playwright';
+          for (const engine of [chromium, webkit]) {
+            const browser = await engine.launch();
+            for (const viewport of [{width:1440,height:900},{width:390,height:844}]) {
+              const page = await browser.newPage({ viewport });
+              const errors = [];
+              page.on('pageerror', error => errors.push(String(error)));
+              const response = await page.goto('http://127.0.0.1:4173/london-cafe', { waitUntil: 'domcontentloaded' });
+              if (!response?.ok()) throw new Error(`London Café returned ${response?.status()}`);
+              await page.locator('main, [role="main"], canvas').first().waitFor({ state: 'visible', timeout: 30000 });
+              if (errors.length) throw new Error(errors.join('; '));
+              await page.close();
+            }
+            await browser.close();
+          }
+          EOF
+      - name: Build metadata startup validation
+        run: |
+          curl --fail --silent http://127.0.0.1:4173/build-info.json > served-build-info.json
+          EXPECTED_SHA=${{ github.sha }} EXPECTED_ARTIFACT_DIGEST=${{ needs.build-once.outputs.artifact-digest }} node scripts/validate-build-info.mjs served-build-info.json
+
+  pending-route-contracts:
+    name: Pending routes — Piccadilly and Hotel registration
+    needs: static-contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Do not claim unregistered routes
+        run: |
+          echo "Piccadilly becomes smoke-eligible only at /piccadilly-line after shared-loader registration."
+          echo "Hotel remains ineligible until the Hotel team supplies a registered route and stable readiness marker."

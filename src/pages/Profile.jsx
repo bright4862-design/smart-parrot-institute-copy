@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useUserProgress } from '@/lib/useUserProgress';
-import { User, Flame, Zap, Trophy, BookOpen, Heart, LogOut, Calendar } from 'lucide-react';
+import { Flame, Zap, Trophy, BookOpen, Heart, LogOut, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 

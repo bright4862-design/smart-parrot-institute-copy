@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "test:heathrow-compat": "node scripts/check-heathrow-piccadilly-compat.mjs",
+    "test:piccadilly-contract": "node scripts/check-piccadilly-map-contract.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -2,8 +2,8 @@ import '@/game/r3fSafeDataProps';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Float, Lightformer, RoundedBox, Text } from '@react-three/drei';
-import { Bloom, EffectComposer, Select, Selection } from '@react-three/postprocessing';
-import { HelpCircle, RotateCcw, Sparkles } from 'lucide-react';
+import { Bloom, EffectComposer, SMAA, Select, Selection } from '@react-three/postprocessing';
+import { HelpCircle, RotateCcw, SlidersHorizontal, Sparkles } from 'lucide-react';
 import * as THREE from 'three';
 import {
   clearCheckpoint,
@@ -20,6 +20,13 @@ import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from '
 import AirportSigns, { AIRPORT_SIGNS, findNearbyAirportSign, getAirportSign } from './AirportSigns';
 import TerminalExpansion, { TICKET_MACHINE_INTERACTION } from './TerminalExpansion';
 import { resolveHeathrowMovement } from './collisionMap';
+import RenderProfileSelector from './RenderProfileSelector';
+import {
+  loadRenderProfilePreference,
+  readRenderCapabilities,
+  resolveRenderProfile,
+  saveRenderProfilePreference,
+} from './renderProfiles';
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
@@ -111,41 +118,11 @@ const TICKET_MACHINE_SCREENS = Object.freeze([
   }),
 ]);
 
-const readMobileRenderProfile = () => {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-    return { mobile: false, ios: false, android: false };
-  }
-
-  const userAgent = navigator.userAgent || '';
-  const ipadDesktopMode = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-  const ios = /iPhone|iPad|iPod/i.test(userAgent) || ipadDesktopMode;
-  const android = /Android/i.test(userAgent);
-  const compactViewport = Math.min(window.innerWidth, window.innerHeight) < 900;
-
-  return {
-    mobile: ios || android || compactViewport,
-    ios,
-    android,
-  };
-};
-
-function readDprRange(mobile) {
-  const deviceDpr = typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1);
-  const maxDpr = Math.max(1, Math.min(deviceDpr, mobile ? 1.75 : 2));
-  const minDpr = Math.min(maxDpr, mobile ? 1.25 : 1.15);
-
-  return {
-    minDpr,
-    maxDpr,
-    initialDpr: Math.min(maxDpr, 1.5),
-  };
-}
-
-function useMobileRenderProfile() {
-  const [profile, setProfile] = useState(readMobileRenderProfile);
+function useRenderCapabilities() {
+  const [capabilities, setCapabilities] = useState(readRenderCapabilities);
 
   useEffect(() => {
-    const refresh = () => setProfile(readMobileRenderProfile());
+    const refresh = () => setCapabilities(readRenderCapabilities());
     window.addEventListener('resize', refresh);
     window.addEventListener('orientationchange', refresh);
     return () => {
@@ -154,7 +131,7 @@ function useMobileRenderProfile() {
     };
   }, []);
 
-  return profile;
+  return capabilities;
 }
 
 class GameCanvasBoundary extends React.Component {
@@ -308,23 +285,25 @@ function Terminal() {
   );
 }
 
-function RainyWindowAtmosphere({ mobileRenderer = false }) {
+function RainyWindowAtmosphere({ mobileRenderer = false, reduced = false }) {
   const rainRef = useRef();
   const runwayGlowRef = useRef();
   const shadowRef = useRef();
   const aircraftRef = useRef();
+  const dropCount = reduced ? 18 : mobileRenderer ? 32 : 72;
+  const runwayLightCount = reduced ? 6 : mobileRenderer ? 10 : 18;
 
-  const drops = useMemo(() => Array.from({ length: mobileRenderer ? 32 : 72 }, (_, index) => ({
+  const drops = useMemo(() => Array.from({ length: dropCount }, (_, index) => ({
     x: -22 + ((index * 7.13) % 44),
     y: 1 + ((index * 3.71) % 13),
     length: 0.25 + ((index * 0.17) % 0.75),
     speed: 0.35 + ((index * 0.11) % 0.8),
-  })), [mobileRenderer]);
+  })), [dropCount]);
 
-  const runwayLights = useMemo(() => Array.from({ length: mobileRenderer ? 10 : 18 }, (_, index) => ({
+  const runwayLights = useMemo(() => Array.from({ length: runwayLightCount }, (_, index) => ({
     x: -21 + index * 2.5,
     color: index % 5 === 0 ? '#ff8b55' : index % 2 === 0 ? '#8fd3ff' : '#fff0a8',
-  })), [mobileRenderer]);
+  })), [runwayLightCount]);
 
   useFrame(({ clock }) => {
     const time = clock.elapsedTime;
@@ -419,63 +398,81 @@ function UndergroundSpot() {
   );
 }
 
-function HeathrowLighting({ mobileRenderer = false }) {
+function HeathrowLighting({ mobileRenderer = false, renderSettings }) {
   const keyLight = useRef();
+  const simplified = renderSettings.lighting === 'simplified';
+  const cinematic = renderSettings.lighting === 'cinematic';
 
   useEffect(() => {
     const light = keyLight.current;
-    if (!light || mobileRenderer) return;
-    light.shadow.mapSize.set(1024, 1024);
-    light.shadow.camera.left = -34;
-    light.shadow.camera.right = 34;
-    light.shadow.camera.top = 34;
-    light.shadow.camera.bottom = -34;
+    if (!light || !renderSettings.shadows) return;
+    const shadowSize = cinematic && !mobileRenderer ? 2048 : 1024;
+    light.shadow.mapSize.set(shadowSize, shadowSize);
+    light.shadow.camera.left = cinematic ? -30 : -34;
+    light.shadow.camera.right = cinematic ? 30 : 34;
+    light.shadow.camera.top = cinematic ? 30 : 34;
+    light.shadow.camera.bottom = cinematic ? -30 : -34;
     light.shadow.camera.near = 1;
     light.shadow.camera.far = 50;
     light.shadow.camera.updateProjectionMatrix();
     light.shadow.bias = -0.00018;
     light.shadow.normalBias = 0.025;
-  }, [mobileRenderer]);
+  }, [cinematic, mobileRenderer, renderSettings.shadows]);
 
   useFrame(({ clock }) => {
     if (keyLight.current) {
-      const baseIntensity = mobileRenderer ? 2.15 : 2.8;
+      const baseIntensity = simplified
+        ? (mobileRenderer ? 1.85 : 2.15)
+        : mobileRenderer
+          ? 2.15
+          : cinematic
+            ? 3.05
+            : 2.8;
       keyLight.current.intensity = baseIntensity + Math.sin(clock.elapsedTime * 0.22) * 0.06;
     }
   });
 
   return (
     <>
-      {!mobileRenderer && (
-        <Environment background={false} resolution={128} frames={1} environmentIntensity={0.82}>
-          <Lightformer form="rect" intensity={4.2} color="#f7e2c5" position={[0, 9, -3]} rotation={[Math.PI / 2, 0, 0]} scale={[22, 8, 1]} />
-          <Lightformer form="rect" intensity={2.4} color="#9dd8ff" position={[0, 6, -13]} rotation={[0, 0, 0]} scale={[28, 8, 1]} />
-          <Lightformer form="ring" intensity={1.4} color="#c6b7ff" position={[10, 5, 5]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 5, 1]} />
+      {renderSettings.environment && (
+        <Environment
+          background={false}
+          resolution={cinematic ? 192 : 128}
+          frames={1}
+          environmentIntensity={cinematic ? 0.92 : 0.82}
+        >
+          <Lightformer form="rect" intensity={cinematic ? 4.8 : 4.2} color="#f7e2c5" position={[0, 9, -3]} rotation={[Math.PI / 2, 0, 0]} scale={[22, 8, 1]} />
+          <Lightformer form="rect" intensity={cinematic ? 2.8 : 2.4} color="#9dd8ff" position={[0, 6, -13]} rotation={[0, 0, 0]} scale={[28, 8, 1]} />
+          <Lightformer form="ring" intensity={cinematic ? 1.7 : 1.4} color="#c6b7ff" position={[10, 5, 5]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 5, 1]} />
         </Environment>
       )}
-      <ambientLight intensity={mobileRenderer ? 0.38 : 0.18} color="#cfdfeb" />
-      <hemisphereLight args={['#d8edfa', '#625a55', mobileRenderer ? 0.82 : 0.58]} />
+      <ambientLight intensity={simplified ? 0.48 : mobileRenderer ? 0.38 : 0.18} color="#cfdfeb" />
+      <hemisphereLight args={['#d8edfa', '#625a55', simplified ? 0.92 : mobileRenderer ? 0.82 : 0.58]} />
       <directionalLight
         ref={keyLight}
         position={[-10, 16, -10]}
         color="#f7e8d3"
-        intensity={mobileRenderer ? 2.15 : 2.8}
-        castShadow={!mobileRenderer}
+        intensity={simplified ? 2.15 : mobileRenderer ? 2.15 : cinematic ? 3.05 : 2.8}
+        castShadow={renderSettings.shadows}
       />
-      {!mobileRenderer && <UndergroundSpot />}
+      {!simplified && <UndergroundSpot />}
     </>
   );
 }
 
-function CinematicBloom() {
+function CinematicPostProcessing({ bloom, smaa }) {
+  if (!bloom && !smaa) return null;
   return (
-    <EffectComposer multisampling={0} resolutionScale={0.72}>
-      <Bloom
-        intensity={0.42}
-        luminanceThreshold={0.9}
-        luminanceSmoothing={0.34}
-        mipmapBlur
-      />
+    <EffectComposer multisampling={0} resolutionScale={bloom ? 0.78 : 1}>
+      {bloom && (
+        <Bloom
+          intensity={0.42}
+          luminanceThreshold={0.9}
+          luminanceSmoothing={0.34}
+          mipmapBlur
+        />
+      )}
+      {smaa && <SMAA />}
     </EffectComposer>
   );
 }
@@ -814,6 +811,7 @@ function World({
   inspectedSignIds,
   focusedSignId,
   mobileRenderer,
+  renderSettings,
 }) {
   const engagedQuestionId = npcQuestion
     || (activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null);
@@ -843,12 +841,13 @@ function World({
       <>
         <color attach="background" args={['#718fa3']} />
         <fog attach="fog" args={['#aebfc9', 32, 82]} />
-        <HeathrowLighting mobileRenderer={mobileRenderer} />
-        <RainyWindowAtmosphere mobileRenderer={mobileRenderer} />
+        <HeathrowLighting mobileRenderer={mobileRenderer} renderSettings={renderSettings} />
+        <RainyWindowAtmosphere mobileRenderer={mobileRenderer} reduced={renderSettings.decorationDensity === 'reduced'} />
         <ArrivalCutsceneCamera active={cutsceneActive} />
         <Terminal />
         <TerminalExpansion
           mobileRenderer={mobileRenderer}
+          decorationDensity={renderSettings.decorationDensity}
           ticketMachineActive={mission.step === HEATHROW_STEPS.USE_TICKET_MACHINE || ticketMachineOpen}
           ticketMachineEngaged={activeTarget === 'ticket_machine' || ticketMachineOpen}
         />
@@ -886,7 +885,7 @@ function World({
           entering={picoEntering}
         />
         {mission.step === HEATHROW_STEPS.FOLLOW_YELLOW_ROUTE && <YellowRouteGuide />}
-        {!mobileRenderer && <CinematicBloom />}
+        <CinematicPostProcessing bloom={renderSettings.bloom} smaa={renderSettings.smaa} />
       </>
     </Selection>
   );
@@ -926,7 +925,7 @@ function DirectionButton({ label, action, inputRef }) {
   );
 }
 
-function AdaptiveRenderQuality({ dpr, minDpr, maxDpr, mobile, onDprChange }) {
+function AdaptiveRenderQuality({ dpr, settings, onDprChange }) {
   const sampleRef = useRef({ elapsed: 0, frames: 0, strongSamples: 0 });
   const lastChangeRef = useRef(-10);
 
@@ -937,7 +936,7 @@ function AdaptiveRenderQuality({ dpr, minDpr, maxDpr, mobile, onDprChange }) {
     sample.elapsed += Math.min(delta, 0.12);
     sample.frames += 1;
 
-    if (sample.elapsed < 2.5) return;
+    if (sample.elapsed < settings.sampleSeconds) return;
 
     const fps = sample.frames / sample.elapsed;
     sample.elapsed = 0;
@@ -945,22 +944,19 @@ function AdaptiveRenderQuality({ dpr, minDpr, maxDpr, mobile, onDprChange }) {
 
     if (state.clock.elapsedTime - lastChangeRef.current < 4) return;
 
-    const lowFps = mobile ? 42 : 50;
-    const highFps = mobile ? 55 : 58;
-
-    if (fps < lowFps && dpr > minDpr + 0.04) {
+    if (fps < settings.lowFps && dpr > settings.minDpr + 0.04) {
       sample.strongSamples = 0;
       lastChangeRef.current = state.clock.elapsedTime;
-      onDprChange(Math.max(minDpr, Number((dpr - 0.15).toFixed(2))));
+      onDprChange(Math.max(settings.minDpr, Number((dpr - settings.dprStepDown).toFixed(2))));
       return;
     }
 
-    if (fps > highFps && dpr < maxDpr - 0.04) {
+    if (fps > settings.highFps && dpr < settings.maxDpr - 0.04) {
       sample.strongSamples += 1;
       if (sample.strongSamples >= 2) {
         sample.strongSamples = 0;
         lastChangeRef.current = state.clock.elapsedTime;
-        onDprChange(Math.min(maxDpr, Number((dpr + 0.1).toFixed(2))));
+        onDprChange(Math.min(settings.maxDpr, Number((dpr + settings.dprStepUp).toFixed(2))));
       }
       return;
     }
@@ -996,11 +992,21 @@ export default function HeathrowPlayableSpine() {
   const [holdProgress, setHoldProgress] = useState(0);
   const [pickupAnimating, setPickupAnimating] = useState(false);
   const [picoEntering, setPicoEntering] = useState(false);
-  const renderProfile = useMobileRenderProfile();
-  const renderRange = useMemo(() => readDprRange(renderProfile.mobile), [renderProfile.mobile]);
-  const [adaptiveDpr, setAdaptiveDpr] = useState(() => readDprRange(readMobileRenderProfile().mobile).initialDpr);
+  const [graphicsOpen, setGraphicsOpen] = useState(false);
+  const renderProfile = useRenderCapabilities();
+  const [renderMode, setRenderMode] = useState(loadRenderProfilePreference);
+  const renderSettings = useMemo(
+    () => resolveRenderProfile(renderMode, renderProfile),
+    [renderMode, renderProfile],
+  );
+  const [adaptiveDpr, setAdaptiveDpr] = useState(
+    () => resolveRenderProfile(loadRenderProfilePreference(), readRenderCapabilities()).initialDpr,
+  );
   const [rendererFailure, setRendererFailure] = useState('');
   const [rendererKey, setRendererKey] = useState(0);
+  const renderContextSignatureRef = useRef(
+    `${renderSettings.id}:${renderSettings.antialias}:${renderSettings.precision}:${renderSettings.shadows}`,
+  );
   const automaticRendererRetriesRef = useRef(0);
   const canHoldSuitcaseRef = useRef(false);
   const pickupAnimatingRef = useRef(false);
@@ -1008,8 +1014,15 @@ export default function HeathrowPlayableSpine() {
   const signsCompletedRef = useRef(false);
 
   useEffect(() => {
-    setAdaptiveDpr(renderRange.initialDpr);
-  }, [renderRange]);
+    saveRenderProfilePreference(renderMode);
+    setAdaptiveDpr(renderSettings.initialDpr);
+    const signature = `${renderSettings.id}:${renderSettings.antialias}:${renderSettings.precision}:${renderSettings.shadows}`;
+    if (renderContextSignatureRef.current !== signature) {
+      renderContextSignatureRef.current = signature;
+      setRendererFailure('');
+      setRendererKey((value) => value + 1);
+    }
+  }, [renderMode, renderSettings]);
 
   const reportPosition = useCallback((x, z) => {
     positionRef.current.x = x;
@@ -1046,7 +1059,8 @@ export default function HeathrowPlayableSpine() {
     && nearSuitcase
     && !pickupAnimating
     && !cutsceneActive
-    && !npcQuestion;
+    && !npcQuestion
+    && !graphicsOpen;
   canHoldSuitcaseRef.current = canHoldSuitcase;
   const activeTarget = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && nearSuitcase
     ? 'suitcase'
@@ -1073,6 +1087,7 @@ export default function HeathrowPlayableSpine() {
     && !npcQuestion
     && !ticketMachineOpen
     && !focusedSignId
+    && !graphicsOpen
     && !pickupAnimating
     && !picoEntering;
 
@@ -1348,6 +1363,27 @@ export default function HeathrowPlayableSpine() {
     return () => window.cancelAnimationFrame(focusFrame);
   }, [cutsceneActive]);
 
+  const closeGraphics = useCallback(() => {
+    setGraphicsOpen(false);
+    window.requestAnimationFrame(() => gameRootRef.current?.focus({ preventScroll: true }));
+  }, []);
+
+  const changeRenderMode = useCallback((mode) => {
+    inputRef.current = { forward: false, backward: false, left: false, right: false };
+    setRenderMode(saveRenderProfilePreference(mode));
+  }, []);
+
+  useEffect(() => {
+    if (!graphicsOpen) return undefined;
+    const onGraphicsKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeGraphics();
+    };
+    window.addEventListener('keydown', onGraphicsKeyDown);
+    return () => window.removeEventListener('keydown', onGraphicsKeyDown);
+  }, [closeGraphics, graphicsOpen]);
+
   const restart = () => {
     clearCheckpoint();
     clearInteractionTimers();
@@ -1368,6 +1404,7 @@ export default function HeathrowPlayableSpine() {
     setHoldProgress(0);
     setPickupAnimating(false);
     setPicoEntering(false);
+    setGraphicsOpen(false);
     setCutsceneActive(true);
     setCutsceneBeat(0);
     dispatch({ type: 'RESET' });
@@ -1433,6 +1470,7 @@ export default function HeathrowPlayableSpine() {
       className="relative h-screen h-[100dvh] overflow-hidden bg-slate-950 text-white outline-none [touch-action:none]"
       style={{ minHeight: renderProfile.mobile ? 0 : 560 }}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
+      data-render-mode={renderSettings.id}
       data-render-dpr={adaptiveDpr.toFixed(2)}
       data-mobile-platform={renderProfile.ios ? 'ios' : renderProfile.android ? 'android' : 'other'}
       data-player-x={playerPosition.x.toFixed(2)}
@@ -1448,27 +1486,27 @@ export default function HeathrowPlayableSpine() {
           fallback={rendererFallback}
         >
           <Canvas
-            key={`${rendererKey}-${renderProfile.mobile ? 'mobile' : 'desktop'}`}
+            key={`${rendererKey}-${renderProfile.mobile ? 'mobile' : 'desktop'}-${renderSettings.id}`}
             fallback={rendererFallback}
-            shadows={!renderProfile.mobile}
+            shadows={renderSettings.shadows}
             dpr={adaptiveDpr}
             camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: renderProfile.mobile ? 110 : 160 }}
             gl={{
-              antialias: !renderProfile.mobile,
+              antialias: renderSettings.antialias,
               alpha: false,
               depth: true,
               stencil: false,
               preserveDrawingBuffer: false,
               failIfMajorPerformanceCaveat: false,
-              precision: renderProfile.mobile ? 'mediump' : 'highp',
-              powerPreference: renderProfile.mobile ? 'default' : 'high-performance',
+              precision: renderSettings.precision,
+              powerPreference: renderSettings.performanceBias === 'speed' ? 'default' : 'high-performance',
               toneMapping: THREE.ACESFilmicToneMapping,
-              toneMappingExposure: 0.94,
+              toneMappingExposure: renderSettings.lighting === 'cinematic' ? 0.98 : 0.94,
             }}
             onCreated={({ gl }) => {
               gl.outputColorSpace = THREE.SRGBColorSpace;
-              gl.shadowMap.enabled = !renderProfile.mobile;
-              if (!renderProfile.mobile) gl.shadowMap.type = THREE.PCFSoftShadowMap;
+              gl.shadowMap.enabled = renderSettings.shadows;
+              if (renderSettings.shadows) gl.shadowMap.type = THREE.PCFSoftShadowMap;
               gl.domElement.addEventListener('webglcontextlost', (event) => {
                 event.preventDefault();
                 setRendererFailure('context-lost');
@@ -1477,9 +1515,7 @@ export default function HeathrowPlayableSpine() {
           >
             <AdaptiveRenderQuality
               dpr={adaptiveDpr}
-              minDpr={renderRange.minDpr}
-              maxDpr={renderRange.maxDpr}
-              mobile={renderProfile.mobile}
+              settings={renderSettings}
               onDprChange={setAdaptiveDpr}
             />
             <World
@@ -1499,6 +1535,7 @@ export default function HeathrowPlayableSpine() {
               inspectedSignIds={inspectedSignIds}
               focusedSignId={focusedSignId}
               mobileRenderer={renderProfile.mobile}
+              renderSettings={renderSettings}
             />
           </Canvas>
         </GameCanvasBoundary>
@@ -1546,10 +1583,33 @@ export default function HeathrowPlayableSpine() {
           </div>
         </div>
         <div className="pointer-events-auto flex gap-2">
+          <button aria-label={`Graphics quality: ${renderSettings.label}`} onClick={() => { inputRef.current = { forward: false, backward: false, left: false, right: false }; setGraphicsOpen(true); }} className="relative grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><SlidersHorizontal className="h-[18px] w-[18px] sm:h-5 sm:w-5" /><span className="absolute -bottom-1 -right-1 rounded-full bg-amber-300 px-1.5 py-0.5 text-[8px] font-black leading-none text-slate-950">{renderSettings.label === 'Performance' ? 'P' : renderSettings.label === 'Auto' ? 'A' : 'HD'}</span></button>
           <button aria-label="Show help" onClick={() => setPicoLine('Pico: “Look for the softly glowing object.”')} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><HelpCircle className="h-[18px] w-[18px] sm:h-5 sm:w-5" /></button>
           <button aria-label="Restart mission" onClick={restart} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><RotateCcw className="h-[18px] w-[18px] sm:h-5 sm:w-5" /></button>
         </div>
       </header>}
+
+      {graphicsOpen && (
+        <div className="absolute inset-0 z-50 flex items-end justify-end bg-slate-950/45 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-[2px] sm:p-6">
+          <section role="dialog" aria-modal="true" aria-labelledby="heathrow-graphics-dialog-title" className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[28px] border border-white/25 bg-slate-950/96 p-4 text-white shadow-2xl [touch-action:pan-y] sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[10px] font-black tracking-[.18em] text-cyan-300 sm:text-xs">HEATHROW · DISPLAY</div>
+                <h2 id="heathrow-graphics-dialog-title" className="mt-1 text-xl font-black sm:text-2xl">Graphics quality</h2>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-300">Current live render scale: {adaptiveDpr.toFixed(2)}×</p>
+              </div>
+              <button type="button" onClick={closeGraphics} className="rounded-full border border-white/20 bg-white/[0.08] px-3 py-2 text-xs font-black text-slate-200 active:scale-95">Close</button>
+            </div>
+            <div className="mt-4">
+              <RenderProfileSelector mode={renderMode} resolvedProfile={renderSettings} onChange={changeRenderMode} />
+            </div>
+            {renderSettings.id === 'hd' && renderProfile.constrained && (
+              <p className="mt-3 rounded-2xl border border-amber-300/30 bg-amber-300/[0.1] px-4 py-3 text-xs font-semibold leading-5 text-amber-100">HD is active with a safe fallback because this device reports limited graphics resources.</p>
+            )}
+          </section>
+        </div>
+      )}
+
       {!cutsceneActive && picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
 
       {focusedSignData && (
@@ -1739,7 +1799,7 @@ export default function HeathrowPlayableSpine() {
         </div>
       )}
 
-      {!cutsceneActive && !npcQuestion && !ticketMachineOpen && !focusedSignId && !pickupAnimating && !picoEntering && (
+      {!cutsceneActive && !npcQuestion && !ticketMachineOpen && !focusedSignId && !graphicsOpen && !pickupAnimating && !picoEntering && (
         <>
           {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.75rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>}
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_8.25rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">

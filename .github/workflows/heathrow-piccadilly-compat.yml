@@ -1,0 +1,75 @@
+name: Heathrow Piccadilly Compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'src/game/heathrow/**'
+      - 'src/game/shared/**'
+      - 'src/game/piccadilly/**'
+      - 'src/pages/LondonMission.jsx'
+      - 'src/game/r3fSafeDataProps.js'
+      - 'scripts/check-heathrow-piccadilly-compat.mjs'
+      - '.github/workflows/heathrow-piccadilly-compat.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches:
+      - main
+      - codex/piccadilly-line-level-2
+    paths:
+      - 'src/game/heathrow/**'
+      - 'src/game/shared/**'
+      - 'src/game/piccadilly/**'
+      - 'src/pages/LondonMission.jsx'
+      - 'src/game/r3fSafeDataProps.js'
+      - 'scripts/check-heathrow-piccadilly-compat.mjs'
+      - '.github/workflows/heathrow-piccadilly-compat.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heathrow-piccadilly-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compatibility-contract:
+    name: Shared engine contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate Heathrow source contracts
+        run: node scripts/check-heathrow-piccadilly-compat.mjs
+        env:
+          CHECK_BRANCH_DRIFT: 'false'
+
+      - name: Fetch tracked map branches
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        run: |
+          git fetch --no-tags origin \
+            +refs/heads/main:refs/remotes/origin/main \
+            +refs/heads/codex/piccadilly-line-level-2:refs/remotes/origin/codex/piccadilly-line-level-2
+
+      - name: Check Piccadilly for Heathrow drift
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        run: node scripts/check-heathrow-piccadilly-compat.mjs
+        env:
+          CHECK_BRANCH_DRIFT: 'true'
+          HEATHROW_REF: origin/main
+          PICCADILLY_REF: origin/codex/piccadilly-line-level-2

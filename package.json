@@ -9,6 +9,7 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
+    "test:heathrow-compat": "node scripts/check-heathrow-piccadilly-compat.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

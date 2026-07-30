@@ -27,6 +27,20 @@ function CafeChair({ position, rotation }) {
   );
 }
 
+function CafeLuggage({ position, color }) {
+  return (
+    <group position={position}>
+      <RoundedBox args={[0.42, 0.68, 0.3]} radius={0.08} position={[0, 0.36, 0]} castShadow receiveShadow>
+        <meshStandardMaterial color={color} roughness={0.5} />
+      </RoundedBox>
+      <mesh position={[0, 0.82, 0]} castShadow>
+        <torusGeometry args={[0.11, 0.025, 8, 12, Math.PI]} />
+        <meshStandardMaterial color="#303842" metalness={0.55} roughness={0.36} />
+      </mesh>
+    </group>
+  );
+}
+
 function CafeTable({ position }) {
   return (
     <group position={position}>
@@ -55,6 +69,8 @@ export default function CafePopulation({ decorationDensity = 'balanced', playerP
     <group>
       {CAFE_TABLES.map((table) => <CafeTable key={table.id} position={table.position} />)}
       {CAFE_SEATS.map((seat) => <CafeChair key={`chair:${seat.id}`} position={seat.position} rotation={seat.rotation} />)}
+      <CafeLuggage position={[16.85, 0, 5.38]} color="#486C8A" />
+      {cafeProfile.id !== 'reduced' && <CafeLuggage position={[26.55, 0, 3.92]} color="#805A78" />}
       {occupiedSeats.map((seat) => (
         <NPCActor
           key={seat.id}

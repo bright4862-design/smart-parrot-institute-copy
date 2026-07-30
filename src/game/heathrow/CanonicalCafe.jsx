@@ -153,6 +153,16 @@ export default function CanonicalCafe({ decorationDensity = 'balanced', mobileRe
         </>
       )}
 
+      {!reduced && (
+        <pointLight
+          position={[0, 4.6, -1.2]}
+          color="#FFD89A"
+          intensity={mobileRenderer ? 2.4 : 3.8}
+          distance={10}
+          decay={2}
+        />
+      )}
+
       {full && (
         <>
           <mesh position={[-5.4, 2.4, 0.2]} castShadow>

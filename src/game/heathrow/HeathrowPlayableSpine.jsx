@@ -7,6 +7,7 @@ import { HelpCircle, RotateCcw, Sparkles } from 'lucide-react';
 import * as THREE from 'three';
 import {
   clearCheckpoint,
+  HEATHROW_SEQUENCE,
   HEATHROW_STEPS,
   INITIAL_MISSION_STATE,
   loadCheckpoint,
@@ -16,11 +17,23 @@ import {
 } from './missionState';
 import TravelerAvatar from './TravelerAvatar';
 import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from './AirportNPCs';
+import AirportSigns, { AIRPORT_SIGNS, findNearbyAirportSign, getAirportSign } from './AirportSigns';
+import TerminalExpansion, { TICKET_MACHINE_INTERACTION } from './TerminalExpansion';
+import { resolveHeathrowMovement } from './collisionMap';
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
-const UNDERGROUND = Object.freeze({ x: 0, z: 10.4 });
-const SUITCASE_INTERACT_RADIUS = 2.35;
+const UNDERGROUND = Object.freeze({ x: 0, z: 19.2 });
+const YELLOW_ROUTE_END = Object.freeze({ x: 0, z: 15.2, radius: 2.35 });
+const YELLOW_ROUTE_GUIDES = Object.freeze([
+  Object.freeze({ x: 14.3, z: 11.3, rotation: -0.45 }),
+  Object.freeze({ x: 12.1, z: 13.1, rotation: -0.55 }),
+  Object.freeze({ x: 9.3, z: 14, rotation: 0 }),
+  Object.freeze({ x: 6.3, z: 14, rotation: 0 }),
+  Object.freeze({ x: 3.3, z: 14.2, rotation: -0.08 }),
+  Object.freeze({ x: 0.8, z: 14.8, rotation: -0.24 }),
+]);
+const SUITCASE_INTERACT_RADIUS = 3.05;
 const SUITCASE_GLOW_RADIUS = 8;
 const SUITCASE_HOLD_MS = 1050;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -29,6 +42,74 @@ const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 const dampAngle = (current, target, smoothing, delta) => (
   current + normalizeAngle(target - current) * (1 - Math.exp(-smoothing * delta))
 );
+const NPC_QUESTIONS = Object.freeze({
+  gate: Object.freeze({
+    eyebrow: 'GATE A12 · TRAVELLER',
+    title: '“Excuse me — is this Gate A12?”',
+    prompt: 'Use the blue gate sign to choose a helpful reply.',
+    answers: Object.freeze([
+      'Yes, this is Gate A12.',
+      'No, this is baggage reclaim.',
+      'The restrooms are over there.',
+    ]),
+    correctIndex: 0,
+    completionEvent: 'HELP_GATE_TRAVELER',
+    completionFlag: 'gateTravelerHelped',
+    success: '“Thank you! I’m in the right place.”',
+    retry: 'Look at the blue gate sign. Read the letter and number together.',
+    picoSuccess: 'Pico: “Nice work — you used the sign to help someone. Now let’s ask airport staff for directions.”',
+  }),
+  employee: Object.freeze({
+    eyebrow: 'AIRPORT STAFF · DIRECTIONS',
+    title: '“Hello. How can I help?”',
+    prompt: 'Choose the polite, complete question.',
+    answers: Object.freeze([
+      'Excuse me, where is the Underground?',
+      'You take me to the Underground now.',
+      'Underground is where?',
+    ]),
+    correctIndex: 0,
+    completionEvent: 'ANSWER_EMPLOYEE',
+    completionFlag: 'employeeDirectionsAnswered',
+    success: '“Of course. Follow the yellow route to the ticket machines.”',
+    retry: 'Start with “Excuse me” and ask a complete question.',
+    picoSuccess: 'Pico: “Excellent manners. The ticket machines are along the yellow route.”',
+  }),
+  restroom: Object.freeze({
+    eyebrow: 'SERVICES · TRAVELLER',
+    title: '“Excuse me — where are the restrooms?”',
+    prompt: 'Use the airport signs to choose a helpful reply.',
+    answers: Object.freeze([
+      'They are next to the coffee shop.',
+      'This is Gate A12.',
+      'I am a suitcase.',
+    ]),
+    correctIndex: 0,
+    completionEvent: 'HELP_RESTROOM_TRAVELER',
+    completionFlag: 'restroomTravelerHelped',
+    success: '“Thank you! I can find them now.”',
+    retry: 'Look at the services sign and choose the complete direction.',
+    picoSuccess: 'Pico: “Clear directions. No interpretive dance required.”',
+  }),
+});
+const TICKET_MACHINE_SCREENS = Object.freeze([
+  Object.freeze({
+    eyebrow: 'TICKET MACHINE · 1 OF 2',
+    title: 'Choose a destination',
+    prompt: 'Where are you travelling today?',
+    answers: Object.freeze(['Central London', 'Gate A12', 'Baggage Reclaim']),
+    correctIndex: 0,
+    retry: 'The airport employee said to travel into Central London.',
+  }),
+  Object.freeze({
+    eyebrow: 'TICKET MACHINE · 2 OF 2',
+    title: 'Choose your journey',
+    prompt: 'You are travelling into London now.',
+    answers: Object.freeze(['Single ticket', 'Return ticket', 'Cancel']),
+    correctIndex: 0,
+    retry: 'Choose a single ticket for this journey.',
+  }),
+]);
 
 const readMobileRenderProfile = () => {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
@@ -107,21 +188,26 @@ function RendererFallback({ onRetry }) {
     <div className="absolute inset-0 z-50 grid place-items-center bg-slate-950 px-6 text-center text-white">
       <div className="max-w-sm rounded-[28px] border border-white/15 bg-white/10 p-6 shadow-2xl backdrop-blur-xl">
         <div className="text-4xl">🦜</div>
-        <h2 className="mt-3 text-xl font-black">The 3D scene needs a quick restart</h2>
-        <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">Close other graphics-heavy tabs, then retry. Smart Parrot will use the lightweight mobile renderer on iOS and Android.</p>
+        <h2 className="mt-3 text-xl font-black">Restarting the 3D scene</h2>
+        <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">Smart Parrot will retry once automatically. If this stays here, close other graphics-heavy tabs and retry.</p>
         <button type="button" onClick={onRetry} className="mt-5 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-slate-950 active:scale-95">Retry mission</button>
       </div>
     </div>
   );
 }
 
-function useInput(inputRef, onInteractPress, onInteractRelease) {
+function useInput(inputRef, onInteractPress, onInteractRelease, enabled = true) {
   useEffect(() => {
     const bindings = {
       KeyW: 'forward', ArrowUp: 'forward', KeyS: 'backward', ArrowDown: 'backward',
       KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
     };
+    const isUiTarget = (target) => (
+      target instanceof HTMLElement
+      && Boolean(target.closest('button, a, input, select, textarea, [contenteditable="true"], [role="button"]'))
+    );
     const keydown = (event) => {
+      if (!enabled || isUiTarget(event.target)) return;
       const action = bindings[event.code];
       if (action) {
         event.preventDefault();
@@ -133,6 +219,7 @@ function useInput(inputRef, onInteractPress, onInteractRelease) {
       }
     };
     const keyup = (event) => {
+      if (!enabled || isUiTarget(event.target)) return;
       const action = bindings[event.code];
       if (action) {
         event.preventDefault();
@@ -147,6 +234,7 @@ function useInput(inputRef, onInteractPress, onInteractRelease) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
       onInteractRelease();
     };
+    if (!enabled) blur();
     window.addEventListener('keydown', keydown);
     window.addEventListener('keyup', keyup);
     window.addEventListener('blur', blur);
@@ -155,39 +243,39 @@ function useInput(inputRef, onInteractPress, onInteractRelease) {
       window.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
     };
-  }, [inputRef, onInteractPress, onInteractRelease]);
+  }, [enabled, inputRef, onInteractPress, onInteractRelease]);
 }
 
 function Terminal() {
-  const columns = useMemo(() => Array.from({ length: 8 }, (_, i) => -21 + i * 6), []);
-  const ceilingLights = useMemo(() => Array.from({ length: 7 }, (_, i) => -18 + i * 6), []);
+  const columns = useMemo(() => Array.from({ length: 11 }, (_, i) => -30 + i * 6), []);
+  const ceilingLights = useMemo(() => Array.from({ length: 10 }, (_, i) => -27 + i * 6), []);
 
   return (
     <group>
-      <mesh receiveShadow position={[0, -0.12, 0]}>
-        <boxGeometry args={[48, 0.2, 34]} />
-        <meshStandardMaterial color="#cfd5dc" roughness={0.2} metalness={0.2} />
+      <mesh receiveShadow position={[0, -0.12, 1]}>
+        <boxGeometry args={[68, 0.2, 48]} />
+        <meshStandardMaterial color="#8f9aa5" roughness={0.72} metalness={0.04} />
       </mesh>
 
-      <mesh position={[0, 7.8, -15.5]} receiveShadow>
-        <boxGeometry args={[48, 16, 0.45]} />
+      <mesh position={[0, 7.8, -22.5]} receiveShadow>
+        <boxGeometry args={[68, 16, 0.45]} />
         <meshPhysicalMaterial color="#789fba" transparent opacity={0.48} roughness={0.12} metalness={0.08} transmission={0.18} />
       </mesh>
 
-      <mesh position={[0, 7.8, -15.28]}>
-        <planeGeometry args={[46, 14]} />
+      <mesh position={[0, 7.8, -22.28]}>
+        <planeGeometry args={[66, 14]} />
         <meshBasicMaterial color="#a8c8d8" transparent opacity={0.13} toneMapped={false} />
       </mesh>
 
       {columns.map((x) => (
-        <mesh key={x} position={[x, 4, -14.9]} castShadow receiveShadow>
+        <mesh key={x} position={[x, 4, -21.9]} castShadow receiveShadow>
           <boxGeometry args={[0.45, 8, 0.45]} />
           <meshStandardMaterial color="#f7f8fa" metalness={0.62} roughness={0.2} />
         </mesh>
       ))}
 
-      <mesh position={[0, 8.5, 0]} receiveShadow>
-        <boxGeometry args={[48, 0.35, 34]} />
+      <mesh position={[0, 8.5, 1]} receiveShadow>
+        <boxGeometry args={[68, 0.35, 48]} />
         <meshStandardMaterial color="#e6e9ed" roughness={0.62} />
       </mesh>
 
@@ -207,33 +295,14 @@ function Terminal() {
       <RoundedBox args={[11, 2.2, 3.2]} radius={0.45} position={[-10.5, 1.05, -8]} castShadow receiveShadow>
         <meshStandardMaterial color="#2d333d" metalness={0.72} roughness={0.28} />
       </RoundedBox>
-      <Text position={[-10.5, 2.7, -6.25]} fontSize={0.62} color="#17233d" anchorX="center">BAGGAGE RECLAIM</Text>
 
       <RoundedBox args={[7.2, 3.2, 2.2]} radius={0.25} position={[12, 1.6, -7]} castShadow receiveShadow>
         <meshStandardMaterial color="#815036" roughness={0.42} />
       </RoundedBox>
       <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
 
-      <Select enabled>
-        <group>
-          <RoundedBox args={[4.2, 1.2, 0.24]} radius={0.14} position={[-3.8, 4.3, -5.7]} castShadow>
-            <meshStandardMaterial color="#17365F" emissive="#0d2d5f" emissiveIntensity={1.15} roughness={0.36} />
-          </RoundedBox>
-          <Text position={[-3.8, 4.3, -5.55]} fontSize={0.34} color="#FFFFFF" anchorX="center">GATE A12 →</Text>
-        </group>
-      </Select>
-
-      <Select enabled>
-        <group>
-          <RoundedBox args={[3.8, 1.2, 0.24]} radius={0.14} position={[9.5, 4.25, -4.8]} castShadow>
-            <meshStandardMaterial color="#17365F" emissive="#0d2d5f" emissiveIntensity={1.15} roughness={0.36} />
-          </RoundedBox>
-          <Text position={[9.5, 4.25, -4.65]} fontSize={0.3} color="#FFFFFF" anchorX="center">RESTROOMS →</Text>
-        </group>
-      </Select>
-
-      <mesh position={[0, 0.03, 4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[3.2, 16]} />
+      <mesh position={[0, 0.03, 7.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[3.2, 34]} />
         <meshStandardMaterial color="#f4c847" roughness={0.4} />
       </mesh>
     </group>
@@ -283,7 +352,7 @@ function RainyWindowAtmosphere({ mobileRenderer = false }) {
 
   return (
     <group>
-      <group ref={rainRef} position={[0, 0, -15.03]}>
+      <group ref={rainRef} position={[0, 0, -22.03]}>
         {drops.map((drop, index) => (
           <mesh key={index} position={[drop.x, drop.y, 0]} rotation={[0, 0, -0.08]}>
             <planeGeometry args={[0.025, drop.length]} />
@@ -292,7 +361,7 @@ function RainyWindowAtmosphere({ mobileRenderer = false }) {
         ))}
       </group>
 
-      <group position={[0, 0, -16.2]}>
+      <group position={[0, 0, -23.2]}>
         <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[54, 12]} />
           <meshStandardMaterial color="#344552" roughness={0.22} metalness={0.28} />
@@ -321,12 +390,12 @@ function RainyWindowAtmosphere({ mobileRenderer = false }) {
         </mesh>
       </group>
 
-      <mesh ref={runwayGlowRef} position={[-19, 0.015, -7]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={runwayGlowRef} position={[-19, 0.015, -28]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[7, 1.1]} />
         <meshBasicMaterial color="#86cfff" transparent opacity={0.2} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </mesh>
 
-      <mesh ref={shadowRef} position={[-18, 0.022, -1]} rotation={[-Math.PI / 2, 0, -0.16]}>
+      <mesh ref={shadowRef} position={[-18, 0.022, -24]} rotation={[-Math.PI / 2, 0, -0.16]}>
         <planeGeometry args={[13, 3.2]} />
         <meshBasicMaterial color="#102132" transparent opacity={0.04} depthWrite={false} />
       </mesh>
@@ -339,14 +408,14 @@ function UndergroundSpot() {
   const target = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(() => {
-    target.position.set(0, 0, 11);
+    target.position.set(0, 0, 20);
     if (light.current) light.current.target = target;
   }, [target]);
 
   return (
     <>
       <primitive object={target} />
-      <spotLight ref={light} position={[0, 9, 9]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={24} decay={2} />
+      <spotLight ref={light} position={[0, 10, 17]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={28} decay={2} />
     </>
   );
 }
@@ -358,10 +427,10 @@ function HeathrowLighting({ mobileRenderer = false }) {
     const light = keyLight.current;
     if (!light || mobileRenderer) return;
     light.shadow.mapSize.set(1024, 1024);
-    light.shadow.camera.left = -24;
-    light.shadow.camera.right = 24;
-    light.shadow.camera.top = 24;
-    light.shadow.camera.bottom = -24;
+    light.shadow.camera.left = -34;
+    light.shadow.camera.right = 34;
+    light.shadow.camera.top = 34;
+    light.shadow.camera.bottom = -34;
     light.shadow.camera.near = 1;
     light.shadow.camera.far = 50;
     light.shadow.camera.updateProjectionMatrix();
@@ -466,7 +535,7 @@ function Suitcase({ visible, active, proximity = 0, collecting = false }) {
 
 function Underground({ active }) {
   return (
-    <group position={[0, 3.4, 11.4]}>
+    <group position={[UNDERGROUND.x - 2.2, 5.25, UNDERGROUND.z - 2]} scale={0.58}>
       <Select enabled>
         <group>
           <mesh castShadow><torusGeometry args={[1.45, 0.34, 20, 48]} /><meshStandardMaterial color={active ? '#ff4c55' : '#db2c37'} emissive={active ? '#a4141d' : '#4f050a'} emissiveIntensity={active ? 2.1 : 0.85} /></mesh>
@@ -474,8 +543,61 @@ function Underground({ active }) {
           <Text position={[0, 0, 0.41]} fontSize={0.42} color="white" anchorX="center">UNDERGROUND</Text>
         </group>
       </Select>
-      <mesh position={[0, -2.45, 0]} castShadow><boxGeometry args={[0.35, 3.7, 0.35]} /><meshStandardMaterial color="#39414c" metalness={0.65} /></mesh>
+      <mesh position={[0, -3, 0]} castShadow><boxGeometry args={[0.35, 5.2, 0.35]} /><meshStandardMaterial color="#39414c" metalness={0.65} /></mesh>
     </group>
+  );
+}
+
+function YellowRouteGuide() {
+  const checkpointRef = useRef();
+
+  useFrame(({ clock }) => {
+    if (!checkpointRef.current) return;
+    const pulse = 1 + Math.sin(clock.elapsedTime * 3.2) * 0.08;
+    checkpointRef.current.scale.setScalar(pulse);
+  });
+
+  return (
+    <Select enabled>
+      <group>
+        {YELLOW_ROUTE_GUIDES.map((guide, index) => (
+          <mesh
+            key={`${guide.x}:${guide.z}`}
+            position={[guide.x, 0.055, guide.z]}
+            rotation={[0, guide.rotation, 0]}
+            receiveShadow
+          >
+            <boxGeometry args={[1.75, 0.08, 0.38]} />
+            <meshStandardMaterial
+              color={index % 2 === 0 ? '#f7d65c' : '#f0bd36'}
+              emissive="#7a5200"
+              emissiveIntensity={0.45}
+              roughness={0.58}
+            />
+          </mesh>
+        ))}
+
+        <group ref={checkpointRef} position={[YELLOW_ROUTE_END.x, 0.07, YELLOW_ROUTE_END.z]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.85, 1.18, 40]} />
+            <meshBasicMaterial color="#ffe06a" transparent opacity={0.9} toneMapped={false} />
+          </mesh>
+        </group>
+
+        <Float speed={1.4} floatIntensity={0.18}>
+          <Text
+            position={[YELLOW_ROUTE_END.x, 2.35, YELLOW_ROUTE_END.z]}
+            fontSize={0.34}
+            color="#fff0a3"
+            anchorX="center"
+            outlineWidth={0.018}
+            outlineColor="#17213b"
+          >
+            FOLLOW THE YELLOW ROUTE
+          </Text>
+        </Float>
+      </group>
+    </Select>
   );
 }
 
@@ -584,12 +706,19 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   useFrame((_, delta) => {
     if (!ref.current) return;
     const input = controlsEnabled ? inputRef.current : { forward: false, backward: false, left: false, right: false };
+    const movementDelta = Math.min(delta, 0.05);
     moveVector.set((input.right ? 1 : 0) - (input.left ? 1 : 0), 0, (input.backward ? 1 : 0) - (input.forward ? 1 : 0));
     if (moveVector.lengthSq()) moveVector.normalize();
-    velocity.current.lerp(moveVector.multiplyScalar(controlsEnabled ? 5.2 : 0), 1 - Math.pow(0.001, delta));
-    ref.current.position.addScaledVector(velocity.current, delta);
-    ref.current.position.x = clamp(ref.current.position.x, -20, 20);
-    ref.current.position.z = clamp(ref.current.position.z, -13, 12);
+    velocity.current.lerp(moveVector.multiplyScalar(controlsEnabled ? 5.2 : 0), 1 - Math.pow(0.001, movementDelta));
+    const requestedPosition = {
+      x: ref.current.position.x + velocity.current.x * movementDelta,
+      z: ref.current.position.z + velocity.current.z * movementDelta,
+    };
+    const resolvedPosition = resolveHeathrowMovement(ref.current.position, requestedPosition, { mobileRenderer });
+    if (Math.abs(resolvedPosition.x - requestedPosition.x) > 0.0001) velocity.current.x = 0;
+    if (Math.abs(resolvedPosition.z - requestedPosition.z) > 0.0001) velocity.current.z = 0;
+    ref.current.position.x = resolvedPosition.x;
+    ref.current.position.z = resolvedPosition.z;
 
     const isMoving = velocity.current.lengthSq() > 0.35;
     if (conversationTarget) {
@@ -618,7 +747,7 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
 
       cameraLook.set(
         (ref.current.position.x + conversationTarget.x) * 0.5,
-        1.48,
+        conversationTarget.lookY ?? 1.48,
         (ref.current.position.z + conversationTarget.z) * 0.5,
       );
       cameraGoal.copy(cameraLook)
@@ -669,27 +798,69 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   );
 }
 
-function World({ inputRef, mission, resetToken, reportPosition, playerPosition, activeTarget, cutsceneActive, gameplayEnabled, suitcaseProximity, pickupAnimating, picoEntering, quizOpen, npcQuestion, mobileRenderer }) {
+function World({
+  inputRef,
+  mission,
+  resetToken,
+  reportPosition,
+  playerPosition,
+  activeTarget,
+  cutsceneActive,
+  gameplayEnabled,
+  suitcaseProximity,
+  pickupAnimating,
+  picoEntering,
+  ticketMachineOpen,
+  npcQuestion,
+  inspectedSignIds,
+  focusedSignId,
+  mobileRenderer,
+}) {
   const engagedQuestionId = npcQuestion
     || (activeTarget === 'gate_question' ? 'gate' : activeTarget === 'restroom_question' ? 'restroom' : null);
-  const conversationTarget = quizOpen
-    ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: -1 }
-    : npcQuestion
-      ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: npcQuestion === 'gate' ? 1 : -1 }
-      : null;
+  const focusedSign = getAirportSign(focusedSignId);
+  const conversationTarget = focusedSign
+    ? {
+        x: focusedSign.position[0],
+        z: focusedSign.position[2],
+        lookY: focusedSign.position[1],
+        cameraSide: focusedSign.cameraSide,
+      }
+    : ticketMachineOpen
+      ? {
+          x: TICKET_MACHINE_INTERACTION.cameraTarget.x,
+          z: TICKET_MACHINE_INTERACTION.cameraTarget.z,
+          lookY: TICKET_MACHINE_INTERACTION.cameraTarget.y,
+          cameraSide: TICKET_MACHINE_INTERACTION.cameraSide,
+        }
+    : npcQuestion === 'employee'
+      ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: 1 }
+      : npcQuestion
+        ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: 1 }
+        : null;
 
   return (
     <Selection>
       <>
         <color attach="background" args={['#718fa3']} />
-        <fog attach="fog" args={['#aebfc9', 22, 56]} />
+        <fog attach="fog" args={['#aebfc9', 32, 82]} />
         <HeathrowLighting mobileRenderer={mobileRenderer} />
         <RainyWindowAtmosphere mobileRenderer={mobileRenderer} />
         <ArrivalCutsceneCamera active={cutsceneActive} />
         <Terminal />
+        <TerminalExpansion
+          mobileRenderer={mobileRenderer}
+          ticketMachineActive={mission.step === HEATHROW_STEPS.USE_TICKET_MACHINE || ticketMachineOpen}
+          ticketMachineEngaged={activeTarget === 'ticket_machine' || ticketMachineOpen}
+        />
+        <AirportSigns
+          missionActive={mission.step === HEATHROW_STEPS.INSPECT_SIGNS}
+          inspectedIds={inspectedSignIds}
+          focusedId={focusedSignId}
+        />
         <AirportNPCs
           employeeActive={mission.step === HEATHROW_STEPS.ASK_EMPLOYEE}
-          employeeEngaged={activeTarget === 'employee' || quizOpen}
+          employeeEngaged={activeTarget === 'employee' || npcQuestion === 'employee'}
           questionActiveId={engagedQuestionId}
           playerPosition={playerPosition}
         />
@@ -715,13 +886,7 @@ function World({ inputRef, mission, resetToken, reportPosition, playerPosition, 
           celebrating={!cutsceneActive && mission.step === HEATHROW_STEPS.COMPLETE}
           entering={picoEntering}
         />
-        {mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && (
-          <Select enabled>
-            <Float speed={1.4} floatIntensity={0.25}>
-              <Text position={[0, 6.7, 11]} fontSize={0.58} color="#f7d65c" anchorX="center" outlineWidth={0.018} outlineColor="#17213b">Follow the yellow path</Text>
-            </Float>
-          </Select>
-        )}
+        {mission.step === HEATHROW_STEPS.FOLLOW_YELLOW_ROUTE && <YellowRouteGuide />}
         {!mobileRenderer && <CinematicBloom />}
       </>
     </Selection>
@@ -779,16 +944,24 @@ function AdaptiveRenderQuality({ dpr, minDpr, maxDpr, mobile, onDprChange }) {
 }
 
 export default function HeathrowPlayableSpine() {
+  const gameRootRef = useRef(null);
   const inputRef = useRef({ forward: false, backward: false, left: false, right: false });
   const positionRef = useRef({ ...SPAWN });
+  const firstTicketAnswerRef = useRef(null);
+  const ticketActionRef = useRef(null);
+  const firstNpcAnswerRef = useRef(null);
+  const npcContinueRef = useRef(null);
   const [playerPosition, setPlayerPosition] = useState({ ...SPAWN });
   const [mission, dispatch] = useReducer(reduceMission, INITIAL_MISSION_STATE, loadCheckpoint);
   const [resetToken, setResetToken] = useState(0);
   const [picoLine, setPicoLine] = useState('');
-  const [quizOpen, setQuizOpen] = useState(false);
-  const [quizFeedback, setQuizFeedback] = useState('');
   const [npcQuestion, setNpcQuestion] = useState(null);
   const [npcQuestionFeedback, setNpcQuestionFeedback] = useState('');
+  const [ticketMachineOpen, setTicketMachineOpen] = useState(false);
+  const [ticketMachineScreen, setTicketMachineScreen] = useState(0);
+  const [ticketMachineFeedback, setTicketMachineFeedback] = useState('');
+  const [inspectedSignIds, setInspectedSignIds] = useState([]);
+  const [focusedSignId, setFocusedSignId] = useState(null);
   const [cutsceneActive, setCutsceneActive] = useState(() => mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && !mission.suitcaseCollected);
   const [cutsceneBeat, setCutsceneBeat] = useState(0);
   const [holdingSuitcase, setHoldingSuitcase] = useState(false);
@@ -800,9 +973,11 @@ export default function HeathrowPlayableSpine() {
   const [adaptiveDpr, setAdaptiveDpr] = useState(() => readDprRange(readMobileRenderProfile().mobile).initialDpr);
   const [rendererFailure, setRendererFailure] = useState('');
   const [rendererKey, setRendererKey] = useState(0);
+  const automaticRendererRetriesRef = useRef(0);
   const canHoldSuitcaseRef = useRef(false);
   const pickupAnimatingRef = useRef(false);
   const interactionTimersRef = useRef([]);
+  const signsCompletedRef = useRef(false);
 
   useEffect(() => {
     setAdaptiveDpr(renderRange.initialDpr);
@@ -824,53 +999,216 @@ export default function HeathrowPlayableSpine() {
   const nearEmployee = distance(playerPosition, AIRPORT_EMPLOYEE_POSITION) < 3.2;
   const nearUnderground = distance(playerPosition, UNDERGROUND) < 3.8;
   const nearGateTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.gate) < 2.8;
-  const nearRestroomTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.restroom) < 2.8;
+  const nearRestroomTraveler = (
+    distance(playerPosition, QUESTION_NPC_POSITIONS.restroom) < 2.8
+    && playerPosition.z > 9
+  );
+  const nearTicketMachine = (
+    distance(playerPosition, TICKET_MACHINE_INTERACTION.interactionPosition)
+      < TICKET_MACHINE_INTERACTION.radius
+    && playerPosition.z > TICKET_MACHINE_INTERACTION.position.z + 0.2
+  );
+  const nearbySign = mission.step === HEATHROW_STEPS.INSPECT_SIGNS
+    ? findNearbyAirportSign(playerPosition)
+    : null;
+  const canInspectNearbySign = nearbySign
+    && !inspectedSignIds.includes(nearbySign.id)
+    && !focusedSignId;
   const canHoldSuitcase = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
     && nearSuitcase
     && !pickupAnimating
     && !cutsceneActive
-    && !quizOpen
     && !npcQuestion;
   canHoldSuitcaseRef.current = canHoldSuitcase;
   const activeTarget = mission.step === HEATHROW_STEPS.COLLECT_SUITCASE && nearSuitcase
     ? 'suitcase'
-    : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && nearEmployee
-      ? 'employee'
-      : mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && nearUnderground
-        ? 'underground'
-        : mission.step !== HEATHROW_STEPS.MEET_PICO && nearGateTraveler
-          ? 'gate_question'
-          : mission.step !== HEATHROW_STEPS.MEET_PICO && nearRestroomTraveler
-            ? 'restroom_question'
-            : null;
+    : canInspectNearbySign
+      ? `sign:${nearbySign.id}`
+      : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && nearEmployee
+        ? 'employee'
+        : mission.step === HEATHROW_STEPS.USE_TICKET_MACHINE && nearTicketMachine
+          ? 'ticket_machine'
+        : mission.step === HEATHROW_STEPS.REACH_UNDERGROUND && nearUnderground
+          ? 'underground'
+          : mission.step === HEATHROW_STEPS.HELP_GATE_TRAVELER && nearGateTraveler
+            ? 'gate_question'
+            : mission.step === HEATHROW_STEPS.HELP_RESTROOM_TRAVELER && nearRestroomTraveler
+              ? 'restroom_question'
+              : null;
+  const npcQuestionData = NPC_QUESTIONS[npcQuestion] ?? null;
+  const npcQuestionComplete = npcQuestionData
+    ? Boolean(mission[npcQuestionData.completionFlag])
+    : false;
+  const ticketMachineScreenData = TICKET_MACHINE_SCREENS[ticketMachineScreen] ?? null;
+  const ticketMachineComplete = ticketMachineOpen && mission.ticketPurchased;
+  const gameplayEnabled = !cutsceneActive
+    && !npcQuestion
+    && !ticketMachineOpen
+    && !focusedSignId
+    && !pickupAnimating
+    && !picoEntering;
 
   const interact = useCallback(() => {
+    if (npcQuestion || ticketMachineOpen || focusedSignId) return;
     const position = positionRef.current;
     if (mission.step === HEATHROW_STEPS.MEET_PICO) {
       dispatch({ type: 'MEET_PICO' });
-      setPicoLine('Pico: “I know the way. Mostly. Let’s ask the human in the smart jacket.”');
+      setPicoLine('Pico: “Let’s read the airport signs before we choose a route.”');
+    } else if (mission.step === HEATHROW_STEPS.INSPECT_SIGNS) {
+      const sign = findNearbyAirportSign(position);
+      if (!sign || inspectedSignIds.includes(sign.id)) return;
+      inputRef.current = { forward: false, backward: false, left: false, right: false };
+      setPicoLine('');
+      setInspectedSignIds((current) => [...current, sign.id]);
+      setFocusedSignId(sign.id);
     } else if (mission.step === HEATHROW_STEPS.ASK_EMPLOYEE && distance(position, AIRPORT_EMPLOYEE_POSITION) < 3.2) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
-      setQuizFeedback('');
-      setQuizOpen(true);
-    } else if (mission.step === HEATHROW_STEPS.FIND_UNDERGROUND && distance(position, UNDERGROUND) < 3.8) {
-      dispatch({ type: 'FIND_UNDERGROUND' });
+      setNpcQuestionFeedback('');
+      setNpcQuestion('employee');
+    } else if (
+      mission.step === HEATHROW_STEPS.USE_TICKET_MACHINE
+      && distance(position, TICKET_MACHINE_INTERACTION.interactionPosition)
+        < TICKET_MACHINE_INTERACTION.radius
+      && position.z > TICKET_MACHINE_INTERACTION.position.z + 0.2
+    ) {
+      inputRef.current = { forward: false, backward: false, left: false, right: false };
+      setPicoLine('');
+      setTicketMachineScreen(0);
+      setTicketMachineFeedback('');
+      setTicketMachineOpen(true);
+    } else if (mission.step === HEATHROW_STEPS.REACH_UNDERGROUND && distance(position, UNDERGROUND) < 3.8) {
+      dispatch({ type: 'REACH_UNDERGROUND' });
       setPicoLine('Pico: “You found it. London is waiting.”');
-    } else if (distance(position, QUESTION_NPC_POSITIONS.gate) < 2.8) {
+    } else if (
+      mission.step === HEATHROW_STEPS.HELP_GATE_TRAVELER
+      && distance(position, QUESTION_NPC_POSITIONS.gate) < 2.8
+    ) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
       setNpcQuestionFeedback('');
       setNpcQuestion('gate');
-    } else if (distance(position, QUESTION_NPC_POSITIONS.restroom) < 2.8) {
+    } else if (
+      mission.step === HEATHROW_STEPS.HELP_RESTROOM_TRAVELER
+      && distance(position, QUESTION_NPC_POSITIONS.restroom) < 2.8
+      && position.z > 9
+    ) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
       setNpcQuestionFeedback('');
       setNpcQuestion('restroom');
     }
-  }, [mission.step]);
+  }, [focusedSignId, inspectedSignIds, mission.step, npcQuestion, ticketMachineOpen]);
+
+  useEffect(() => {
+    if (
+      mission.step !== HEATHROW_STEPS.INSPECT_SIGNS
+      || inspectedSignIds.length !== AIRPORT_SIGNS.length
+      || signsCompletedRef.current
+    ) {
+      return;
+    }
+
+    signsCompletedRef.current = true;
+    dispatch({ type: 'INSPECT_SIGNS' });
+    setPicoLine('Pico: “Three signs, three clues. Let’s help the traveller at Gate A12.”');
+  }, [inspectedSignIds, mission.step]);
 
   const clearInteractionTimers = useCallback(() => {
     interactionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     interactionTimersRef.current = [];
   }, []);
+
+  const closeTicketMachine = useCallback(() => {
+    setTicketMachineOpen(false);
+    setTicketMachineScreen(0);
+    setTicketMachineFeedback('');
+    window.requestAnimationFrame(() => gameRootRef.current?.focus({ preventScroll: true }));
+  }, []);
+
+  useEffect(() => {
+    if (!ticketMachineOpen) return undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      if (ticketMachineScreen >= TICKET_MACHINE_SCREENS.length) {
+        ticketActionRef.current?.focus({ preventScroll: true });
+      } else {
+        firstTicketAnswerRef.current?.focus({ preventScroll: true });
+      }
+    });
+    const onDialogKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeTicketMachine();
+    };
+    window.addEventListener('keydown', onDialogKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('keydown', onDialogKeyDown);
+    };
+  }, [closeTicketMachine, ticketMachineOpen, ticketMachineScreen]);
+
+  const answerTicketMachine = useCallback((answerIndex) => {
+    if (!ticketMachineScreenData || ticketMachineComplete) return;
+    if (answerIndex !== ticketMachineScreenData.correctIndex) {
+      setTicketMachineFeedback(ticketMachineScreenData.retry);
+      return;
+    }
+
+    setTicketMachineFeedback('');
+    setTicketMachineScreen((screen) => Math.min(screen + 1, TICKET_MACHINE_SCREENS.length));
+  }, [ticketMachineComplete, ticketMachineScreenData]);
+
+  const collectTicket = useCallback(() => {
+    if (ticketMachineScreen < TICKET_MACHINE_SCREENS.length) return;
+    if (ticketMachineComplete) {
+      closeTicketMachine();
+      return;
+    }
+
+    dispatch({ type: 'COMPLETE_TICKET_MACHINE' });
+    setTicketMachineFeedback('Central London · Single — ticket collected.');
+    setPicoLine('Pico: “Ticket collected. Let’s help the traveller near the restrooms.”');
+  }, [closeTicketMachine, ticketMachineComplete, ticketMachineScreen]);
+
+  const closeNpcQuestion = useCallback(() => {
+    setNpcQuestion(null);
+    setNpcQuestionFeedback('');
+    window.requestAnimationFrame(() => gameRootRef.current?.focus({ preventScroll: true }));
+  }, []);
+
+  useEffect(() => {
+    if (!npcQuestion) return undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      firstNpcAnswerRef.current?.focus({ preventScroll: true });
+    });
+    const onDialogKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeNpcQuestion();
+    };
+    window.addEventListener('keydown', onDialogKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('keydown', onDialogKeyDown);
+    };
+  }, [closeNpcQuestion, npcQuestion]);
+
+  useEffect(() => {
+    if (!npcQuestionComplete) return undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      npcContinueRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [npcQuestionComplete]);
+
+  const answerNpcQuestion = useCallback((answerIndex) => {
+    if (!npcQuestionData || npcQuestionComplete) return;
+    if (answerIndex !== npcQuestionData.correctIndex) {
+      setNpcQuestionFeedback(npcQuestionData.retry);
+      return;
+    }
+
+    dispatch({ type: npcQuestionData.completionEvent });
+    setNpcQuestionFeedback(npcQuestionData.success);
+    setPicoLine(npcQuestionData.picoSuccess);
+  }, [npcQuestionComplete, npcQuestionData]);
 
   const beginSuitcaseHold = useCallback(() => {
     if (!canHoldSuitcaseRef.current || pickupAnimatingRef.current) return;
@@ -897,7 +1235,7 @@ export default function HeathrowPlayableSpine() {
     endSuitcaseHold();
   }, [endSuitcaseHold]);
 
-  useInput(inputRef, onInteractPress, onInteractRelease);
+  useInput(inputRef, onInteractPress, onInteractRelease, gameplayEnabled);
 
   useEffect(() => {
     if (!holdingSuitcase) return undefined;
@@ -950,6 +1288,17 @@ export default function HeathrowPlayableSpine() {
   useEffect(() => () => clearInteractionTimers(), [clearInteractionTimers]);
   useEffect(() => saveCheckpoint(mission), [mission]);
   useEffect(() => {
+    if (
+      mission.step !== HEATHROW_STEPS.FOLLOW_YELLOW_ROUTE
+      || distance(playerPosition, YELLOW_ROUTE_END) >= YELLOW_ROUTE_END.radius
+    ) {
+      return;
+    }
+
+    dispatch({ type: 'FOLLOW_YELLOW_ROUTE' });
+    setPicoLine('Pico: “Yellow route complete. The Underground entrance is just ahead.”');
+  }, [mission.step, playerPosition]);
+  useEffect(() => {
     if (!cutsceneActive) return undefined;
     inputRef.current = { forward: false, backward: false, left: false, right: false };
     setCutsceneBeat(0);
@@ -970,10 +1319,14 @@ export default function HeathrowPlayableSpine() {
     positionRef.current = { ...SPAWN };
     setPlayerPosition({ ...SPAWN });
     setPicoLine('');
-    setQuizOpen(false);
-    setQuizFeedback('');
     setNpcQuestion(null);
     setNpcQuestionFeedback('');
+    setTicketMachineOpen(false);
+    setTicketMachineScreen(0);
+    setTicketMachineFeedback('');
+    setInspectedSignIds([]);
+    setFocusedSignId(null);
+    signsCompletedRef.current = false;
     setHoldingSuitcase(false);
     setHoldProgress(0);
     setPickupAnimating(false);
@@ -984,16 +1337,15 @@ export default function HeathrowPlayableSpine() {
     setResetToken((value) => value + 1);
   };
 
-  const progress = {
-    collect_suitcase: 'w-1/5',
-    meet_pico: 'w-2/5',
-    ask_employee: 'w-3/5',
-    find_underground: 'w-4/5',
-    complete: 'w-full',
-  }[mission.step];
+  const missionStepIndex = Math.max(0, HEATHROW_SEQUENCE.indexOf(mission.step));
+  const progressPercent = ((missionStepIndex + 1) / HEATHROW_SEQUENCE.length) * 100;
   const canInteract = activeTarget || mission.step === HEATHROW_STEPS.MEET_PICO;
-  const label = activeTarget === 'gate_question' || activeTarget === 'restroom_question'
-    ? 'Talk to traveler'
+  const label = activeTarget?.startsWith('sign:')
+    ? 'Inspect sign'
+    : activeTarget === 'gate_question' || activeTarget === 'restroom_question'
+    ? 'Talk to traveller'
+    : activeTarget === 'ticket_machine'
+      ? 'Use ticket machine'
     : mission.step === HEATHROW_STEPS.COLLECT_SUITCASE
       ? 'Collect suitcase'
       : mission.step === HEATHROW_STEPS.MEET_PICO
@@ -1001,23 +1353,7 @@ export default function HeathrowPlayableSpine() {
         : mission.step === HEATHROW_STEPS.ASK_EMPLOYEE
           ? 'Ask airport staff'
           : 'Enter Underground';
-  const npcQuestionData = npcQuestion === 'gate'
-    ? {
-        eyebrow: 'TRAVELER QUESTION',
-        title: '“Excuse me, which gate are we in?”',
-        answers: ['We are at Gate A12.', 'We are in the restroom.', 'The gate is coffee.'],
-        correctIndex: 0,
-        success: 'Exactly — we are at Gate A12.',
-      }
-    : npcQuestion === 'restroom'
-      ? {
-          eyebrow: 'TRAVELER QUESTION',
-          title: '“Excuse me, where is the restroom?”',
-          answers: ['It is next to the coffee shop.', 'It is Gate A12.', 'I am a suitcase.'],
-          correctIndex: 0,
-          success: 'Perfect — it is next to the coffee shop.',
-        }
-      : null;
+  const focusedSignData = getAirportSign(focusedSignId);
   const cutsceneCopy = [
     { eyebrow: 'SMART PARROT ADVENTURE', title: 'London Heathrow', body: 'A new city. A new language. One very important suitcase.' },
     { eyebrow: 'TERMINAL 5', title: 'Arrivals', body: 'Follow the signs through the busy terminal.' },
@@ -1025,29 +1361,60 @@ export default function HeathrowPlayableSpine() {
     { eyebrow: 'PICO', title: '“Purple suitcase. Very fashionable.”', body: '“Also, apparently, very easy to lose.”' },
   ][cutsceneBeat];
 
-  const retryRenderer = () => {
+  const performRendererRetry = useCallback(() => {
     setRendererFailure('');
     setRendererKey((value) => value + 1);
-  };
+  }, []);
+
+  const retryRenderer = useCallback(() => {
+    automaticRendererRetriesRef.current = 0;
+    performRendererRetry();
+  }, [performRendererRetry]);
+
+  useEffect(() => {
+    if (!rendererFailure || automaticRendererRetriesRef.current >= 1) return undefined;
+    automaticRendererRetriesRef.current += 1;
+    const retryTimer = window.setTimeout(performRendererRetry, 700);
+    return () => window.clearTimeout(retryTimer);
+  }, [performRendererRetry, rendererFailure]);
+
+  useEffect(() => {
+    if (rendererFailure) return undefined;
+    const stableTimer = window.setTimeout(() => {
+      automaticRendererRetriesRef.current = 0;
+    }, 4000);
+    return () => window.clearTimeout(stableTimer);
+  }, [rendererFailure, rendererKey]);
 
   const rendererFallback = <RendererFallback onRetry={retryRenderer} />;
 
   return (
     <main
+      ref={gameRootRef}
+      tabIndex={-1}
       className="relative h-screen h-[100dvh] overflow-hidden bg-slate-950 text-white [touch-action:none]"
       style={{ minHeight: renderProfile.mobile ? 0 : 560 }}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
       data-render-dpr={adaptiveDpr.toFixed(2)}
       data-mobile-platform={renderProfile.ios ? 'ios' : renderProfile.android ? 'android' : 'other'}
+      data-player-x={playerPosition.x.toFixed(2)}
+      data-player-z={playerPosition.z.toFixed(2)}
     >
       {rendererFailure ? rendererFallback : (
-        <GameCanvasBoundary resetKey={rendererKey} onError={() => setRendererFailure('render-error')} fallback={rendererFallback}>
+        <GameCanvasBoundary
+          resetKey={rendererKey}
+          onError={(error) => {
+            console.error('[Heathrow] 3D scene error', error);
+            setRendererFailure(error?.message || 'render-error');
+          }}
+          fallback={rendererFallback}
+        >
           <Canvas
             key={`${rendererKey}-${renderProfile.mobile ? 'mobile' : 'desktop'}`}
             fallback={rendererFallback}
             shadows={!renderProfile.mobile}
             dpr={adaptiveDpr}
-            camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: renderProfile.mobile ? 80 : 120 }}
+            camera={{ position: [0, 7.15, 2.8], fov: 52, near: 0.1, far: renderProfile.mobile ? 110 : 160 }}
             gl={{
               antialias: !renderProfile.mobile,
               alpha: false,
@@ -1058,7 +1425,7 @@ export default function HeathrowPlayableSpine() {
               precision: renderProfile.mobile ? 'mediump' : 'highp',
               powerPreference: renderProfile.mobile ? 'default' : 'high-performance',
               toneMapping: THREE.ACESFilmicToneMapping,
-              toneMappingExposure: 1.02,
+              toneMappingExposure: 0.94,
             }}
             onCreated={({ gl }) => {
               gl.outputColorSpace = THREE.SRGBColorSpace;
@@ -1085,12 +1452,14 @@ export default function HeathrowPlayableSpine() {
               playerPosition={playerPosition}
               activeTarget={activeTarget}
               cutsceneActive={cutsceneActive}
-              gameplayEnabled={!cutsceneActive && !quizOpen && !npcQuestion && !pickupAnimating && !picoEntering}
+              gameplayEnabled={gameplayEnabled}
               suitcaseProximity={mission.step === HEATHROW_STEPS.COLLECT_SUITCASE ? suitcaseProximity : 0}
               pickupAnimating={pickupAnimating}
               picoEntering={picoEntering}
-              quizOpen={quizOpen}
+              ticketMachineOpen={ticketMachineOpen}
               npcQuestion={npcQuestion}
+              inspectedSignIds={inspectedSignIds}
+              focusedSignId={focusedSignId}
               mobileRenderer={renderProfile.mobile}
             />
           </Canvas>
@@ -1126,7 +1495,17 @@ export default function HeathrowPlayableSpine() {
           <div className="flex items-center gap-1.5 text-[10px] font-black tracking-[.16em] text-amber-300 sm:text-xs"><Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> LONDON · A1</div>
           <h1 className="mt-0.5 text-base font-black sm:mt-1 sm:text-xl">Heathrow Terminal 5</h1>
           <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-200 sm:mt-2 sm:text-sm">{objectiveCopy(mission.step)}</p>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15 sm:mt-3 sm:h-2"><div className={`h-full rounded-full bg-amber-300 transition-all duration-500 ${progress}`} /></div>
+          {mission.step === HEATHROW_STEPS.INSPECT_SIGNS && (
+            <div className="mt-2 text-[10px] font-black tracking-[.12em] text-sky-200 sm:text-xs">
+              AIRPORT SIGNS · {inspectedSignIds.length}/{AIRPORT_SIGNS.length}
+            </div>
+          )}
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15 sm:mt-3 sm:h-2">
+            <div
+              className="h-full rounded-full bg-amber-300 transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
         </div>
         <div className="pointer-events-auto flex gap-2">
           <button aria-label="Show help" onClick={() => setPicoLine('Pico: “Look for the softly glowing object.”')} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><HelpCircle className="h-[18px] w-[18px] sm:h-5 sm:w-5" /></button>
@@ -1135,76 +1514,194 @@ export default function HeathrowPlayableSpine() {
       </header>}
       {!cutsceneActive && picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
 
-      {quizOpen && (
-        <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/45 bg-white/96 p-5 text-slate-900 shadow-2xl backdrop-blur-xl sm:p-7">
-            <div className="text-xs font-black tracking-[.18em] text-violet-600">FIRST ENGLISH MOMENT</div>
-            <h2 className="mt-2 text-2xl font-black tracking-tight">What should you say?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Choose the polite sentence to ask the airport employee for directions.</p>
-            <div className="mt-5 grid gap-3">
-              {[
-                'Excuse me, where is the Underground?',
-                'You take me Underground now.',
-                'Underground is where?',
-              ].map((answer, index) => (
-                <button
-                  key={answer}
-                  type="button"
-                  onClick={() => {
-                    if (index === 0) {
-                      dispatch({ type: 'ANSWER_PHRASE' });
-                      setQuizFeedback('Perfect! The employee points you toward the yellow route.');
-                      setPicoLine('Pico: “Excellent manners. I was going to say: train, please!”');
-                      window.setTimeout(() => setQuizOpen(false), 850);
-                    } else {
-                      setQuizFeedback('Almost — choose the polite complete sentence beginning with “Excuse me”.');
-                    }
-                  }}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold transition hover:border-violet-300 hover:bg-violet-50 active:scale-[0.99]"
-                >
-                  {answer}
-                </button>
-              ))}
+      {focusedSignData && (
+        <div className="absolute inset-0 z-40 flex items-end justify-end bg-slate-950/18 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6">
+          <div className="w-full max-w-sm rounded-[24px] border border-sky-100/55 bg-slate-950/90 p-5 text-white shadow-2xl backdrop-blur-xl sm:p-6">
+            <div className="text-[10px] font-black tracking-[.18em] text-sky-300 sm:text-xs">
+              AIRPORT SIGNS · {inspectedSignIds.length}/{AIRPORT_SIGNS.length}
             </div>
-            {quizFeedback && <p className="mt-4 rounded-2xl bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800">{quizFeedback}</p>}
-            <button type="button" onClick={() => setQuizOpen(false)} className="mt-4 text-sm font-bold text-slate-500">Close</button>
+            <h2 className="mt-2 text-2xl font-black tracking-tight">{focusedSignData.shortLabel}</h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-100">{focusedSignData.learningCopy}</p>
+            <p className="mt-3 rounded-2xl bg-sky-400/12 px-4 py-3 text-xs font-bold leading-5 text-sky-100">
+              {focusedSignData.hint}
+            </p>
+            <button
+              type="button"
+              onClick={() => setFocusedSignId(null)}
+              className="mt-5 w-full rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 active:scale-[0.98]"
+            >
+              Continue exploring
+            </button>
           </div>
+        </div>
+      )}
+
+      {ticketMachineOpen && (
+        <div className="absolute inset-0 z-40 flex items-end justify-end bg-slate-950/[0.18] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ticket-machine-dialog-title"
+            className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[26px] border border-cyan-100/50 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl [touch-action:pan-y] sm:max-h-[calc(100dvh-3rem)] sm:p-6"
+          >
+            {ticketMachineScreenData ? (
+              <>
+                <div className="text-[10px] font-black tracking-[.18em] text-cyan-300 sm:text-xs">
+                  {ticketMachineScreenData.eyebrow}
+                </div>
+                <h2 id="ticket-machine-dialog-title" className="mt-2 text-xl font-black tracking-tight sm:text-2xl">
+                  {ticketMachineScreenData.title}
+                </h2>
+                <p className="mt-2 text-xs font-semibold leading-5 text-slate-300 sm:text-sm sm:leading-6">
+                  {ticketMachineScreenData.prompt}
+                </p>
+                <div className="mt-4 grid gap-2.5 sm:mt-5 sm:gap-3">
+                  {ticketMachineScreenData.answers.map((answer, index) => (
+                    <button
+                      key={answer}
+                      ref={index === 0 ? firstTicketAnswerRef : null}
+                      type="button"
+                      onClick={() => answerTicketMachine(index)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        answerTicketMachine(index);
+                      }}
+                      className="min-h-12 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-left text-sm font-bold text-white transition hover:border-cyan-200/70 hover:bg-cyan-300/[0.15] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 active:scale-[0.99]"
+                    >
+                      {answer}
+                    </button>
+                  ))}
+                </div>
+                {ticketMachineFeedback && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="mt-4 rounded-2xl border border-amber-300/40 bg-amber-300/[0.12] px-4 py-3 text-sm font-semibold text-amber-100"
+                  >
+                    <span className="font-black">Try again. </span>
+                    {ticketMachineFeedback}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={closeTicketMachine}
+                  className="mt-4 min-h-12 w-full rounded-full border border-white/25 bg-white/[0.08] px-5 py-3 text-sm font-black text-slate-200 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 active:scale-[0.98]"
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="text-[10px] font-black tracking-[.18em] text-cyan-300 sm:text-xs">TICKET MACHINE · READY</div>
+                <h2 id="ticket-machine-dialog-title" className="mt-2 text-xl font-black tracking-tight sm:text-2xl">
+                  Collect your ticket
+                </h2>
+                <p className="mt-2 text-xs font-semibold leading-5 text-slate-300 sm:text-sm sm:leading-6">
+                  Check the journey details before taking the ticket.
+                </p>
+                <div className="mt-4 rounded-[22px] border border-cyan-200/35 bg-cyan-300/[0.1] p-4 sm:mt-5">
+                  <div className="text-[10px] font-black tracking-[.16em] text-cyan-200">DESTINATION</div>
+                  <div className="mt-1 text-xl font-black">Central London</div>
+                  <div className="mt-3 flex items-center justify-between gap-4 border-t border-white/15 pt-3 text-sm font-bold text-slate-200">
+                    <span>Single ticket</span>
+                    <span>1 passenger</span>
+                  </div>
+                </div>
+                {ticketMachineFeedback && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="mt-4 rounded-2xl border border-emerald-300/40 bg-emerald-400/[0.12] px-4 py-3 text-sm font-semibold text-emerald-100"
+                  >
+                    <span className="font-black">Complete. </span>
+                    {ticketMachineFeedback}
+                  </p>
+                )}
+                <button
+                  ref={ticketActionRef}
+                  type="button"
+                  onClick={collectTicket}
+                  className="mt-4 min-h-12 w-full rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-100/80 active:scale-[0.98]"
+                >
+                  {ticketMachineComplete ? 'Continue' : 'Collect ticket'}
+                </button>
+                {!ticketMachineComplete && (
+                  <button
+                    type="button"
+                    onClick={closeTicketMachine}
+                    className="mt-2 min-h-11 w-full rounded-full text-sm font-bold text-slate-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70"
+                  >
+                    Close
+                  </button>
+                )}
+              </>
+            )}
+          </section>
         </div>
       )}
 
       {npcQuestionData && (
-        <div className="absolute inset-0 z-40 grid place-items-end bg-slate-950/32 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[1px] sm:place-items-center">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/45 bg-white/96 p-5 text-slate-900 shadow-2xl backdrop-blur-xl sm:p-7">
-            <div className="text-xs font-black tracking-[.18em] text-sky-700">{npcQuestionData.eyebrow}</div>
-            <h2 className="mt-2 text-2xl font-black tracking-tight">{npcQuestionData.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Choose the clearest helpful answer.</p>
-            <div className="mt-5 grid gap-3">
+        <div className="absolute inset-0 z-40 flex items-end justify-end bg-slate-950/[0.18] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="npc-dialog-title"
+            className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[26px] border border-sky-100/50 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl [touch-action:pan-y] sm:max-h-[calc(100dvh-3rem)] sm:p-6"
+          >
+            <div className="text-[10px] font-black tracking-[.18em] text-sky-300 sm:text-xs">{npcQuestionData.eyebrow}</div>
+            <h2 id="npc-dialog-title" className="mt-2 text-xl font-black tracking-tight sm:text-2xl">{npcQuestionData.title}</h2>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-300 sm:text-sm sm:leading-6">{npcQuestionData.prompt}</p>
+            <div className="mt-4 grid gap-2.5 sm:mt-5 sm:gap-3">
               {npcQuestionData.answers.map((answer, index) => (
                 <button
                   key={answer}
+                  ref={index === 0 ? firstNpcAnswerRef : null}
                   type="button"
-                  onClick={() => {
-                    if (index === npcQuestionData.correctIndex) {
-                      setNpcQuestionFeedback(npcQuestionData.success);
-                      setPicoLine('Pico: “Helpful, polite, and no one boarded the wrong plane. Excellent.”');
-                      window.setTimeout(() => setNpcQuestion(null), 900);
-                    } else {
-                      setNpcQuestionFeedback('Not quite — look at the airport signs and choose the complete sentence.');
-                    }
+                  disabled={npcQuestionComplete}
+                  onClick={() => answerNpcQuestion(index)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    answerNpcQuestion(index);
                   }}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold transition hover:border-sky-300 hover:bg-sky-50 active:scale-[0.99]"
+                  className="min-h-12 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-left text-sm font-bold text-white transition hover:border-sky-200/70 hover:bg-sky-300/[0.15] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 active:scale-[0.99] disabled:cursor-default disabled:opacity-55"
                 >
                   {answer}
                 </button>
               ))}
             </div>
-            {npcQuestionFeedback && <p className="mt-4 rounded-2xl bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">{npcQuestionFeedback}</p>}
-            <button type="button" onClick={() => setNpcQuestion(null)} className="mt-4 text-sm font-bold text-slate-500">Close</button>
-          </div>
+            {npcQuestionFeedback && (
+              <p
+                role="status"
+                aria-live="polite"
+                className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-semibold ${
+                  npcQuestionComplete
+                    ? 'border-emerald-300/40 bg-emerald-400/[0.12] text-emerald-100'
+                    : 'border-amber-300/40 bg-amber-300/[0.12] text-amber-100'
+                }`}
+              >
+                <span className="font-black">{npcQuestionComplete ? 'Correct. ' : 'Try again. '}</span>
+                {npcQuestionFeedback}
+              </p>
+            )}
+            <button
+              ref={npcContinueRef}
+              type="button"
+              onClick={closeNpcQuestion}
+              className={`mt-4 min-h-12 w-full rounded-full px-5 py-3 text-sm font-black transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 active:scale-[0.98] ${
+                npcQuestionComplete
+                  ? 'bg-amber-300 text-slate-950'
+                  : 'border border-white/25 bg-white/[0.08] text-slate-200'
+              }`}
+            >
+              {npcQuestionComplete ? 'Continue' : 'Close'}
+            </button>
+          </section>
         </div>
       )}
 
-      {!cutsceneActive && !npcQuestion && !pickupAnimating && !picoEntering && (
+      {!cutsceneActive && !npcQuestion && !ticketMachineOpen && !focusedSignId && !pickupAnimating && !picoEntering && (
         <>
           {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_5.25rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>}
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">

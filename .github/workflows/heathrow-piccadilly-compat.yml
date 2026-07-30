@@ -49,10 +49,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Use Node.js 20
+      - name: Use Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Validate Heathrow source contracts
         run: node scripts/check-heathrow-piccadilly-compat.mjs

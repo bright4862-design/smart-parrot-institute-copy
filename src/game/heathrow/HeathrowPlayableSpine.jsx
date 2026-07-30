@@ -1311,6 +1311,15 @@ export default function HeathrowPlayableSpine() {
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [cutsceneActive]);
 
+  useEffect(() => {
+    if (cutsceneActive) return undefined;
+    inputRef.current = { forward: false, backward: false, left: false, right: false };
+    const focusFrame = window.requestAnimationFrame(() => {
+      gameRootRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [cutsceneActive]);
+
   const restart = () => {
     clearCheckpoint();
     clearInteractionTimers();
@@ -1391,8 +1400,9 @@ export default function HeathrowPlayableSpine() {
   return (
     <main
       ref={gameRootRef}
-      tabIndex={-1}
-      className="relative h-screen h-[100dvh] overflow-hidden bg-slate-950 text-white [touch-action:none]"
+      tabIndex={0}
+      onPointerDown={() => gameRootRef.current?.focus({ preventScroll: true })}
+      className="relative h-screen h-[100dvh] overflow-hidden bg-slate-950 text-white outline-none [touch-action:none]"
       style={{ minHeight: renderProfile.mobile ? 0 : 560 }}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
       data-render-dpr={adaptiveDpr.toFixed(2)}

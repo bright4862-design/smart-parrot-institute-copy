@@ -895,10 +895,17 @@ function DirectionButton({ label, action, inputRef }) {
   const set = (value) => { inputRef.current[action] = value; };
   const press = (event) => {
     event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     set(true);
   };
   const release = (event) => {
     event?.preventDefault();
+    event?.stopPropagation();
+    const button = event?.currentTarget;
+    if (button?.hasPointerCapture?.(event.pointerId)) {
+      button.releasePointerCapture(event.pointerId);
+    }
     set(false);
   };
 
@@ -910,17 +917,19 @@ function DirectionButton({ label, action, inputRef }) {
       onPointerDown={press}
       onPointerUp={release}
       onPointerCancel={release}
-      onPointerLeave={release}
-      onTouchStart={press}
-      onTouchEnd={release}
-      onTouchCancel={release}
-      onMouseDown={press}
-      onMouseUp={release}
-      onMouseLeave={release}
+      onLostPointerCapture={release}
       onContextMenu={(event) => event.preventDefault()}
+      onClick={(event) => event.preventDefault()}
       className="grid h-[52px] w-[52px] select-none place-items-center rounded-2xl border border-white/40 bg-slate-950/62 text-lg font-black text-white shadow-xl backdrop-blur active:scale-95"
+      style={{
+        touchAction: 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitTapHighlightColor: 'transparent',
+      }}
     >
-      {label}
+      <span aria-hidden="true" className="pointer-events-none select-none">{label}</span>
     </button>
   );
 }
@@ -1467,8 +1476,16 @@ export default function HeathrowPlayableSpine() {
       ref={gameRootRef}
       tabIndex={0}
       onPointerDown={() => gameRootRef.current?.focus({ preventScroll: true })}
-      className="relative h-screen h-[100dvh] overflow-hidden bg-slate-950 text-white outline-none [touch-action:none]"
-      style={{ minHeight: renderProfile.mobile ? 0 : 560 }}
+      onContextMenu={(event) => event.preventDefault()}
+      onDragStart={(event) => event.preventDefault()}
+      className="relative h-screen h-[100dvh] select-none overflow-hidden bg-slate-950 text-white outline-none [touch-action:none]"
+      style={{
+        minHeight: renderProfile.mobile ? 0 : 560,
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitTapHighlightColor: 'transparent',
+      }}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
       data-render-mode={renderSettings.id}
       data-render-dpr={adaptiveDpr.toFixed(2)}

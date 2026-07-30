@@ -31,6 +31,48 @@ const EXPERIENCE_STYLES = `
     touch-action: manipulation;
   }
 
+  @media (max-width: 899px), (pointer: coarse) {
+    .heathrow-experience-shell {
+      inset: 0 auto auto 0;
+      width: 100%;
+      height: 100svh;
+      max-height: 100svh;
+    }
+
+    .heathrow-experience-shell main[data-render-profile="mobile-safe"] {
+      height: 100svh !important;
+      min-height: 100svh !important;
+      max-height: 100svh !important;
+    }
+
+    .heathrow-experience-shell main[data-render-profile="mobile-safe"]
+      div.absolute.left-4.z-20.grid.grid-cols-3 {
+      bottom: calc(env(safe-area-inset-bottom) + 11.75rem) !important;
+    }
+
+    .heathrow-experience-shell main[data-render-profile="mobile-safe"]
+      div.absolute.right-4.z-20[class*="max-w-[58%]"] {
+      bottom: calc(env(safe-area-inset-bottom) + 12.25rem) !important;
+    }
+
+    .heathrow-experience-shell main[data-render-profile="mobile-safe"]
+      > div.absolute.inset-0.z-40.flex.items-end.justify-end {
+      padding-bottom: calc(env(safe-area-inset-bottom) + 8.25rem) !important;
+    }
+
+    .heathrow-experience-shell main[data-render-profile="mobile-safe"]
+      > div.absolute.inset-0.z-40.flex.items-end.justify-end
+      > div,
+    .heathrow-experience-shell main[data-render-profile="mobile-safe"]
+      > div.absolute.inset-0.z-40.flex.items-end.justify-end
+      > section {
+      max-height: calc(100svh - 10rem) !important;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
   .heathrow-coach {
     animation: heathrow-coach-in 320ms ease-out both;
   }

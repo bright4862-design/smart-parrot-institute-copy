@@ -13,6 +13,7 @@ const Leaderboard = lazy(() => import('@/pages/Leaderboard'));
 const Profile = lazy(() => import('@/pages/Profile'));
 const LondonMission = lazy(() => import('@/pages/LondonMission'));
 const AdventurePrototype = lazy(() => import('@/pages/adventure-prototype'));
+const CafeMission = lazy(() => import('@/pages/CafeMission'));
 
 function RouteLoading() {
   return (
@@ -49,6 +50,8 @@ const AuthenticatedApp = () => {
         <Route path="/london" element={<LondonMission />} />
         <Route path="/heathrow-mission" element={<LondonMission />} />
         <Route path="/adventure-prototype" element={<AdventurePrototype />} />
+        <Route path="/level-4-cafe" element={<CafeMission />} />
+        <Route path="/london-cafe" element={<CafeMission />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     </Suspense>

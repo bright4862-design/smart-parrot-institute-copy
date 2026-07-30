@@ -894,7 +894,36 @@ function World({
 
 function DirectionButton({ label, action, inputRef }) {
   const set = (value) => { inputRef.current[action] = value; };
-  return <button aria-label={label} onPointerDown={(e) => { e.preventDefault(); set(true); }} onPointerUp={() => set(false)} onPointerCancel={() => set(false)} onPointerLeave={() => set(false)} className="grid h-[52px] w-[52px] select-none place-items-center rounded-2xl border border-white/40 bg-slate-950/62 text-lg font-black text-white shadow-xl backdrop-blur active:scale-95">{label}</button>;
+  const press = (event) => {
+    event.preventDefault();
+    set(true);
+  };
+  const release = (event) => {
+    event?.preventDefault();
+    set(false);
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      draggable={false}
+      onPointerDown={press}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onPointerLeave={release}
+      onTouchStart={press}
+      onTouchEnd={release}
+      onTouchCancel={release}
+      onMouseDown={press}
+      onMouseUp={release}
+      onMouseLeave={release}
+      onContextMenu={(event) => event.preventDefault()}
+      className="grid h-[52px] w-[52px] select-none place-items-center rounded-2xl border border-white/40 bg-slate-950/62 text-lg font-black text-white shadow-xl backdrop-blur active:scale-95"
+    >
+      {label}
+    </button>
+  );
 }
 
 function AdaptiveRenderQuality({ dpr, minDpr, maxDpr, mobile, onDprChange }) {

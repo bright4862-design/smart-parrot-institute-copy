@@ -1713,7 +1713,7 @@ export default function HeathrowPlayableSpine() {
 
       {!cutsceneActive && !npcQuestion && !ticketMachineOpen && !focusedSignId && !pickupAnimating && !picoEntering && (
         <>
-          {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.75rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
+          {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.75rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>}
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_8.25rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">
             {activeTarget === 'suitcase' ? (
               <button

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { resolveHeathrowAudioProfile } from './heathrowAudioProfile';
 
 const STORAGE_KEY = 'smart-parrot:heathrow-ambience-muted:v1';
 const CAFE_POSITION = Object.freeze({ x: 22, z: 8.4 });
@@ -50,7 +51,54 @@ function createLoopingNoise(context, destination, { gain = 0.03, highpass = 0, l
   return { source, level, high, low };
 }
 
-function createAmbienceEngine({ performanceMode = false } = {}) {
+function createCafeChatter(context, destination, voiceCount = 2) {
+  const output = context.createGain();
+  output.gain.value = 0;
+  output.connect(destination);
+
+  const voices = Array.from({ length: Math.max(1, voiceCount) }, (_, index) => {
+    const source = context.createBufferSource();
+    source.buffer = createNoiseBuffer(context, 2.4 + index * 0.35);
+    source.loop = true;
+
+    const speechBand = context.createBiquadFilter();
+    speechBand.type = 'bandpass';
+    speechBand.frequency.value = 520 + index * 260;
+    speechBand.Q.value = 0.72 + index * 0.08;
+
+    const presence = context.createBiquadFilter();
+    presence.type = 'lowpass';
+    presence.frequency.value = 2100 + index * 260;
+
+    const voiceLevel = context.createGain();
+    voiceLevel.gain.value = 0.0048 + index * 0.0006;
+
+    const cadence = context.createOscillator();
+    cadence.type = 'sine';
+    cadence.frequency.value = 0.42 + index * 0.17;
+    const cadenceDepth = context.createGain();
+    cadenceDepth.gain.value = 0.0024;
+
+    cadence.connect(cadenceDepth).connect(voiceLevel.gain);
+    source.connect(speechBand).connect(presence).connect(voiceLevel).connect(output);
+    source.start(context.currentTime + index * 0.04);
+    cadence.start(context.currentTime + index * 0.06);
+
+    return { source, cadence };
+  });
+
+  return {
+    output,
+    destroy() {
+      voices.forEach(({ source, cadence }) => {
+        try { source.stop(); } catch { /* already stopped */ }
+        try { cadence.stop(); } catch { /* already stopped */ }
+      });
+    },
+  };
+}
+
+function createAmbienceEngine({ performanceMode = false, cafeVoiceCount = 2 } = {}) {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   if (!AudioContext) return null;
 
@@ -69,9 +117,12 @@ function createAmbienceEngine({ performanceMode = false } = {}) {
     highpass: 35,
     lowpass: 220,
   });
-  const cafe = performanceMode
-    ? null
-    : createLoopingNoise(context, master, { gain: 0, highpass: 550, lowpass: 3100 });
+  const cafe = createLoopingNoise(context, master, {
+    gain: 0,
+    highpass: performanceMode ? 620 : 520,
+    lowpass: performanceMode ? 2200 : 3200,
+  });
+  const chatter = createCafeChatter(context, master, performanceMode ? 1 : cafeVoiceCount);
 
   const hum = context.createOscillator();
   hum.type = 'sine';
@@ -144,9 +195,9 @@ function createAmbienceEngine({ performanceMode = false } = {}) {
     },
     setCafeProximity(value) {
       cafeProximity = clamp(value, 0, 1);
-      if (!cafe) return;
-      cafe.level.gain.setTargetAtTime(0.028 * cafeProximity, context.currentTime, 0.28);
-      cafe.low.frequency.setTargetAtTime(1600 + cafeProximity * 1800, context.currentTime, 0.3);
+      cafe.level.gain.setTargetAtTime((performanceMode ? 0.008 : 0.018) * cafeProximity, context.currentTime, 0.28);
+      cafe.low.frequency.setTargetAtTime(1500 + cafeProximity * 1800, context.currentTime, 0.3);
+      chatter.output.gain.setTargetAtTime((performanceMode ? 0.32 : 0.58) * cafeProximity, context.currentTime, 0.34);
     },
     async suspend() {
       if (!destroyed && context.state === 'running') await context.suspend();
@@ -157,7 +208,8 @@ function createAmbienceEngine({ performanceMode = false } = {}) {
       window.clearTimeout(cafeTimer);
       terminal.source.stop();
       ventilation.source.stop();
-      cafe?.source.stop();
+      cafe.source.stop();
+      chatter.destroy();
       hum.stop();
       context.close().catch(() => {});
     },
@@ -171,17 +223,19 @@ export default function useHeathrowAmbience({ playerPosition, renderSettings }) 
     typeof window !== 'undefined' && Boolean(window.AudioContext || window.webkitAudioContext)
   ));
   const engineRef = useRef(null);
-  const performanceMode = renderSettings?.id === 'performance';
+  const audioProfile = resolveHeathrowAudioProfile(renderSettings);
+  const performanceMode = audioProfile.performanceMode;
+  const cafeVoiceCount = audioProfile.cafeVoiceCount;
 
   const ensureStarted = useCallback(async () => {
     if (!supported) return;
     if (!engineRef.current) {
-      engineRef.current = createAmbienceEngine({ performanceMode });
+      engineRef.current = createAmbienceEngine({ performanceMode, cafeVoiceCount });
     }
     await engineRef.current?.resume();
     engineRef.current?.setMuted(muted);
     setStarted(Boolean(engineRef.current));
-  }, [muted, performanceMode, supported]);
+  }, [cafeVoiceCount, muted, performanceMode, supported]);
 
   useEffect(() => {
     if (!supported || muted || started) return undefined;
@@ -204,7 +258,7 @@ export default function useHeathrowAmbience({ playerPosition, renderSettings }) 
     engineRef.current = null;
     setStarted(false);
     if (!muted) ensureStarted().catch(() => {});
-  }, [performanceMode]);
+  }, [cafeVoiceCount, performanceMode]);
 
   useEffect(() => {
     const engine = engineRef.current;

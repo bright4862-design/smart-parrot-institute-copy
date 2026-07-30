@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import { RoundedBox, Text } from '@react-three/drei';
 import { CreditCard, RotateCcw, ShoppingBag, Utensils } from 'lucide-react';
 import { loadRenderProfilePreference, readRenderCapabilities, resolveRenderProfile } from '@/game/heathrow/renderProfiles';
+import { writeCafeRecoveryCache } from './recoveryCache';
 
 const MENU = Object.freeze([
   { id: 'latte', name: 'Latte', price: 3.8, type: 'drink' },
@@ -99,8 +100,8 @@ export default function LondonCafePlayable() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem('smart-parrot:london-cafe:v1', JSON.stringify({ step, selected, service, payment }));
-    } catch { /* private mode */ }
+      writeCafeRecoveryCache({ step, selected, service, payment });
+    } catch { /* recovery cache is best-effort */ }
   }, [step, selected, service, payment]);
 
   const reset = () => {

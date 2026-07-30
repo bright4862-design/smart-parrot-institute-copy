@@ -2,10 +2,10 @@ import { Billboard, Float, RoundedBox, Text } from '@react-three/drei';
 import CanonicalCafe from './CanonicalCafe';
 
 export const TICKET_MACHINE_INTERACTION = Object.freeze({
-  position: Object.freeze({ x: 0, z: 10.5 }),
-  interactionPosition: Object.freeze({ x: 0, z: 12 }),
-  cameraTarget: Object.freeze({ x: 0, y: 1.46, z: 10.95 }),
-  radius: 2.25,
+  position: Object.freeze({ x: 0, z: 25.5 }),
+  interactionPosition: Object.freeze({ x: 0, z: 27.1 }),
+  cameraTarget: Object.freeze({ x: 0, y: 1.46, z: 25.95 }),
+  radius: 2.35,
   cameraSide: 1,
 });
 
@@ -153,11 +153,10 @@ export default function TerminalExpansion({
     <group>
       <ZoneFloor position={[-23, 3.5]} size={[18, 22]} color="#7f96a8" />
       <ZoneFloor position={[23, 4]} size={[18, 22]} color="#849b91" />
-      <ZoneFloor position={[0, 13]} size={[15, 18]} color="#91889e" />
+      <ZoneFloor position={[0, 19]} size={[15, 34]} color="#91889e" />
 
       <ConcourseHeader position={[-22, 6.4, -2]} label="GATES A · A12" accent="#4aa3ff" />
       <ConcourseHeader position={[22, 6.4, -1]} label="SERVICES · RESTROOMS" accent="#48d6ba" />
-      <ConcourseHeader position={[0, 6.4, 14.5]} label="TRAINS · UNDERGROUND" accent="#f05b65" />
 
       <group position={[-22, 0, 8]}>
         <RoundedBox args={[13, 0.38, 0.9]} radius={0.12} position={[0, 0.35, 0]} castShadow receiveShadow>
@@ -173,7 +172,7 @@ export default function TerminalExpansion({
 
       <CanonicalCafe decorationDensity={decorationDensity} mobileRenderer={mobileRenderer} />
 
-      <group position={[0, 0, 10.5]}>
+      <group position={[0, 0, 25.5]}>
         <RoundedBox args={[8.6, 0.25, 4.8]} radius={0.2} position={[0, 0.12, 0]} receiveShadow>
           <meshStandardMaterial color="#bac5d1" roughness={0.38} metalness={0.22} />
         </RoundedBox>

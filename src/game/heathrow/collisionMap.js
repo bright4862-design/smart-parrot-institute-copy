@@ -1,10 +1,10 @@
 export const HEATHROW_PLAYER_RADIUS = 0.62;
 
 export const HEATHROW_WORLD_BOUNDS = Object.freeze({
-  minX: -31,
-  maxX: 31,
+  minX: -36,
+  maxX: 36,
   minZ: -21,
-  maxZ: 23,
+  maxZ: 44,
 });
 
 const rectangle = (id, minX, maxX, minZ, maxZ, desktopOnly = false) => Object.freeze({
@@ -23,7 +23,7 @@ export const HEATHROW_COLLIDERS = Object.freeze([
   rectangle('canonical-cafe-counter', 16.6, 27.4, 7.3, 8.7),
   rectangle('cafe-seating-west', 16.7, 20.1, 3.75, 5.55),
   rectangle('cafe-seating-east', 23.3, 26.7, 3.75, 5.55),
-  rectangle('ticket-machine-island', -4.3, 4.3, 8.1, 12.9),
+  rectangle('ticket-machine-island', -4.3, 4.3, 23.1, 27.9),
 
   rectangle('left-glass-divider', -11.11, -10.89, -3, 13, true),
   rectangle('right-glass-divider', 10.89, 11.11, -3, 13, true),
@@ -38,7 +38,10 @@ export const HEATHROW_COLLIDERS = Object.freeze([
   rectangle('planter-midwest', -15.92, -14.08, 8.08, 9.92, true),
   rectangle('planter-services', 14.08, 15.92, 8.08, 9.92),
   rectangle('planter-far-east', 28.08, 29.92, 6.08, 7.92, true),
-  rectangle('underground-sign-post', -2.32, -2.08, 17.08, 17.32),
+  rectangle('baggage-hall-west-wall', -21.1, -20.8, -16.5, -1.8),
+  rectangle('underground-tunnel-left', -7.28, -6.98, 27.8, 44),
+  rectangle('underground-tunnel-right', 6.98, 7.28, 27.8, 44),
+  rectangle('underground-sign-post', -2.32, -2.08, 34.08, 34.32),
 ]);
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));

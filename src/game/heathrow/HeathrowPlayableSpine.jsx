@@ -33,15 +33,16 @@ import {
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
-const UNDERGROUND = Object.freeze({ x: 0, z: 19.2 });
-const YELLOW_ROUTE_END = Object.freeze({ x: 0, z: 15.2, radius: 2.35 });
+const UNDERGROUND = Object.freeze({ x: 0, z: 36.2 });
+const YELLOW_ROUTE_END = Object.freeze({ x: 0, z: 29.2, radius: 2.45 });
 const YELLOW_ROUTE_GUIDES = Object.freeze([
   Object.freeze({ x: 14.3, z: 11.3, rotation: -0.45 }),
-  Object.freeze({ x: 12.1, z: 13.1, rotation: -0.55 }),
-  Object.freeze({ x: 9.3, z: 14, rotation: 0 }),
-  Object.freeze({ x: 6.3, z: 14, rotation: 0 }),
-  Object.freeze({ x: 3.3, z: 14.2, rotation: -0.08 }),
-  Object.freeze({ x: 0.8, z: 14.8, rotation: -0.24 }),
+  Object.freeze({ x: 12.2, z: 14.2, rotation: -0.52 }),
+  Object.freeze({ x: 9.6, z: 17.2, rotation: -0.5 }),
+  Object.freeze({ x: 7.2, z: 20.1, rotation: -0.48 }),
+  Object.freeze({ x: 4.8, z: 22.8, rotation: -0.42 }),
+  Object.freeze({ x: 2.6, z: 25.2, rotation: -0.38 }),
+  Object.freeze({ x: 0.8, z: 27.7, rotation: -0.2 }),
 ]);
 const SUITCASE_INTERACT_RADIUS = 3.05;
 const SUITCASE_GLOW_RADIUS = 8;
@@ -226,23 +227,24 @@ function useInput(inputRef, onInteractPress, onInteractRelease, enabled = true) 
 }
 
 function Terminal() {
-  const columns = useMemo(() => Array.from({ length: 11 }, (_, i) => -30 + i * 6), []);
-  const ceilingLights = useMemo(() => Array.from({ length: 10 }, (_, i) => -27 + i * 6), []);
+  const columns = useMemo(() => Array.from({ length: 13 }, (_, i) => -36 + i * 6), []);
+  const ceilingLights = useMemo(() => Array.from({ length: 12 }, (_, i) => -33 + i * 6), []);
+  const ceilingRows = useMemo(() => [-10, 12, 34], []);
 
   return (
     <group>
-      <mesh receiveShadow position={[0, -0.12, 1]}>
-        <boxGeometry args={[68, 0.2, 48]} />
+      <mesh receiveShadow position={[0, -0.12, 10]}>
+        <boxGeometry args={[76, 0.2, 66]} />
         <meshStandardMaterial color="#8f9aa5" roughness={0.72} metalness={0.04} />
       </mesh>
 
       <mesh position={[0, 7.8, -22.5]} receiveShadow>
-        <boxGeometry args={[68, 16, 0.45]} />
+        <boxGeometry args={[76, 16, 0.45]} />
         <meshPhysicalMaterial color="#789fba" transparent opacity={0.48} roughness={0.12} metalness={0.08} transmission={0.18} />
       </mesh>
 
       <mesh position={[0, 7.8, -22.28]}>
-        <planeGeometry args={[66, 14]} />
+        <planeGeometry args={[74, 14]} />
         <meshBasicMaterial color="#a8c8d8" transparent opacity={0.13} toneMapped={false} />
       </mesh>
 
@@ -253,23 +255,23 @@ function Terminal() {
         </mesh>
       ))}
 
-      <mesh position={[0, 8.5, 1]} receiveShadow>
-        <boxGeometry args={[68, 0.35, 48]} />
+      <mesh position={[0, 8.5, 10]} receiveShadow>
+        <boxGeometry args={[76, 0.35, 66]} />
         <meshStandardMaterial color="#e6e9ed" roughness={0.62} />
       </mesh>
 
-      {ceilingLights.map((x) => (
-        <mesh key={x} position={[x, 8.28, -0.5]} rotation={[Math.PI / 2, 0, 0]}>
+      {ceilingRows.flatMap((z) => ceilingLights.map((x) => (
+        <mesh key={`${x}:${z}`} position={[x, 8.28, z]} rotation={[Math.PI / 2, 0, 0]}>
           <planeGeometry args={[3.8, 0.85]} />
           <meshStandardMaterial
             color="#fff4d6"
             emissive="#ffe3a1"
-            emissiveIntensity={1.9}
+            emissiveIntensity={1.65}
             roughness={0.38}
             toneMapped={false}
           />
         </mesh>
-      ))}
+      )))}
 
       <RoundedBox args={[11, 2.2, 3.2]} radius={0.45} position={[-10.5, 1.05, -8]} castShadow receiveShadow>
         <meshStandardMaterial color="#2d333d" metalness={0.72} roughness={0.28} />
@@ -299,8 +301,8 @@ function Terminal() {
         </Text>
       </group>
 
-      <mesh position={[0, 0.03, 7.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[3.2, 34]} />
+      <mesh position={[0, 0.03, 16]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[3.2, 51]} />
         <meshStandardMaterial color="#f4c847" roughness={0.4} />
       </mesh>
     </group>
@@ -408,14 +410,14 @@ function UndergroundSpot() {
   const target = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(() => {
-    target.position.set(0, 0, 20);
+    target.position.set(0, 0, 36.2);
     if (light.current) light.current.target = target;
   }, [target]);
 
   return (
     <>
       <primitive object={target} />
-      <spotLight ref={light} position={[0, 10, 17]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={28} decay={2} />
+      <spotLight ref={light} position={[0, 10, 34]} angle={0.48} penumbra={0.9} color="#ffe9a8" intensity={22} distance={32} decay={2} />
     </>
   );
 }

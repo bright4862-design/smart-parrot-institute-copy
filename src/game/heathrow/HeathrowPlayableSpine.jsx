@@ -132,13 +132,13 @@ const readMobileRenderProfile = () => {
 
 function readDprRange(mobile) {
   const deviceDpr = typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1);
-  const maxDpr = Math.max(1, Math.min(deviceDpr, mobile ? 1.5 : 2));
-  const minDpr = Math.min(maxDpr, mobile ? 1 : 1.15);
+  const maxDpr = Math.max(1, Math.min(deviceDpr, mobile ? 1.75 : 2));
+  const minDpr = Math.min(maxDpr, mobile ? 1.1 : 1.15);
 
   return {
     minDpr,
     maxDpr,
-    initialDpr: Math.min(maxDpr, mobile ? 1.25 : 1.5),
+    initialDpr: Math.min(maxDpr, 1.5),
   };
 }
 
@@ -1713,8 +1713,8 @@ export default function HeathrowPlayableSpine() {
 
       {!cutsceneActive && !npcQuestion && !ticketMachineOpen && !focusedSignId && !pickupAnimating && !picoEntering && (
         <>
-          {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_5.25rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>}
-          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">
+          {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.75rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>
+          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_8.25rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">
             {activeTarget === 'suitcase' ? (
               <button
                 type="button"

@@ -20,6 +20,7 @@ import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from '
 import AirportLife from './AirportLife';
 import AirportSigns, { AIRPORT_SIGNS, findNearbyAirportSign, getAirportSign } from './AirportSigns';
 import TerminalExpansion, { TICKET_MACHINE_INTERACTION } from './TerminalExpansion';
+import AirportSections from './AirportSections';
 import { resolveHeathrowMovement } from './collisionMap';
 import useHeathrowAmbience from './useHeathrowAmbience';
 import RenderProfileSelector from './RenderProfileSelector';
@@ -871,6 +872,10 @@ function World({
           decorationDensity={renderSettings.decorationDensity}
           ticketMachineActive={mission.step === HEATHROW_STEPS.USE_TICKET_MACHINE || ticketMachineOpen}
           ticketMachineEngaged={activeTarget === 'ticket_machine' || ticketMachineOpen}
+        />
+        <AirportSections
+          mobileRenderer={mobileRenderer}
+          decorationDensity={renderSettings.decorationDensity}
         />
         <AirportSigns
           missionActive={mission.step === HEATHROW_STEPS.INSPECT_SIGNS}

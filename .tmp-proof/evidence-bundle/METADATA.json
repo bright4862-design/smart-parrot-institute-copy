@@ -1,0 +1,9 @@
+{
+  "app_id": "69c16c52c86d161e74940243",
+  "environment": "active Base44 app sandbox / live entity API",
+  "git_sha": "96cbf7fcda1e43e8266df107ce0d701ec7cef4ec",
+  "sdk_version": "0.8.41",
+  "vite_plugin_version": "1.0.30",
+  "function_deployment_version": null,
+  "function_deployment_reason": "No function deployed because native atomic first-create and receipt uniqueness were not supported/proven."
+}

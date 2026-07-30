@@ -274,10 +274,29 @@ function Terminal() {
         <meshStandardMaterial color="#2d333d" metalness={0.72} roughness={0.28} />
       </RoundedBox>
 
-      <RoundedBox args={[7.2, 3.2, 2.2]} radius={0.25} position={[12, 1.6, -7]} castShadow receiveShadow>
-        <meshStandardMaterial color="#815036" roughness={0.42} />
-      </RoundedBox>
-      <Text position={[12, 3.45, -5.8]} fontSize={0.58} color="#fff7e7" anchorX="center">COFFEE</Text>
+      <group name="heathrow-arrivals-help-kiosk" position={[12, 0, -7]}>
+        <RoundedBox args={[5.4, 1.35, 1.45]} radius={0.2} position={[0, 0.68, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color="#315A78" roughness={0.38} metalness={0.18} />
+        </RoundedBox>
+        <RoundedBox args={[5.65, 0.14, 1.62]} radius={0.07} position={[0, 1.36, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color="#D6E0E7" roughness={0.28} metalness={0.14} />
+        </RoundedBox>
+        <group position={[0, 2.55, 0.5]}>
+          <RoundedBox args={[4.75, 0.82, 0.14]} radius={0.1} castShadow>
+            <meshStandardMaterial color="#173F68" emissive="#0A294B" emissiveIntensity={0.42} roughness={0.4} />
+          </RoundedBox>
+          <Text position={[0, 0, 0.08]} fontSize={0.29} color="#FFFFFF" anchorX="center" anchorY="middle" outlineWidth={0.008} outlineColor="#07192F">
+            ARRIVALS HELP
+          </Text>
+        </group>
+        <mesh position={[1.55, 1.75, -0.18]} rotation={[-0.18, 0, 0]}>
+          <planeGeometry args={[0.9, 0.58]} />
+          <meshStandardMaterial color="#9EE8F6" emissive="#2C9DBC" emissiveIntensity={0.55} roughness={0.22} />
+        </mesh>
+        <Text position={[-1.15, 1.62, -0.73]} rotation={[0, Math.PI, 0]} fontSize={0.16} color="#EAF6FF" anchorX="center">
+          INFORMATION · DIRECTIONS
+        </Text>
+      </group>
 
       <mesh position={[0, 0.03, 7.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[3.2, 34]} />

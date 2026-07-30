@@ -948,7 +948,7 @@ function DirectionButton({ label, action, inputRef }) {
       onLostPointerCapture={release}
       onContextMenu={(event) => event.preventDefault()}
       onClick={(event) => event.preventDefault()}
-      className="grid h-[52px] w-[52px] select-none place-items-center rounded-2xl border border-white/40 bg-slate-950/62 text-lg font-black text-white shadow-xl backdrop-blur active:scale-95"
+      className="grid h-14 w-14 select-none place-items-center rounded-2xl border border-white/55 bg-slate-950/78 text-xl font-black text-white shadow-[0_12px_30px_rgba(2,6,23,.42)] backdrop-blur-md active:scale-95"
       style={{
         touchAction: 'none',
         userSelect: 'none',
@@ -1520,6 +1520,8 @@ export default function HeathrowPlayableSpine() {
         WebkitTouchCallout: 'none',
         WebkitTapHighlightColor: 'transparent',
       }}
+      data-testid="heathrow-ready"
+      data-heathrow-ready={rendererFailure ? 'false' : 'true'}
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
       data-render-mode={renderSettings.id}
       data-render-dpr={adaptiveDpr.toFixed(2)}
@@ -1881,7 +1883,21 @@ export default function HeathrowPlayableSpine() {
 
       {!cutsceneActive && !npcQuestion && !ticketMachineOpen && !focusedSignId && !graphicsOpen && !pickupAnimating && !picoEntering && (
         <>
-          {renderProfile.mobile && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.75rem)] left-4 z-20 grid grid-cols-3 gap-1.5"><div /><DirectionButton label="↑" action="forward" inputRef={inputRef} /><div /><DirectionButton label="←" action="left" inputRef={inputRef} /><DirectionButton label="↓" action="backward" inputRef={inputRef} /><DirectionButton label="→" action="right" inputRef={inputRef} /></div>}
+          {renderProfile.mobile && (
+            <div
+              role="group"
+              aria-label="Touch movement controls"
+              data-testid="heathrow-touch-controls"
+              className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_7.5rem)] left-3 z-20 grid grid-cols-3 gap-2 rounded-[26px] border border-white/20 bg-slate-950/28 p-2 shadow-[0_18px_50px_rgba(2,6,23,.28)] backdrop-blur-sm sm:left-4"
+            >
+              <div />
+              <DirectionButton label="↑" action="forward" inputRef={inputRef} />
+              <div />
+              <DirectionButton label="←" action="left" inputRef={inputRef} />
+              <DirectionButton label="↓" action="backward" inputRef={inputRef} />
+              <DirectionButton label="→" action="right" inputRef={inputRef} />
+            </div>
+          )}
           <div className="absolute bottom-[calc(env(safe-area-inset-bottom)_+_8.25rem)] right-4 z-20 max-w-[58%] sm:bottom-5 sm:right-5 sm:max-w-[62%]">
             {activeTarget === 'suitcase' ? (
               <button
@@ -1922,7 +1938,7 @@ export default function HeathrowPlayableSpine() {
                 </span>
               </button>
             ) : canInteract ? (
-              <button onClick={interact} className="min-h-12 rounded-full bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button>
+              <button data-testid="heathrow-interact" onClick={interact} className="min-h-12 rounded-full border border-amber-100/70 bg-amber-300 px-4 py-3 text-xs font-black leading-tight text-slate-950 shadow-[0_0_32px_rgba(252,211,77,.65)] active:scale-95 sm:px-6 sm:py-4 sm:text-sm">{label}<span className="ml-2 hidden opacity-70 sm:inline">E</span></button>
             ) : mission.step === HEATHROW_STEPS.COMPLETE ? (
               <div className="rounded-full border border-emerald-300/40 bg-emerald-950/70 px-5 py-3 text-sm font-black text-emerald-100 backdrop-blur">Checkpoint saved ✓</div>
             ) : (

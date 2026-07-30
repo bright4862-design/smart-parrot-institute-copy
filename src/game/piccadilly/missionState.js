@@ -1,3 +1,5 @@
+import { PICCADILLY_LEVEL_ID } from './levelDefinition.js';
+
 export const PICCADILLY_STEPS = Object.freeze({
   ENTER_UNDERGROUND: 'enter_underground',
   USE_TICKET_BARRIER: 'use_ticket_barrier',
@@ -22,7 +24,12 @@ export const PICCADILLY_SEQUENCE = Object.freeze([
   PICCADILLY_STEPS.COMPLETE,
 ]);
 
-export const PICCADILLY_CHECKPOINT_KEY = 'smart-parrot:piccadilly-checkpoint:v1';
+export const PICCADILLY_RECOVERY_CACHE_VERSION = 1;
+export const PICCADILLY_RECOVERY_CACHE_KEY = 'smart-parrot:recovery-cache:piccadilly-line:v1';
+export const PICCADILLY_LEGACY_CHECKPOINT_KEY = 'smart-parrot:piccadilly-checkpoint:v1';
+
+// Compatibility alias only. This is a recovery cache key, not a cloud-save key.
+export const PICCADILLY_CHECKPOINT_KEY = PICCADILLY_RECOVERY_CACHE_KEY;
 
 export const INITIAL_PICCADILLY_STATE = Object.freeze({
   step: PICCADILLY_STEPS.ENTER_UNDERGROUND,
@@ -119,32 +126,68 @@ export function piccadillyObjectiveCopy(step) {
   return OBJECTIVE_COPY[step] ?? '';
 }
 
-export function loadPiccadillyCheckpoint() {
+function restoreMissionState(savedState) {
+  const stepIndex = PICCADILLY_SEQUENCE.indexOf(savedState?.step);
+  if (stepIndex === -1) return { ...INITIAL_PICCADILLY_STATE };
+
+  return {
+    ...INITIAL_PICCADILLY_STATE,
+    step: savedState.step,
+    ...Object.fromEntries(
+      COMPLETION_FLAGS.map((flag, flagIndex) => [flag, flagIndex < stepIndex]),
+    ),
+  };
+}
+
+export function createPiccadillyRecoveryEnvelope(state, savedAt = new Date().toISOString()) {
+  return Object.freeze({
+    cacheVersion: PICCADILLY_RECOVERY_CACHE_VERSION,
+    levelId: PICCADILLY_LEVEL_ID,
+    authority: 'local-recovery-only',
+    synchronized: false,
+    deviceScoped: true,
+    serverRevision: null,
+    savedAt,
+    state: { ...state },
+  });
+}
+
+export function loadPiccadillyRecoveryCache() {
   if (typeof window === 'undefined') return { ...INITIAL_PICCADILLY_STATE };
 
   try {
-    const saved = JSON.parse(window.localStorage.getItem(PICCADILLY_CHECKPOINT_KEY));
-    const stepIndex = PICCADILLY_SEQUENCE.indexOf(saved?.step);
-    if (stepIndex === -1) return { ...INITIAL_PICCADILLY_STATE };
+    const currentRaw = window.localStorage.getItem(PICCADILLY_RECOVERY_CACHE_KEY);
+    const legacyRaw = window.localStorage.getItem(PICCADILLY_LEGACY_CHECKPOINT_KEY);
+    const parsed = JSON.parse(currentRaw ?? legacyRaw);
 
-    return {
-      ...INITIAL_PICCADILLY_STATE,
-      step: saved.step,
-      ...Object.fromEntries(
-        COMPLETION_FLAGS.map((flag, flagIndex) => [flag, flagIndex < stepIndex]),
-      ),
-    };
+    if (parsed?.cacheVersion !== undefined) {
+      if (parsed.cacheVersion !== PICCADILLY_RECOVERY_CACHE_VERSION) return { ...INITIAL_PICCADILLY_STATE };
+      if (parsed.levelId !== PICCADILLY_LEVEL_ID) return { ...INITIAL_PICCADILLY_STATE };
+      if (parsed.authority !== 'local-recovery-only' || parsed.synchronized !== false) return { ...INITIAL_PICCADILLY_STATE };
+      return restoreMissionState(parsed.state);
+    }
+
+    // One-way compatibility with the original local checkpoint shape.
+    return restoreMissionState(parsed);
   } catch {
     return { ...INITIAL_PICCADILLY_STATE };
   }
 }
 
-export function savePiccadillyCheckpoint(state) {
+export function savePiccadillyRecoveryCache(state) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(PICCADILLY_CHECKPOINT_KEY, JSON.stringify(state));
+  const envelope = createPiccadillyRecoveryEnvelope(state);
+  window.localStorage.setItem(PICCADILLY_RECOVERY_CACHE_KEY, JSON.stringify(envelope));
+  window.localStorage.removeItem(PICCADILLY_LEGACY_CHECKPOINT_KEY);
 }
 
-export function clearPiccadillyCheckpoint() {
+export function clearPiccadillyRecoveryCache() {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(PICCADILLY_CHECKPOINT_KEY);
+  window.localStorage.removeItem(PICCADILLY_RECOVERY_CACHE_KEY);
+  window.localStorage.removeItem(PICCADILLY_LEGACY_CHECKPOINT_KEY);
 }
+
+// Temporary aliases while callers migrate to explicit recovery-cache naming.
+export const loadPiccadillyCheckpoint = loadPiccadillyRecoveryCache;
+export const savePiccadillyCheckpoint = savePiccadillyRecoveryCache;
+export const clearPiccadillyCheckpoint = clearPiccadillyRecoveryCache;

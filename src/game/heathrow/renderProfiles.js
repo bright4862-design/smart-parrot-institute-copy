@@ -12,6 +12,12 @@ export const RENDER_PROFILE_LABELS = Object.freeze({
   [RENDER_PROFILE_MODES.PERFORMANCE]: 'Performance',
 });
 
+export const RENDER_PROFILE_OPTIONS = Object.freeze([
+  Object.freeze({ id: RENDER_PROFILE_MODES.AUTO, label: 'Auto', description: 'Balances clarity and frame rate for this device.' }),
+  Object.freeze({ id: RENDER_PROFILE_MODES.HD, label: 'HD', description: 'Sharper edges, signs, characters, and lighting.' }),
+  Object.freeze({ id: RENDER_PROFILE_MODES.PERFORMANCE, label: 'Performance', description: 'Prioritises smooth play and battery life.' }),
+]);
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const finiteOr = (value, fallback) => (Number.isFinite(value) ? value : fallback);
 
@@ -32,6 +38,12 @@ export function readRenderCapabilities(source = {}) {
   const deviceDpr = clamp(finiteOr(windowLike?.devicePixelRatio, 1), 1, 3);
   const saveData = Boolean(navigatorLike?.connection?.saveData);
   const reducedMotion = windowLike?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  let embeddedPreview = false;
+  try {
+    embeddedPreview = Boolean(windowLike && windowLike.top !== windowLike.self);
+  } catch {
+    embeddedPreview = true;
+  }
   const constrained = saveData || deviceMemory <= 3 || hardwareConcurrency <= 3;
   const strong = !constrained
     && deviceMemory >= 6
@@ -49,6 +61,7 @@ export function readRenderCapabilities(source = {}) {
     deviceDpr,
     saveData,
     reducedMotion,
+    embeddedPreview,
     constrained,
     strong,
   });
@@ -81,6 +94,11 @@ export function resolveRenderProfile(mode = RENDER_PROFILE_MODES.AUTO, capabilit
       decorationDensity: 'reduced',
       lighting: 'simplified',
       performanceBias: 'speed',
+      sampleSeconds: 2.25,
+      lowFps: mobile ? 34 : 42,
+      highFps: mobile ? 48 : 54,
+      dprStepDown: 0.15,
+      dprStepUp: 0.08,
     });
   }
 
@@ -104,6 +122,11 @@ export function resolveRenderProfile(mode = RENDER_PROFILE_MODES.AUTO, capabilit
       decorationDensity: constrained ? 'balanced' : 'full',
       lighting: capableForHd ? 'cinematic' : 'balanced',
       performanceBias: 'quality',
+      sampleSeconds: 2.75,
+      lowFps: mobile ? 44 : 50,
+      highFps: mobile ? 57 : 59,
+      dprStepDown: 0.12,
+      dprStepUp: 0.08,
     });
   }
 
@@ -130,6 +153,11 @@ export function resolveRenderProfile(mode = RENDER_PROFILE_MODES.AUTO, capabilit
     decorationDensity: constrained ? 'reduced' : 'balanced',
     lighting: constrained ? 'simplified' : 'balanced',
     performanceBias: 'balanced',
+    sampleSeconds: 2.5,
+    lowFps: mobile ? 42 : 50,
+    highFps: mobile ? 55 : 58,
+    dprStepDown: 0.15,
+    dprStepUp: 0.1,
   });
 }
 

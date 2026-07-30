@@ -19,7 +19,7 @@ function CoffeeCup({ position, scale = 1 }) {
 
 function MenuBoard({ x, label, price }) {
   return (
-    <group position={[x, 3.08, 1.48]} rotation={[0, Math.PI, 0]}>
+    <group position={[x, 3.08, 2.35]} rotation={[0, Math.PI, 0]}>
       <RoundedBox args={[2.25, 1.15, 0.12]} radius={0.08} castShadow>
         <meshStandardMaterial color="#19372F" roughness={0.58} />
       </RoundedBox>
@@ -51,7 +51,7 @@ function PastryDisplay({ reduced }) {
 
 function CoffeeMachine({ x, reduced }) {
   return (
-    <group position={[x, 1.76, 1.33]} rotation={[0, Math.PI, 0]}>
+    <group position={[x, 1.76, 2.08]} rotation={[0, Math.PI, 0]}>
       <RoundedBox args={[1.2, 0.88, 0.6]} radius={0.1} castShadow>
         <meshStandardMaterial color="#27313B" roughness={0.28} metalness={0.58} />
       </RoundedBox>
@@ -112,14 +112,14 @@ export default function CanonicalCafe({ decorationDensity = 'balanced', mobileRe
         </mesh>
       </group>
 
-      <RoundedBox args={[10.4, 0.18, 0.72]} radius={0.08} position={[0, 1.26, 1.55]} castShadow receiveShadow>
+      <RoundedBox args={[10.4, 0.18, 0.72]} radius={0.08} position={[0, 1.26, 2.28]} castShadow receiveShadow>
         <meshStandardMaterial color="#35434A" roughness={0.42} metalness={0.34} />
       </RoundedBox>
       <CoffeeMachine x={-2.7} reduced={reduced} />
       {!reduced && <CoffeeMachine x={-0.95} reduced={false} />}
-      <CoffeeCup position={[1.2, 1.45, 1.48]} />
-      <CoffeeCup position={[1.48, 1.45, 1.48]} scale={0.94} />
-      {!reduced && <CoffeeCup position={[1.75, 1.45, 1.48]} scale={0.9} />}
+      <CoffeeCup position={[1.2, 1.45, 2.22]} />
+      <CoffeeCup position={[1.48, 1.45, 2.22]} scale={0.94} />
+      {!reduced && <CoffeeCup position={[1.75, 1.45, 2.22]} scale={0.9} />}
 
       <group position={[0, 4.15, 0.55]} rotation={[0, Math.PI, 0]}>
         <RoundedBox args={[8.8, 1.15, 0.16]} radius={0.12} castShadow>

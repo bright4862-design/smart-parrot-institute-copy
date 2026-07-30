@@ -23,10 +23,10 @@ function MenuBoard({ x, label, price }) {
       <RoundedBox args={[2.25, 1.15, 0.12]} radius={0.08} castShadow>
         <meshStandardMaterial color="#19372F" roughness={0.58} />
       </RoundedBox>
-      <Text position={[0, 0.18, 0.07]} fontSize={0.19} color="#FFF4D6" anchorX="center" anchorY="middle">
+      <Text position={[0, 0.18, 0.07]} rotation={[0, Math.PI, 0]} fontSize={0.19} color="#FFF4D6" anchorX="center" anchorY="middle">
         {label}
       </Text>
-      <Text position={[0, -0.2, 0.07]} fontSize={0.13} color="#BEE5D2" anchorX="center" anchorY="middle">
+      <Text position={[0, -0.2, 0.07]} rotation={[0, Math.PI, 0]} fontSize={0.13} color="#BEE5D2" anchorX="center" anchorY="middle">
         {price}
       </Text>
     </group>
@@ -125,10 +125,10 @@ export default function CanonicalCafe({ decorationDensity = 'balanced', mobileRe
         <RoundedBox args={[8.8, 1.15, 0.16]} radius={0.12} castShadow>
           <meshStandardMaterial color="#25483C" emissive="#17342B" emissiveIntensity={0.42} roughness={0.46} />
         </RoundedBox>
-        <Text position={[0, 0.12, 0.095]} fontSize={0.44} color="#FFF2CF" anchorX="center" anchorY="middle" outlineWidth={0.01} outlineColor="#12251F">
+        <Text position={[0, 0.12, 0.095]} rotation={[0, Math.PI, 0]} fontSize={0.44} color="#FFF2CF" anchorX="center" anchorY="middle" outlineWidth={0.01} outlineColor="#12251F">
           TERMINAL CAFÉ
         </Text>
-        <Text position={[0, -0.3, 0.095]} fontSize={0.14} color="#BFE2D2" anchorX="center" anchorY="middle">
+        <Text position={[0, -0.3, 0.095]} rotation={[0, Math.PI, 0]} fontSize={0.14} color="#BFE2D2" anchorX="center" anchorY="middle">
           COFFEE · TEA · PASTRIES
         </Text>
       </group>

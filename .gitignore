@@ -2,6 +2,17 @@
 .env
 .env.*
 
+# Credentials and temporary proof material
+.tmp-proof/
+**/.tmp-proof/
+*credentials*.json
+*credential*.json
+*creds*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
 # Logs
 /logs
 *.log

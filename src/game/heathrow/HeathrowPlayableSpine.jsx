@@ -1627,7 +1627,23 @@ export default function HeathrowPlayableSpine() {
         </div>
       )}
 
-      {!cutsceneActive && picoLine && <div className="pointer-events-none absolute left-1/2 top-[7.5rem] z-20 w-[min(86vw,420px)] -translate-x-1/2 rounded-2xl border border-white/30 bg-slate-950/78 px-4 py-2.5 text-center text-xs font-bold shadow-2xl backdrop-blur-xl sm:top-32 sm:px-5 sm:py-3 sm:text-sm">{picoLine}</div>}
+      {!cutsceneActive && picoLine && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top)+12.5rem)] z-30 w-[min(90vw,460px)] -translate-x-1/2 sm:top-52"
+        >
+          <div className="flex items-start gap-3 rounded-[22px] border border-amber-200/70 bg-slate-950/96 px-4 py-3.5 text-left shadow-[0_18px_60px_rgba(2,6,23,.72),0_0_0_1px_rgba(255,255,255,.08)] backdrop-blur-2xl sm:px-5 sm:py-4">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-amber-100/70 bg-amber-300 text-xl shadow-[0_0_24px_rgba(252,211,77,.3)]" aria-hidden="true">🦜</div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-black tracking-[.18em] text-amber-300 sm:text-xs">PICO</div>
+              <p className="mt-1 text-[15px] font-extrabold leading-6 tracking-[.005em] text-white [text-shadow:0_2px_8px_rgba(0,0,0,.9)] sm:text-base sm:leading-7">
+                {picoLine.replace(/^Pico:\s*/, '')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {focusedSignData && (
         <div className="absolute inset-0 z-40 flex items-end justify-end bg-slate-950/18 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6">

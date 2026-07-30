@@ -1,40 +1,4 @@
-import { RoundedBox, Text } from '@react-three/drei';
-
-function SectionHeader({ position, width, label, subtitle, accent, textColor = '#FFFFFF' }) {
-  return (
-    <group position={position}>
-      <RoundedBox args={[width, 1.08, 0.18]} radius={0.12} castShadow>
-        <meshStandardMaterial
-          color="#173552"
-          emissive={accent}
-          emissiveIntensity={0.34}
-          roughness={0.38}
-          metalness={0.12}
-        />
-      </RoundedBox>
-      <Text
-        position={[0, 0.16, 0.105]}
-        fontSize={0.34}
-        color={textColor}
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.01}
-        outlineColor="#07192F"
-      >
-        {label}
-      </Text>
-      <Text
-        position={[0, -0.24, 0.105]}
-        fontSize={0.12}
-        color="#DCEBFA"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {subtitle}
-      </Text>
-    </group>
-  );
-}
+import { RoundedBox } from '@react-three/drei';
 
 function LuggageProp({ position, color, scale = 1 }) {
   return (
@@ -50,89 +14,117 @@ function LuggageProp({ position, color, scale = 1 }) {
   );
 }
 
+function PassageFrame({ position, width, accent = '#91B8D6', strong = false }) {
+  const postColor = strong ? '#344B5C' : '#607786';
+  return (
+    <group position={position}>
+      {[-width / 2, width / 2].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          <mesh position={[0, 2.7, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.28, 5.4, 0.32]} />
+            <meshStandardMaterial color={postColor} roughness={0.34} metalness={0.48} />
+          </mesh>
+          <RoundedBox args={[0.72, 0.28, 0.72]} radius={0.08} position={[0, 0.14, 0]} castShadow receiveShadow>
+            <meshStandardMaterial color="#465666" roughness={0.46} metalness={0.28} />
+          </RoundedBox>
+        </group>
+      ))}
+      <mesh position={[0, 5.25, 0]} castShadow receiveShadow>
+        <boxGeometry args={[width + 0.3, 0.36, 0.36]} />
+        <meshStandardMaterial color={postColor} emissive={accent} emissiveIntensity={strong ? 0.28 : 0.14} roughness={0.34} metalness={0.42} />
+      </mesh>
+      <mesh position={[0, 4.84, 0.03]}>
+        <boxGeometry args={[width - 0.45, 0.08, 0.08]} />
+        <meshBasicMaterial color={accent} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
 function BaggageClaimSection({ reduced }) {
+  const passageFrames = reduced ? [-4.4, -7] : [-2.2, -4.6, -7];
+
   return (
     <group name="heathrow-baggage-claim-section">
-      <mesh position={[-10.5, 0.018, -8]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[16, 8.6]} />
+      <mesh position={[-11.8, 0.018, -9.1]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[19.5, 15.4]} />
         <meshStandardMaterial color="#718394" roughness={0.76} metalness={0.04} />
       </mesh>
 
-      <mesh position={[-10.5, 0.035, -4.05]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[13.8, 0.34]} />
+      <mesh position={[-11.8, 0.035, -2.02]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[17.2, 0.34]} />
         <meshStandardMaterial color="#E8C14C" emissive="#6F4A00" emissiveIntensity={0.22} roughness={0.56} />
       </mesh>
 
-      <SectionHeader
-        position={[-10.5, 5.05, -4.45]}
-        width={8.6}
-        label="BAGGAGE RECLAIM"
-        subtitle="ARRIVALS · CAROUSEL 5"
-        accent="#4AA3FF"
-      />
+      <group name="heathrow-baggage-passage">
+        {passageFrames.map((x, index) => (
+          <group key={x} position={[x, 0, -8.35]} rotation={[0, Math.PI / 2, 0]}>
+            <PassageFrame position={[0, 0, 0]} width={4.8} accent="#91D5FF" strong={index === passageFrames.length - 1} />
+          </group>
+        ))}
+      </group>
 
-      {[-16.9, -4.1].map((x) => (
-        <group key={x} position={[x, 0, -4.45]}>
-          <mesh position={[0, 2.42, 0]} castShadow>
-            <boxGeometry args={[0.2, 4.84, 0.2]} />
-            <meshStandardMaterial color="#D8DEE5" roughness={0.28} metalness={0.62} />
-          </mesh>
-          <mesh position={[0, 0.42, 0.15]} castShadow>
-            <boxGeometry args={[0.38, 0.84, 0.38]} />
-            <meshStandardMaterial color="#465666" roughness={0.46} metalness={0.28} />
-          </mesh>
-        </group>
-      ))}
+      <mesh position={[-20.95, 2.7, -9.1]} castShadow receiveShadow>
+        <boxGeometry args={[0.28, 5.4, 14.8]} />
+        <meshStandardMaterial color="#607786" roughness={0.38} metalness={0.38} />
+      </mesh>
 
-      <LuggageProp position={[-15.1, 0, -5.4]} color="#486C8A" />
-      <LuggageProp position={[-6.2, 0, -5.25]} color="#805A78" scale={0.92} />
-      {!reduced && <LuggageProp position={[-4.8, 0, -9.8]} color="#C17A4F" scale={0.84} />}
+      <LuggageProp position={[-17.1, 0, -5.35]} color="#486C8A" />
+      <LuggageProp position={[-7.4, 0, -5.15]} color="#805A78" scale={0.92} />
+      {!reduced && <LuggageProp position={[-5.8, 0, -12.4]} color="#C17A4F" scale={0.84} />}
 
       {!reduced && (
-        <pointLight position={[-10.5, 5.6, -6.5]} color="#D9EEFF" intensity={2.2} distance={13} decay={2} />
+        <pointLight position={[-11.5, 5.8, -8.6]} color="#D9EEFF" intensity={2.1} distance={15} decay={2} />
       )}
     </group>
   );
 }
 
 function UndergroundSection({ reduced, mobileRenderer }) {
+  const tunnelFrames = reduced ? [29.4, 36.4, 42] : [28.6, 32.8, 37, 41.2];
+
   return (
     <group name="heathrow-underground-section">
-      <mesh position={[0, 0.02, 18.1]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[15, 10.8]} />
-        <meshStandardMaterial color="#817A8D" roughness={0.76} metalness={0.03} />
+      <mesh position={[0, 0.02, 35.4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[15.5, 20.8]} />
+        <meshStandardMaterial color="#777382" roughness={0.78} metalness={0.03} />
       </mesh>
 
-      <mesh position={[0, 0.045, 17.1]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[4.2, 9.8]} />
-        <meshStandardMaterial color="#E9C846" emissive="#785200" emissiveIntensity={0.28} roughness={0.54} />
+      <mesh position={[0, 0.045, 35.2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[4.4, 20.2]} />
+        <meshStandardMaterial color="#E9C846" emissive="#785200" emissiveIntensity={0.24} roughness={0.54} />
       </mesh>
 
-      <SectionHeader
-        position={[0, 5.45, 15.55]}
-        width={9.4}
-        label="LONDON TRANSPORT"
-        subtitle="UNDERGROUND · CENTRAL LONDON"
-        accent="#E43C4A"
-      />
+      <group name="heathrow-underground-tunnel">
+        {tunnelFrames.map((z, index) => (
+          <PassageFrame
+            key={z}
+            position={[0, 0, z]}
+            width={12.8}
+            accent={index % 2 === 0 ? '#E74753' : '#4B79C8'}
+            strong={index === 0}
+          />
+        ))}
 
-      {[-6.7, 6.7].map((x) => (
-        <group key={x} position={[x, 0, 15.55]}>
-          <mesh position={[0, 2.62, 0]} castShadow>
-            <boxGeometry args={[0.24, 5.24, 0.24]} />
-            <meshStandardMaterial color="#D8DEE5" roughness={0.28} metalness={0.64} />
-          </mesh>
-          <RoundedBox args={[0.72, 0.34, 0.72]} radius={0.08} position={[0, 0.18, 0]} castShadow receiveShadow>
-            <meshStandardMaterial color="#465666" roughness={0.46} metalness={0.3} />
-          </RoundedBox>
-        </group>
-      ))}
+        {[-7.15, 7.15].map((x) => (
+          <group key={x}>
+            <mesh position={[x, 1.35, 35.4]} castShadow receiveShadow>
+              <boxGeometry args={[0.22, 2.7, 19.6]} />
+              <meshStandardMaterial color="#354857" roughness={0.44} metalness={0.32} />
+            </mesh>
+            <mesh position={[x * 0.994, 2.78, 35.4]}>
+              <boxGeometry args={[0.08, 0.12, 18.8]} />
+              <meshBasicMaterial color={x < 0 ? '#E74753' : '#4B79C8'} toneMapped={false} />
+            </mesh>
+          </group>
+        ))}
+      </group>
 
-      <group position={[0, 0, 22.2]}>
-        <RoundedBox args={[8.6, 0.24, 1.2]} radius={0.1} position={[0, 0.12, 0]} castShadow receiveShadow>
+      <group position={[0, 0, 43.4]}>
+        <RoundedBox args={[9.2, 0.24, 1.2]} radius={0.1} position={[0, 0.12, 0]} castShadow receiveShadow>
           <meshStandardMaterial color="#31404D" roughness={0.42} metalness={0.34} />
         </RoundedBox>
-        {!reduced && [-3.7, 3.7].map((x) => (
+        {!reduced && [-4, 4].map((x) => (
           <mesh key={x} position={[x, 1.45, 0]} castShadow>
             <boxGeometry args={[0.18, 2.9, 0.18]} />
             <meshStandardMaterial color="#AAB4BD" roughness={0.28} metalness={0.62} />
@@ -142,10 +134,10 @@ function UndergroundSection({ reduced, mobileRenderer }) {
 
       {!reduced && (
         <pointLight
-          position={[0, 5.7, 18.8]}
+          position={[0, 5.8, 36.4]}
           color="#FFE6A1"
-          intensity={mobileRenderer ? 2 : 3.2}
-          distance={14}
+          intensity={mobileRenderer ? 1.8 : 3}
+          distance={17}
           decay={2}
         />
       )}

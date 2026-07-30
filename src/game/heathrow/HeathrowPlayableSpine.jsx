@@ -19,11 +19,21 @@ import TravelerAvatar from './TravelerAvatar';
 import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from './AirportNPCs';
 import AirportSigns, { AIRPORT_SIGNS, findNearbyAirportSign, getAirportSign } from './AirportSigns';
 import TerminalExpansion, { TICKET_MACHINE_INTERACTION } from './TerminalExpansion';
+import { resolveHeathrowMovement } from './collisionMap';
 
 const SPAWN = Object.freeze({ x: 0, z: -9 });
 const SUITCASE = Object.freeze({ x: -10.5, z: -7.4 });
 const UNDERGROUND = Object.freeze({ x: 0, z: 19.2 });
-const SUITCASE_INTERACT_RADIUS = 2.35;
+const YELLOW_ROUTE_END = Object.freeze({ x: 0, z: 15.2, radius: 2.35 });
+const YELLOW_ROUTE_GUIDES = Object.freeze([
+  Object.freeze({ x: 14.3, z: 11.3, rotation: -0.45 }),
+  Object.freeze({ x: 12.1, z: 13.1, rotation: -0.55 }),
+  Object.freeze({ x: 9.3, z: 14, rotation: 0 }),
+  Object.freeze({ x: 6.3, z: 14, rotation: 0 }),
+  Object.freeze({ x: 3.3, z: 14.2, rotation: -0.08 }),
+  Object.freeze({ x: 0.8, z: 14.8, rotation: -0.24 }),
+]);
+const SUITCASE_INTERACT_RADIUS = 3.05;
 const SUITCASE_GLOW_RADIUS = 8;
 const SUITCASE_HOLD_MS = 1050;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -178,8 +188,8 @@ function RendererFallback({ onRetry }) {
     <div className="absolute inset-0 z-50 grid place-items-center bg-slate-950 px-6 text-center text-white">
       <div className="max-w-sm rounded-[28px] border border-white/15 bg-white/10 p-6 shadow-2xl backdrop-blur-xl">
         <div className="text-4xl">🦜</div>
-        <h2 className="mt-3 text-xl font-black">The 3D scene needs a quick restart</h2>
-        <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">Close other graphics-heavy tabs, then retry. Smart Parrot will use the lightweight mobile renderer on iOS and Android.</p>
+        <h2 className="mt-3 text-xl font-black">Restarting the 3D scene</h2>
+        <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">Smart Parrot will retry once automatically. If this stays here, close other graphics-heavy tabs and retry.</p>
         <button type="button" onClick={onRetry} className="mt-5 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-slate-950 active:scale-95">Retry mission</button>
       </div>
     </div>
@@ -525,7 +535,7 @@ function Suitcase({ visible, active, proximity = 0, collecting = false }) {
 
 function Underground({ active }) {
   return (
-    <group position={[UNDERGROUND.x, 3.4, UNDERGROUND.z + 1]}>
+    <group position={[UNDERGROUND.x - 2.2, 5.25, UNDERGROUND.z - 2]} scale={0.58}>
       <Select enabled>
         <group>
           <mesh castShadow><torusGeometry args={[1.45, 0.34, 20, 48]} /><meshStandardMaterial color={active ? '#ff4c55' : '#db2c37'} emissive={active ? '#a4141d' : '#4f050a'} emissiveIntensity={active ? 2.1 : 0.85} /></mesh>
@@ -533,8 +543,61 @@ function Underground({ active }) {
           <Text position={[0, 0, 0.41]} fontSize={0.42} color="white" anchorX="center">UNDERGROUND</Text>
         </group>
       </Select>
-      <mesh position={[0, -2.45, 0]} castShadow><boxGeometry args={[0.35, 3.7, 0.35]} /><meshStandardMaterial color="#39414c" metalness={0.65} /></mesh>
+      <mesh position={[0, -3, 0]} castShadow><boxGeometry args={[0.35, 5.2, 0.35]} /><meshStandardMaterial color="#39414c" metalness={0.65} /></mesh>
     </group>
+  );
+}
+
+function YellowRouteGuide() {
+  const checkpointRef = useRef();
+
+  useFrame(({ clock }) => {
+    if (!checkpointRef.current) return;
+    const pulse = 1 + Math.sin(clock.elapsedTime * 3.2) * 0.08;
+    checkpointRef.current.scale.setScalar(pulse);
+  });
+
+  return (
+    <Select enabled>
+      <group>
+        {YELLOW_ROUTE_GUIDES.map((guide, index) => (
+          <mesh
+            key={`${guide.x}:${guide.z}`}
+            position={[guide.x, 0.055, guide.z]}
+            rotation={[0, guide.rotation, 0]}
+            receiveShadow
+          >
+            <boxGeometry args={[1.75, 0.08, 0.38]} />
+            <meshStandardMaterial
+              color={index % 2 === 0 ? '#f7d65c' : '#f0bd36'}
+              emissive="#7a5200"
+              emissiveIntensity={0.45}
+              roughness={0.58}
+            />
+          </mesh>
+        ))}
+
+        <group ref={checkpointRef} position={[YELLOW_ROUTE_END.x, 0.07, YELLOW_ROUTE_END.z]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.85, 1.18, 40]} />
+            <meshBasicMaterial color="#ffe06a" transparent opacity={0.9} toneMapped={false} />
+          </mesh>
+        </group>
+
+        <Float speed={1.4} floatIntensity={0.18}>
+          <Text
+            position={[YELLOW_ROUTE_END.x, 2.35, YELLOW_ROUTE_END.z]}
+            fontSize={0.34}
+            color="#fff0a3"
+            anchorX="center"
+            outlineWidth={0.018}
+            outlineColor="#17213b"
+          >
+            FOLLOW THE YELLOW ROUTE
+          </Text>
+        </Float>
+      </group>
+    </Select>
   );
 }
 
@@ -643,12 +706,19 @@ function Player({ inputRef, resetToken, reportPosition, controlsEnabled, convers
   useFrame((_, delta) => {
     if (!ref.current) return;
     const input = controlsEnabled ? inputRef.current : { forward: false, backward: false, left: false, right: false };
+    const movementDelta = Math.min(delta, 0.05);
     moveVector.set((input.right ? 1 : 0) - (input.left ? 1 : 0), 0, (input.backward ? 1 : 0) - (input.forward ? 1 : 0));
     if (moveVector.lengthSq()) moveVector.normalize();
-    velocity.current.lerp(moveVector.multiplyScalar(controlsEnabled ? 5.2 : 0), 1 - Math.pow(0.001, delta));
-    ref.current.position.addScaledVector(velocity.current, delta);
-    ref.current.position.x = clamp(ref.current.position.x, -31, 31);
-    ref.current.position.z = clamp(ref.current.position.z, -21, 23);
+    velocity.current.lerp(moveVector.multiplyScalar(controlsEnabled ? 5.2 : 0), 1 - Math.pow(0.001, movementDelta));
+    const requestedPosition = {
+      x: ref.current.position.x + velocity.current.x * movementDelta,
+      z: ref.current.position.z + velocity.current.z * movementDelta,
+    };
+    const resolvedPosition = resolveHeathrowMovement(ref.current.position, requestedPosition, { mobileRenderer });
+    if (Math.abs(resolvedPosition.x - requestedPosition.x) > 0.0001) velocity.current.x = 0;
+    if (Math.abs(resolvedPosition.z - requestedPosition.z) > 0.0001) velocity.current.z = 0;
+    ref.current.position.x = resolvedPosition.x;
+    ref.current.position.z = resolvedPosition.z;
 
     const isMoving = velocity.current.lengthSq() > 0.35;
     if (conversationTarget) {
@@ -766,7 +836,7 @@ function World({
     : npcQuestion === 'employee'
       ? { ...AIRPORT_EMPLOYEE_POSITION, cameraSide: 1 }
       : npcQuestion
-        ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: npcQuestion === 'gate' ? 1 : -1 }
+        ? { ...QUESTION_NPC_POSITIONS[npcQuestion], cameraSide: 1 }
         : null;
 
   return (
@@ -816,13 +886,7 @@ function World({
           celebrating={!cutsceneActive && mission.step === HEATHROW_STEPS.COMPLETE}
           entering={picoEntering}
         />
-        {mission.step === HEATHROW_STEPS.FOLLOW_YELLOW_ROUTE && (
-          <Select enabled>
-            <Float speed={1.4} floatIntensity={0.25}>
-              <Text position={[0, 6.7, 11]} fontSize={0.58} color="#f7d65c" anchorX="center" outlineWidth={0.018} outlineColor="#17213b">Follow the yellow path</Text>
-            </Float>
-          </Select>
-        )}
+        {mission.step === HEATHROW_STEPS.FOLLOW_YELLOW_ROUTE && <YellowRouteGuide />}
         {!mobileRenderer && <CinematicBloom />}
       </>
     </Selection>
@@ -909,6 +973,7 @@ export default function HeathrowPlayableSpine() {
   const [adaptiveDpr, setAdaptiveDpr] = useState(() => readDprRange(readMobileRenderProfile().mobile).initialDpr);
   const [rendererFailure, setRendererFailure] = useState('');
   const [rendererKey, setRendererKey] = useState(0);
+  const automaticRendererRetriesRef = useRef(0);
   const canHoldSuitcaseRef = useRef(false);
   const pickupAnimatingRef = useRef(false);
   const interactionTimersRef = useRef([]);
@@ -934,7 +999,10 @@ export default function HeathrowPlayableSpine() {
   const nearEmployee = distance(playerPosition, AIRPORT_EMPLOYEE_POSITION) < 3.2;
   const nearUnderground = distance(playerPosition, UNDERGROUND) < 3.8;
   const nearGateTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.gate) < 2.8;
-  const nearRestroomTraveler = distance(playerPosition, QUESTION_NPC_POSITIONS.restroom) < 2.8;
+  const nearRestroomTraveler = (
+    distance(playerPosition, QUESTION_NPC_POSITIONS.restroom) < 2.8
+    && playerPosition.z > 9
+  );
   const nearTicketMachine = (
     distance(playerPosition, TICKET_MACHINE_INTERACTION.interactionPosition)
       < TICKET_MACHINE_INTERACTION.radius
@@ -1021,6 +1089,7 @@ export default function HeathrowPlayableSpine() {
     } else if (
       mission.step === HEATHROW_STEPS.HELP_RESTROOM_TRAVELER
       && distance(position, QUESTION_NPC_POSITIONS.restroom) < 2.8
+      && position.z > 9
     ) {
       inputRef.current = { forward: false, backward: false, left: false, right: false };
       setNpcQuestionFeedback('');
@@ -1219,6 +1288,17 @@ export default function HeathrowPlayableSpine() {
   useEffect(() => () => clearInteractionTimers(), [clearInteractionTimers]);
   useEffect(() => saveCheckpoint(mission), [mission]);
   useEffect(() => {
+    if (
+      mission.step !== HEATHROW_STEPS.FOLLOW_YELLOW_ROUTE
+      || distance(playerPosition, YELLOW_ROUTE_END) >= YELLOW_ROUTE_END.radius
+    ) {
+      return;
+    }
+
+    dispatch({ type: 'FOLLOW_YELLOW_ROUTE' });
+    setPicoLine('Pico: “Yellow route complete. The Underground entrance is just ahead.”');
+  }, [mission.step, playerPosition]);
+  useEffect(() => {
     if (!cutsceneActive) return undefined;
     inputRef.current = { forward: false, backward: false, left: false, right: false };
     setCutsceneBeat(0);
@@ -1281,10 +1361,30 @@ export default function HeathrowPlayableSpine() {
     { eyebrow: 'PICO', title: '“Purple suitcase. Very fashionable.”', body: '“Also, apparently, very easy to lose.”' },
   ][cutsceneBeat];
 
-  const retryRenderer = () => {
+  const performRendererRetry = useCallback(() => {
     setRendererFailure('');
     setRendererKey((value) => value + 1);
-  };
+  }, []);
+
+  const retryRenderer = useCallback(() => {
+    automaticRendererRetriesRef.current = 0;
+    performRendererRetry();
+  }, [performRendererRetry]);
+
+  useEffect(() => {
+    if (!rendererFailure || automaticRendererRetriesRef.current >= 1) return undefined;
+    automaticRendererRetriesRef.current += 1;
+    const retryTimer = window.setTimeout(performRendererRetry, 700);
+    return () => window.clearTimeout(retryTimer);
+  }, [performRendererRetry, rendererFailure]);
+
+  useEffect(() => {
+    if (rendererFailure) return undefined;
+    const stableTimer = window.setTimeout(() => {
+      automaticRendererRetriesRef.current = 0;
+    }, 4000);
+    return () => window.clearTimeout(stableTimer);
+  }, [rendererFailure, rendererKey]);
 
   const rendererFallback = <RendererFallback onRetry={retryRenderer} />;
 
@@ -1297,9 +1397,18 @@ export default function HeathrowPlayableSpine() {
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
       data-render-dpr={adaptiveDpr.toFixed(2)}
       data-mobile-platform={renderProfile.ios ? 'ios' : renderProfile.android ? 'android' : 'other'}
+      data-player-x={playerPosition.x.toFixed(2)}
+      data-player-z={playerPosition.z.toFixed(2)}
     >
       {rendererFailure ? rendererFallback : (
-        <GameCanvasBoundary resetKey={rendererKey} onError={() => setRendererFailure('render-error')} fallback={rendererFallback}>
+        <GameCanvasBoundary
+          resetKey={rendererKey}
+          onError={(error) => {
+            console.error('[Heathrow] 3D scene error', error);
+            setRendererFailure(error?.message || 'render-error');
+          }}
+          fallback={rendererFallback}
+        >
           <Canvas
             key={`${rendererKey}-${renderProfile.mobile ? 'mobile' : 'desktop'}`}
             fallback={rendererFallback}

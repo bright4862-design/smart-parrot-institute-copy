@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Billboard, Float, RoundedBox, Text } from '@react-three/drei';
 import { Select } from '@react-three/postprocessing';
 import * as THREE from 'three';
+import AirportPopulation from './AirportPopulation';
 
 export const AIRPORT_EMPLOYEE_POSITION = Object.freeze({ x: 6.2, z: 10.2 });
 export const QUESTION_NPC_POSITIONS = Object.freeze({
@@ -333,8 +334,6 @@ export default function AirportNPCs({
   mobileRenderer = false,
   decorationDensity = 'balanced',
 }) {
-  const showAmbientCrowd = decorationDensity !== 'reduced';
-  const showFullCrowd = decorationDensity === 'full' && !mobileRenderer;
   return (
     <group>
       <AirportEmployee active={employeeActive} engaged={employeeEngaged} playerPosition={playerPosition} />
@@ -362,24 +361,11 @@ export default function AirportNPCs({
         playerPosition={playerPosition}
       />
 
-      {showAmbientCrowd && (
-        <>
-          <Passenger position={[-7.2, 0.7, -3.5]} phase={0.2} walking axis="z" range={2.2} suitcase paletteIndex={2} />
-          <Passenger position={[12.2, 0.7, -5.4]} phase={1.1} walking axis="x" range={1.7} phone paletteIndex={1} />
-          <Passenger position={[-14.2, 0.7, 1.6]} rotation={1.2} phase={2.3} phone paletteIndex={2} />
-          <Passenger position={[13.5, 0.7, 3.8]} rotation={-1.1} phase={0.8} suitcase paletteIndex={3} />
-        </>
-      )}
-      {showFullCrowd && (
-        <>
-          <Passenger position={[-4.8, 0.7, 7.3]} phase={3.2} walking axis="x" range={2.1} paletteIndex={4} />
-          <Passenger position={[9.3, 0.7, 7.8]} rotation={2.6} phase={2.7} phone paletteIndex={5} />
-          <Passenger position={[-16.8, 0.7, -8.8]} phase={4.2} walking axis="x" range={1.8} suitcase paletteIndex={2} />
-          <Passenger position={[16.2, 0.7, -9.5]} rotation={-2.4} phase={5.1} paletteIndex={1} />
-          <Passenger position={[-25.5, 0.7, 12.5]} phase={1.8} walking axis="z" range={2.6} phone paletteIndex={4} />
-          <Passenger position={[25.5, 0.7, 13.2]} phase={3.7} walking axis="x" range={2.2} suitcase paletteIndex={5} />
-        </>
-      )}
+      <AirportPopulation
+        decorationDensity={decorationDensity}
+        mobileRenderer={mobileRenderer}
+        playerPosition={playerPosition}
+      />
     </group>
   );
 }

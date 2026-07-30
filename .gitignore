@@ -2,6 +2,9 @@
 .env
 .env.*
 
+# Temporary local proof artifacts
+.tmp-proof/
+
 # Logs
 /logs
 *.log

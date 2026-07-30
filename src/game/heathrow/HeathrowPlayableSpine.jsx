@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } 
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Float, Lightformer, RoundedBox, Text } from '@react-three/drei';
 import { Bloom, EffectComposer, SMAA, Select, Selection } from '@react-three/postprocessing';
-import { HelpCircle, RotateCcw, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { HelpCircle, RotateCcw, SlidersHorizontal, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import * as THREE from 'three';
 import {
   clearCheckpoint,
@@ -17,9 +17,11 @@ import {
 } from './missionState';
 import TravelerAvatar from './TravelerAvatar';
 import AirportNPCs, { AIRPORT_EMPLOYEE_POSITION, QUESTION_NPC_POSITIONS } from './AirportNPCs';
+import AirportLife from './AirportLife';
 import AirportSigns, { AIRPORT_SIGNS, findNearbyAirportSign, getAirportSign } from './AirportSigns';
 import TerminalExpansion, { TICKET_MACHINE_INTERACTION } from './TerminalExpansion';
 import { resolveHeathrowMovement } from './collisionMap';
+import useHeathrowAmbience from './useHeathrowAmbience';
 import RenderProfileSelector from './RenderProfileSelector';
 import {
   loadRenderProfilePreference,
@@ -861,6 +863,13 @@ function World({
           employeeEngaged={activeTarget === 'employee' || npcQuestion === 'employee'}
           questionActiveId={engagedQuestionId}
           playerPosition={playerPosition}
+          mobileRenderer={mobileRenderer}
+          decorationDensity={renderSettings.decorationDensity}
+        />
+        <AirportLife
+          decorationDensity={renderSettings.decorationDensity}
+          mobileRenderer={mobileRenderer}
+          playerPosition={playerPosition}
         />
         <Suitcase
           visible={!mission.suitcaseCollected}
@@ -1008,6 +1017,12 @@ export default function HeathrowPlayableSpine() {
     () => resolveRenderProfile(renderMode, renderProfile),
     [renderMode, renderProfile],
   );
+  const {
+    muted: ambienceMuted,
+    started: ambienceStarted,
+    supported: ambienceSupported,
+    toggleMuted: toggleAmbience,
+  } = useHeathrowAmbience({ playerPosition, renderSettings });
   const [adaptiveDpr, setAdaptiveDpr] = useState(
     () => resolveRenderProfile(loadRenderProfilePreference(), readRenderCapabilities()).initialDpr,
   );
@@ -1489,6 +1504,7 @@ export default function HeathrowPlayableSpine() {
       data-render-profile={renderProfile.mobile ? 'mobile-safe' : 'desktop-cinematic'}
       data-render-mode={renderSettings.id}
       data-render-dpr={adaptiveDpr.toFixed(2)}
+      data-audio-state={!ambienceSupported ? 'unsupported' : ambienceMuted ? 'muted' : ambienceStarted ? 'playing' : 'ready'}
       data-mobile-platform={renderProfile.ios ? 'ios' : renderProfile.android ? 'android' : 'other'}
       data-player-x={playerPosition.x.toFixed(2)}
       data-player-z={playerPosition.z.toFixed(2)}
@@ -1600,6 +1616,18 @@ export default function HeathrowPlayableSpine() {
           </div>
         </div>
         <div className="pointer-events-auto flex gap-2">
+          {ambienceSupported && (
+            <button
+              type="button"
+              aria-label={ambienceMuted ? 'Turn airport ambience on' : 'Mute airport ambience'}
+              aria-pressed={!ambienceMuted}
+              onClick={toggleAmbience}
+              className="relative grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur active:scale-95 sm:h-11 sm:w-11"
+            >
+              {ambienceMuted ? <VolumeX className="h-[18px] w-[18px] sm:h-5 sm:w-5" /> : <Volume2 className="h-[18px] w-[18px] sm:h-5 sm:w-5" />}
+              {!ambienceMuted && !ambienceStarted && <span className="absolute -bottom-1 -right-1 rounded-full bg-cyan-300 px-1.5 py-0.5 text-[8px] font-black leading-none text-slate-950">TAP</span>}
+            </button>
+          )}
           <button aria-label={`Graphics quality: ${renderSettings.label}`} onClick={() => { inputRef.current = { forward: false, backward: false, left: false, right: false }; setGraphicsOpen(true); }} className="relative grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><SlidersHorizontal className="h-[18px] w-[18px] sm:h-5 sm:w-5" /><span className="absolute -bottom-1 -right-1 rounded-full bg-amber-300 px-1.5 py-0.5 text-[8px] font-black leading-none text-slate-950">{renderSettings.label === 'Performance' ? 'P' : renderSettings.label === 'Auto' ? 'A' : 'HD'}</span></button>
           <button aria-label="Show help" onClick={() => setPicoLine('Pico: “Look for the softly glowing object.”')} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><HelpCircle className="h-[18px] w-[18px] sm:h-5 sm:w-5" /></button>
           <button aria-label="Restart mission" onClick={restart} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-slate-950/65 backdrop-blur sm:h-11 sm:w-11"><RotateCcw className="h-[18px] w-[18px] sm:h-5 sm:w-5" /></button>

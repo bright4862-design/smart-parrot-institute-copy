@@ -2,6 +2,8 @@ import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Float, RoundedBox, Text } from '@react-three/drei';
 import * as THREE from 'three';
+import CafePopulation from './CafePopulation';
+import { resolveCafePopulation } from './cafePopulation';
 
 const SKIN = ['#F2C3A0', '#D89B74', '#A96F50', '#6F4635'];
 const HAIR = ['#2A211E', '#4B3328', '#171515', '#704A31'];
@@ -68,6 +70,7 @@ function CoffeeWorker({ position, rotation = Math.PI, phase = 0, role = 'barista
     const time = clock.elapsedTime + phase;
     if (root.current) {
       root.current.position.y = Math.sin(time * 1.55) * 0.014;
+      root.current.position.x = role === 'service' ? Math.sin(time * 0.46) * 0.52 : 0;
       root.current.rotation.z = Math.sin(time * 0.72) * 0.012;
     }
     if (!facing.current) return;
@@ -89,34 +92,44 @@ function CoffeeWorker({ position, rotation = Math.PI, phase = 0, role = 'barista
       face.current.rotation.x = THREE.MathUtils.damp(face.current.rotation.x, nearPlayer ? -0.025 : 0, 6, delta);
     }
 
-    const workingPulse = Math.sin(time * (role === 'barista' ? 2.7 : 2.1));
+    const workingPulse = Math.sin(time * (role === 'barista' ? 2.7 : role === 'service' ? 1.4 : 2.1));
+    const leftTarget = role === 'barista'
+      ? -0.72 + workingPulse * 0.18
+      : role === 'service'
+        ? -0.72 + workingPulse * 0.045
+        : -0.28 + workingPulse * 0.08;
+    const rightTarget = role === 'barista'
+      ? -0.48 - workingPulse * 0.16
+      : role === 'service'
+        ? -0.72 - workingPulse * 0.045
+        : -0.65 + workingPulse * 0.12;
     if (leftArm.current) {
-      leftArm.current.rotation.x = THREE.MathUtils.damp(
-        leftArm.current.rotation.x,
-        role === 'barista' ? -0.72 + workingPulse * 0.18 : -0.28 + workingPulse * 0.08,
+      leftArm.current.rotation.x = THREE.MathUtils.damp(leftArm.current.rotation.x, leftTarget, 8, delta);
+      leftArm.current.rotation.z = THREE.MathUtils.damp(
+        leftArm.current.rotation.z,
+        role === 'barista' ? -0.18 : role === 'service' ? -0.08 : 0.08,
         8,
         delta,
       );
-      leftArm.current.rotation.z = THREE.MathUtils.damp(leftArm.current.rotation.z, role === 'barista' ? -0.18 : 0.08, 8, delta);
     }
     if (rightArm.current) {
-      rightArm.current.rotation.x = THREE.MathUtils.damp(
-        rightArm.current.rotation.x,
-        role === 'barista' ? -0.48 - workingPulse * 0.16 : -0.65 + workingPulse * 0.12,
+      rightArm.current.rotation.x = THREE.MathUtils.damp(rightArm.current.rotation.x, rightTarget, 8, delta);
+      rightArm.current.rotation.z = THREE.MathUtils.damp(
+        rightArm.current.rotation.z,
+        role === 'barista' ? 0.22 : role === 'service' ? 0.08 : -0.1,
         8,
         delta,
       );
-      rightArm.current.rotation.z = THREE.MathUtils.damp(rightArm.current.rotation.z, role === 'barista' ? 0.22 : -0.1, 8, delta);
     }
     if (tool.current) {
-      tool.current.rotation.z = role === 'barista' ? workingPulse * 0.14 : 0;
-      tool.current.position.y = role === 'barista' ? 0.63 + Math.abs(workingPulse) * 0.035 : 0.68;
+      tool.current.rotation.z = role === 'barista' ? workingPulse * 0.14 : role === 'service' ? workingPulse * 0.02 : 0;
+      tool.current.position.y = role === 'barista' ? 0.63 + Math.abs(workingPulse) * 0.035 : 0.7;
     }
   });
 
-  const skin = role === 'cashier' ? SKIN[1] : role === 'runner' ? SKIN[3] : SKIN[0];
-  const hair = role === 'cashier' ? HAIR[2] : role === 'runner' ? HAIR[0] : HAIR[1];
-  const apron = role === 'runner' ? '#315A78' : '#3D5A4A';
+  const skin = role === 'cashier' ? SKIN[1] : role === 'service' ? SKIN[3] : SKIN[0];
+  const hair = role === 'cashier' ? HAIR[2] : role === 'service' ? HAIR[0] : HAIR[1];
+  const apron = role === 'service' ? '#315A78' : '#3D5A4A';
 
   return (
     <group ref={facing} position={position} rotation={[0, rotation, 0]} scale={1.08}>
@@ -164,7 +177,10 @@ function CoffeeWorker({ position, rotation = Math.PI, phase = 0, role = 'barista
 
         <SimpleFace skin={skin} hair={hair} faceRef={face} />
 
-        <group ref={tool} position={[role === 'barista' ? 0.28 : -0.22, 0.66, 0.48]}>
+        <group
+          ref={tool}
+          position={role === 'barista' ? [0.28, 0.66, 0.48] : role === 'service' ? [0, 0.7, 0.5] : [-0.22, 0.68, 0.48]}
+        >
           {role === 'barista' ? (
             <>
               <mesh castShadow>
@@ -175,6 +191,18 @@ function CoffeeWorker({ position, rotation = Math.PI, phase = 0, role = 'barista
                 <torusGeometry args={[0.07, 0.018, 6, 12, Math.PI * 1.45]} />
                 <meshStandardMaterial color="#F7F1E8" roughness={0.45} />
               </mesh>
+            </>
+          ) : role === 'service' ? (
+            <>
+              <RoundedBox args={[0.62, 0.055, 0.36]} radius={0.04} castShadow>
+                <meshStandardMaterial color="#303A46" roughness={0.35} metalness={0.48} />
+              </RoundedBox>
+              {[-0.18, 0.18].map((x) => (
+                <mesh key={x} position={[x, 0.12, 0]} castShadow>
+                  <cylinderGeometry args={[0.075, 0.065, 0.16, 10]} />
+                  <meshStandardMaterial color="#F7F1E8" roughness={0.45} />
+                </mesh>
+              ))}
             </>
           ) : (
             <RoundedBox args={[0.32, 0.2, 0.045]} radius={0.04} castShadow>
@@ -273,11 +301,12 @@ function CoffeeSteam({ enabled }) {
 }
 
 export default function AirportLife({ decorationDensity = 'balanced', mobileRenderer = false, playerPosition }) {
-  const full = decorationDensity === 'full' && !mobileRenderer;
+  const cafeProfile = resolveCafePopulation(decorationDensity);
+  const fullTerminalCrowd = decorationDensity === 'full' && !mobileRenderer;
   const reduced = decorationDensity === 'reduced';
   const ambientTravelers = reduced
     ? []
-    : full
+    : fullTerminalCrowd
       ? [
           { position: [-20, 0.7, -5.2], phase: 0.4, axis: 'z', range: 2.1, palette: 0 },
           { position: [20, 0.7, -3.2], phase: 1.7, axis: 'x', range: 1.8, palette: 1 },
@@ -294,9 +323,12 @@ export default function AirportLife({ decorationDensity = 'balanced', mobileRend
   return (
     <group>
       <CoffeeWorker position={[19.2, 0.72, 9.35]} role="barista" phase={0.2} playerPosition={playerPosition} />
-      <CoffeeWorker position={[23.1, 0.72, 9.35]} role="cashier" phase={1.4} playerPosition={playerPosition} />
-      {full && <CoffeeWorker position={[26.2, 0.72, 9.3]} role="runner" phase={2.5} playerPosition={playerPosition} />}
+      <CoffeeWorker position={[23.1, 0.72, 9.35]} role="service" phase={1.4} playerPosition={playerPosition} />
+      {cafeProfile.workerRoles.includes('cashier') && (
+        <CoffeeWorker position={[26.2, 0.72, 9.3]} role="cashier" phase={2.5} playerPosition={playerPosition} />
+      )}
       <CoffeeSteam enabled={!reduced} />
+      <CafePopulation decorationDensity={decorationDensity} playerPosition={playerPosition} />
 
       {ambientTravelers.map((traveler) => (
         <AmbientTraveler key={`${traveler.position[0]}:${traveler.position[2]}`} {...traveler} />

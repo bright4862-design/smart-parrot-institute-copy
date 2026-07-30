@@ -21,6 +21,8 @@ export const HEATHROW_COLLIDERS = Object.freeze([
   rectangle('coffee-counter', 8.4, 15.6, -8.1, -5.9),
   rectangle('gate-barrier', -28.5, -15.5, 7.55, 8.45),
   rectangle('services-counter', 15.5, 28.5, 7.15, 8.85),
+  rectangle('cafe-seating-west', 16.7, 20.1, 3.75, 5.55),
+  rectangle('cafe-seating-east', 23.3, 26.7, 3.75, 5.55),
   rectangle('ticket-machine-island', -4.3, 4.3, 8.1, 12.9),
 
   rectangle('left-glass-divider', -11.11, -10.89, -3, 13, true),

@@ -7,7 +7,7 @@ import * as THREE from 'three';
 export const AIRPORT_EMPLOYEE_POSITION = Object.freeze({ x: 6.2, z: 10.2 });
 export const QUESTION_NPC_POSITIONS = Object.freeze({
   gate: Object.freeze({ x: -21, z: 5.8 }),
-  restroom: Object.freeze({ x: 21, z: 6.8 }),
+  restroom: Object.freeze({ x: 17.4, z: 10.4 }),
 });
 
 const SKIN_TONES = ['#F2C3A0', '#D89B74', '#A96F50', '#6F4635'];

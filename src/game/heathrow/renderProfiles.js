@@ -103,7 +103,7 @@ export function resolveRenderProfile(mode = RENDER_PROFILE_MODES.AUTO, capabilit
   }
 
   if (requestedMode === RENDER_PROFILE_MODES.HD) {
-    const capableForHd = strong || (!constrained && !mobile);
+    const capableForHd = !constrained && (strong || !mobile || deviceDpr >= 2);
     const maxDpr = Math.min(deviceDpr, mobile ? 2 : 2.25);
     const initialTarget = mobile ? 1.75 : 1.85;
     return Object.freeze({

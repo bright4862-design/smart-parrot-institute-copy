@@ -132,11 +132,22 @@ function TicketMachine({ x, active = false, engaged = false }) {
 
 export default function TerminalExpansion({
   mobileRenderer = false,
+  decorationDensity = 'balanced',
   ticketMachineActive = false,
   ticketMachineEngaged = false,
 }) {
-  const visibleBenches = mobileRenderer ? BENCH_POSITIONS.slice(0, 4) : BENCH_POSITIONS;
-  const visiblePlanters = mobileRenderer ? PLANTER_POSITIONS.filter((_, index) => index % 2 === 0) : PLANTER_POSITIONS;
+  const reducedDecorations = decorationDensity === 'reduced';
+  const visibleBenches = reducedDecorations
+    ? BENCH_POSITIONS.slice(0, 2)
+    : mobileRenderer
+      ? BENCH_POSITIONS.slice(0, 4)
+      : BENCH_POSITIONS;
+  const visiblePlanters = reducedDecorations
+    ? PLANTER_POSITIONS.slice(0, 1)
+    : mobileRenderer
+      ? PLANTER_POSITIONS.filter((_, index) => index % 2 === 0)
+      : PLANTER_POSITIONS;
+  const ticketMachineXs = reducedDecorations ? [0] : [-2.2, 0, 2.2];
 
   return (
     <group>
@@ -173,7 +184,7 @@ export default function TerminalExpansion({
         <RoundedBox args={[8.6, 0.25, 4.8]} radius={0.2} position={[0, 0.12, 0]} receiveShadow>
           <meshStandardMaterial color="#bac5d1" roughness={0.38} metalness={0.22} />
         </RoundedBox>
-        {[-2.2, 0, 2.2].map((x) => (
+        {ticketMachineXs.map((x) => (
           <TicketMachine
             key={x}
             x={x}
@@ -186,7 +197,7 @@ export default function TerminalExpansion({
       {visibleBenches.map(([x, z]) => <Bench key={`${x}:${z}`} position={[x, z]} />)}
       {visiblePlanters.map(([x, z]) => <Planter key={`${x}:${z}`} position={[x, z]} />)}
 
-      {!mobileRenderer && (
+      {!mobileRenderer && !reducedDecorations && (
         <>
           <mesh position={[-11, 3.2, 5]} castShadow receiveShadow>
             <boxGeometry args={[0.22, 6.4, 16]} />

@@ -6,12 +6,28 @@ on:
       - agent/lesson-booking-blueprint
     paths:
       - "supabase/**"
+      - "src/App.jsx"
+      - "src/lib/LessonBookingAuthContext.jsx"
+      - "src/lib/lessonBookingApi.js"
+      - "src/lib/lessonBookingSupabase.js"
+      - "src/pages/LessonBooking.jsx"
+      - "package.json"
+      - "package-lock.json"
       - "scripts/check-lesson-booking-foundation.mjs"
+      - "scripts/check-lesson-booking-browser-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
       - "supabase/**"
+      - "src/App.jsx"
+      - "src/lib/LessonBookingAuthContext.jsx"
+      - "src/lib/lessonBookingApi.js"
+      - "src/lib/lessonBookingSupabase.js"
+      - "src/pages/LessonBooking.jsx"
+      - "package.json"
+      - "package-lock.json"
       - "scripts/check-lesson-booking-foundation.mjs"
+      - "scripts/check-lesson-booking-browser-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 
 permissions:
@@ -20,11 +36,18 @@ permissions:
 jobs:
   foundation-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify booking foundation invariants
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Verify database foundation invariants
         run: node scripts/check-lesson-booking-foundation.mjs
+      - name: Verify browser/auth boundary
+        run: node scripts/check-lesson-booking-browser-boundary.mjs
+      - name: Build application
+        run: npm run build

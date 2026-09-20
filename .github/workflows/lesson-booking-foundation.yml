@@ -17,6 +17,7 @@ on:
       - "scripts/check-lesson-booking-browser-boundary.mjs"
       - "scripts/check-lesson-booking-reservation-boundary.mjs"
       - "scripts/check-lesson-booking-stripe-boundary.mjs"
+      - "scripts/check-lesson-booking-hold-recovery-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -32,6 +33,7 @@ on:
       - "scripts/check-lesson-booking-browser-boundary.mjs"
       - "scripts/check-lesson-booking-reservation-boundary.mjs"
       - "scripts/check-lesson-booking-stripe-boundary.mjs"
+      - "scripts/check-lesson-booking-hold-recovery-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 
 permissions:
@@ -57,5 +59,7 @@ jobs:
         run: node scripts/check-lesson-booking-reservation-boundary.mjs
       - name: Verify Stripe Checkout/webhook boundary
         run: node scripts/check-lesson-booking-stripe-boundary.mjs
+      - name: Verify deferred hold/recovery boundary
+        run: node scripts/check-lesson-booking-hold-recovery-boundary.mjs
       - name: Build application
         run: npm run build

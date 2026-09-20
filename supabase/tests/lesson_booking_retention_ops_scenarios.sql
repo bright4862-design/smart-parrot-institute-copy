@@ -30,7 +30,7 @@ select public.admin_set_booking_retention_control(
 
 do $$ declare r jsonb; begin
   select public.admin_booking_launch_health('2026-09-20 15:00+00') into r;
-  if r->>'schema_version'<>'smart_parrot_booking_launch_health_v2' then
+  if r->>'schema_version'<>'smart_parrot_booking_launch_health_v3' then
     raise exception 'Launch-health schema was not upgraded: %',r;
   end if;
   if coalesce((r#>>'{counts,unclassified_evidence_bookings}')::int,0)<1 then
@@ -42,8 +42,11 @@ do $$ declare r jsonb; begin
   if coalesce((r#>>'{counts,unapproved_retention_classes}')::int,0)<4 then
     raise exception 'Unapproved retention classes were not surfaced: %',r;
   end if;
-  if (r->>'attention_count')::int < 3 or r->>'status'<>'attention' then
-    raise exception 'Retention governance gaps did not affect health: %',r;
+  if coalesce((r#>>'{counts,provider_rehearsal_missing}')::int,0)<>1 then
+    raise exception 'Missing provider rehearsal was not surfaced: %',r;
+  end if;
+  if (r->>'attention_count')::int < 4 or r->>'status'<>'attention' then
+    raise exception 'Retention/launch governance gaps did not affect health: %',r;
   end if;
 end $$;
 

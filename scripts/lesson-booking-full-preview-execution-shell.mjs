@@ -7,13 +7,17 @@ import {
   classifyProviderCleanup,
 } from './lesson-booking-full-preview-driver-contract.mjs';
 import { assertMinimizedPreviewObservation } from './lesson-booking-full-preview-observer.mjs';
+import { assertMinimizedFullPreviewRunSnapshot } from './lesson-booking-full-preview-run-registry.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const FULL_PREVIEW_SHELL_GATE = 'SMART_PARROT_FULL_PREVIEW_SHELL_ENABLED';
 
 export const AUTHORITATIVE_SERVER_OPERATIONS = Object.freeze({
+  begin_run: Object.freeze({ target: 'admin_begin_booking_full_preview_run', auth: 'admin_rpc' }),
   reserve_booking: Object.freeze({ target: 'create-booking', auth: 'student_user' }),
+  bind_run_booking: Object.freeze({ target: 'admin_bind_booking_full_preview_run', auth: 'admin_rpc' }),
+  refresh_run: Object.freeze({ target: 'admin_refresh_booking_full_preview_run', auth: 'admin_rpc' }),
   observe_run: Object.freeze({ target: 'admin_observe_booking_preview_run', auth: 'admin_rpc' }),
   place_deferred_holds: Object.freeze({ target: 'place-holds', auth: 'secret_worker' }),
   recover_failed_hold: Object.freeze({ target: 'fix-payment', auth: 'student_user' }),
@@ -28,6 +32,13 @@ function requiredString(value, label) {
   const normalized = String(value ?? '').trim();
   if (!normalized) throw new Error(`${label}_required`);
   return normalized;
+}
+
+function bookingIdFromReservation(response) {
+  const candidate = response?.booking?.booking_id ?? response?.booking_id ?? null;
+  const id = requiredString(candidate, 'booking_id');
+  if (!UUID_RE.test(id)) throw new Error('invalid_booking_id');
+  return id;
 }
 
 export function buildPreviewFixtureNamespace(runId) {
@@ -139,22 +150,47 @@ export function createFullPreviewExecutionShell({ invokeServer }) {
       const starts = new Date(requiredString(startsAt, 'starts_at'));
       if (Number.isNaN(starts.getTime())) throw new Error('invalid_starts_at');
 
+      const begun = assertMinimizedFullPreviewRunSnapshot(await invokeAuthoritative('begin_run', {
+        p_run_id: runContract.run_id,
+        p_scenario: scenario,
+      }));
+
       const response = await invokeAuthoritative('reserve_booking', {
         lesson_type_id: lessonId,
         starts_at: starts.toISOString(),
         request_id: runContract.run_id,
         express_start_request: true,
       });
+      const bookingId = bookingIdFromReservation(response);
+
+      const bound = assertMinimizedFullPreviewRunSnapshot(await invokeAuthoritative('bind_run_booking', {
+        p_run_id: runContract.run_id,
+        p_booking_id: bookingId,
+      }));
+      if (bound.booking_id !== bookingId || bound.run_id !== runContract.run_id) {
+        throw new Error('full_preview_run_binding_integrity_failed');
+      }
 
       return Object.freeze({
         run_contract: runContract,
         fixture,
+        run_registry: bound,
+        run_registry_begin_replay: begun.replay,
         reservation_response: response,
         idempotency_scope: Object.freeze({
           booking_request_id: runContract.run_id,
+          preview_run_id: runContract.run_id,
           server_checkout_key: 'derived_from_booking_id',
         }),
       });
+    },
+
+    async refreshRun({ runId }) {
+      const id = requiredString(runId, 'run_id');
+      if (!UUID_RE.test(id)) throw new Error('invalid_run_id');
+      return assertMinimizedFullPreviewRunSnapshot(await invokeAuthoritative('refresh_run', {
+        p_run_id: id,
+      }));
     },
 
     async observe({ bookingId, scenario }) {

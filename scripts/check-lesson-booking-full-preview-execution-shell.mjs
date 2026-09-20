@@ -106,11 +106,49 @@ assert.equal(
   true,
 );
 
+const runSnapshot = (overrides = {}) => ({
+  schema_version: 1,
+  run_id: runId,
+  scenario: 'near_term_success',
+  booking_id: null,
+  state: 'initialized',
+  pause_reason: null,
+  terminal: false,
+  revision: 0,
+  last_booking_status: null,
+  last_observed_at: null,
+  completed_at: null,
+  replay: false,
+  ...overrides,
+});
+
 const calls = [];
 const fakeTransport = async (call) => {
   calls.push(call);
+  if (call.operation === 'begin_run') return runSnapshot();
   if (call.operation === 'reserve_booking') {
     return { booking: { booking_id: bookingId }, checkout: { status: 'open' } };
+  }
+  if (call.operation === 'bind_run_booking') {
+    return runSnapshot({
+      booking_id: bookingId,
+      state: 'awaiting_checkout_completion',
+      pause_reason: 'checkout_completion',
+      revision: 1,
+      last_booking_status: 'pending_checkout',
+      last_observed_at: '2026-09-20T19:01:00.000Z',
+    });
+  }
+  if (call.operation === 'refresh_run') {
+    return runSnapshot({
+      booking_id: bookingId,
+      state: 'awaiting_checkout_completion',
+      pause_reason: 'checkout_completion',
+      revision: 1,
+      last_booking_status: 'pending_checkout',
+      last_observed_at: '2026-09-20T19:02:00.000Z',
+      replay: true,
+    });
   }
   if (call.operation === 'observe_run') return baseObservation;
   if (call.operation === 'settle_due_lessons') return { settlements: [] };
@@ -132,7 +170,7 @@ const gate = {
   stripeKey: 'sk_test_contract_only',
 };
 
-await shell.reserve({
+const firstReservation = await shell.reserve({
   gate,
   runId,
   scenario: 'near_term_success',
@@ -146,11 +184,15 @@ await shell.reserve({
   lessonTypeId,
   startsAt: '2026-09-22T12:00:00.000Z',
 });
+assert.equal(firstReservation.run_registry.booking_id, bookingId);
+assert.equal(firstReservation.idempotency_scope.preview_run_id, runId);
 const reservationCalls = calls.filter((call) => call.operation === 'reserve_booking');
 assert.equal(reservationCalls.length, 2);
 assert.ok(reservationCalls.every((call) => call.payload.request_id === runId));
 assert.ok(reservationCalls.every((call) => call.target === 'create-booking'));
 assert.ok(reservationCalls.every((call) => call.auth === 'student_user'));
+assert.equal(calls.filter((call) => call.operation === 'begin_run').length, 2);
+assert.equal(calls.filter((call) => call.operation === 'bind_run_booking').length, 2);
 
 await assert.rejects(
   () => shell.reserve({
@@ -173,6 +215,11 @@ await assert.rejects(
   /production_project_refused/,
 );
 
+const refreshed = await shell.refreshRun({ runId });
+assert.equal(refreshed.booking_id, bookingId);
+assert.equal(refreshed.revision, 1);
+assert.equal(calls.at(-1).target, 'admin_refresh_booking_full_preview_run');
+
 const observed = await shell.observe({ bookingId, scenario: 'near_term_success' });
 assert.equal(observed.progress.state, 'awaiting_checkout_completion');
 
@@ -192,7 +239,10 @@ assert.equal(ambiguousCleanup.status, 'cleanup_incomplete');
 assert.equal(ambiguousCleanup.reconciliation_intent.operation, 'reconcile_cleanup');
 assert.equal(ambiguousCleanup.reconciliation_intent.automatic_provider_retry, false);
 
+assert.equal(AUTHORITATIVE_SERVER_OPERATIONS.begin_run.target, 'admin_begin_booking_full_preview_run');
 assert.equal(AUTHORITATIVE_SERVER_OPERATIONS.reserve_booking.target, 'create-booking');
+assert.equal(AUTHORITATIVE_SERVER_OPERATIONS.bind_run_booking.target, 'admin_bind_booking_full_preview_run');
+assert.equal(AUTHORITATIVE_SERVER_OPERATIONS.refresh_run.target, 'admin_refresh_booking_full_preview_run');
 assert.equal(AUTHORITATIVE_SERVER_OPERATIONS.observe_run.target, 'admin_observe_booking_preview_run');
 
 const shellSource = fs.readFileSync('scripts/lesson-booking-full-preview-execution-shell.mjs', 'utf8');
@@ -222,4 +272,4 @@ assert.ok(migration.includes("'attendance_evidence_count'"));
 assert.ok(migration.includes("'settlement_evidence_count'"));
 assert.ok(migration.includes('private.smart_parrot_require_admin'));
 
-console.log('Phase 4C5D disabled execution shell/minimized observer checks passed.');
+console.log('Phase 4C5D disabled execution shell/minimized observer checks passed with durable-run integration.');

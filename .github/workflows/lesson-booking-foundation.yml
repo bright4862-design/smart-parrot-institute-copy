@@ -38,11 +38,14 @@ on:
       - "scripts/check-lesson-booking-rehearsal-ux-preflight-boundary.mjs"
       - "scripts/check-lesson-booking-full-preview-driver-contract.mjs"
       - "scripts/check-lesson-booking-full-preview-execution-shell.mjs"
+      - "scripts/check-lesson-booking-full-preview-run-registry.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
       - "scripts/lesson-booking-full-preview-driver-contract.mjs"
       - "scripts/lesson-booking-full-preview-observer.mjs"
+      - "scripts/lesson-booking-full-preview-run-registry.mjs"
+      - "scripts/lesson-booking-full-preview-supabase-transport.mjs"
       - "scripts/lesson-booking-full-preview-execution-shell.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
@@ -80,11 +83,14 @@ on:
       - "scripts/check-lesson-booking-rehearsal-ux-preflight-boundary.mjs"
       - "scripts/check-lesson-booking-full-preview-driver-contract.mjs"
       - "scripts/check-lesson-booking-full-preview-execution-shell.mjs"
+      - "scripts/check-lesson-booking-full-preview-run-registry.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
       - "scripts/lesson-booking-full-preview-driver-contract.mjs"
       - "scripts/lesson-booking-full-preview-observer.mjs"
+      - "scripts/lesson-booking-full-preview-run-registry.mjs"
+      - "scripts/lesson-booking-full-preview-supabase-transport.mjs"
       - "scripts/lesson-booking-full-preview-execution-shell.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 permissions:
@@ -159,6 +165,8 @@ jobs:
         run: node scripts/check-lesson-booking-full-preview-driver-contract.mjs
       - name: Verify Phase 4C5D execution shell/minimized observer boundary
         run: node scripts/check-lesson-booking-full-preview-execution-shell.mjs
+      - name: Verify Phase 4C5E approved preview transport/run registry boundary
+        run: node scripts/check-lesson-booking-full-preview-run-registry.mjs
       - name: Verify preview E2E execution gate is closed in CI
         run: node scripts/lesson-booking-preview-e2e.mjs
       - name: Verify provider-write preview E2E gate is closed in CI
@@ -184,5 +192,6 @@ jobs:
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_provider_rehearsal_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_provider_rehearsal_readiness_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_observer_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_run_registry_scenarios.sql
       - name: Build application
         run: npm run build

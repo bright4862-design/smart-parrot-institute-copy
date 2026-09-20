@@ -41,14 +41,32 @@ expect(
 expect(auth.includes('.auth.signInWithOtp('), 'Booking auth provider must use Supabase magic-link auth.');
 expect(auth.includes('.auth.signOut()'), 'Booking auth provider must expose Supabase sign-out.');
 
+const availabilityStart = api.indexOf('export async function listAvailableLessonSlots');
+const nextExportAfterAvailability = api.indexOf('export async function', availabilityStart + 1);
+const availabilityAdapter = availabilityStart >= 0
+  ? api.slice(availabilityStart, nextExportAfterAvailability >= 0 ? nextExportAfterAvailability : api.length)
+  : '';
 expect(
-  api.includes("client.rpc('available_slots'"),
+  availabilityAdapter.includes("client.rpc('available_slots'"),
   'Availability adapter must call only the available_slots RPC.',
 );
 for (const forbiddenMutation of ['.insert(', '.update(', '.upsert(', '.delete(', '.functions.invoke(', 'stripe']) {
   expect(
-    !api.toLowerCase().includes(forbiddenMutation.toLowerCase()),
+    !availabilityAdapter.toLowerCase().includes(forbiddenMutation.toLowerCase()),
     `Availability adapter must remain read-only; found ${forbiddenMutation}.`,
+  );
+}
+
+const cancellationStart = api.indexOf('export async function requestBookingCancellation');
+const cancellationAdapter = cancellationStart >= 0 ? api.slice(cancellationStart) : '';
+expect(
+  cancellationAdapter.includes("client.functions.invoke('cancel-booking'"),
+  'Authenticated cancellation may only cross the browser boundary through cancel-booking.',
+);
+for (const forbiddenField of ['amount_cents:', 'requested_at:', 'policy_version_id:', 'payment_action:', 'stripe_']) {
+  expect(
+    !cancellationAdapter.toLowerCase().includes(forbiddenField.toLowerCase()),
+    `Cancellation browser adapter must not author ${forbiddenField}`,
   );
 }
 
@@ -99,4 +117,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Lesson booking browser boundary passed (${sourceFiles.length} browser source files scanned).`);
+console.log(`Lesson booking browser boundary passed (${sourceFiles.length} browser source files scanned; availability remains read-only and authenticated cancellation sends no money/time/policy authority).`);

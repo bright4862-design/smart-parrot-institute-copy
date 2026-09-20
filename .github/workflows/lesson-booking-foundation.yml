@@ -47,18 +47,6 @@ jobs:
   foundation-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -70,10 +58,12 @@ jobs:
           deno-version: v2.x
       - name: Install dependencies
         run: npm install
-      - name: Install Postgres client
+      - name: Start ephemeral PostgreSQL
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+          sudo -u postgres pg_isready
       - name: Typecheck Phase 2 Edge Functions
         run: >-
           deno check --node-modules-dir=none
@@ -96,17 +86,15 @@ jobs:
       - name: Verify settlement boundary
         run: node scripts/check-lesson-booking-settlement-boundary.mjs
       - name: Execute migrations + settlement behavior scenarios
-        env:
-          PGPASSWORD: postgres
         run: |
           set -euo pipefail
-          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/tests/bootstrap_minimal_supabase.sql
           for migration in supabase/migrations/*.sql; do
             echo "Applying ${migration}"
-            psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f "${migration}"
+            sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f "${migration}"
           done
-          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/tests/lesson_booking_settlement_scenarios.sql
       - name: Build application
         run: npm run build

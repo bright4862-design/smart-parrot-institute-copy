@@ -9,6 +9,7 @@ import AppLayout from '@/components/layout/AppLayout';
 
 const Learn = lazy(() => import('@/pages/Learn'));
 const LessonPage = lazy(() => import('@/pages/LessonPage'));
+const LessonBooking = lazy(() => import('@/pages/LessonBooking'));
 const Leaderboard = lazy(() => import('@/pages/Leaderboard'));
 const Profile = lazy(() => import('@/pages/Profile'));
 const LondonMission = lazy(() => import('@/pages/LondonMission'));
@@ -47,6 +48,7 @@ const AuthenticatedApp = () => {
           <Route path="/profile" element={<Profile />} />
         </Route>
         <Route path="/lesson/:id" element={<LessonPage />} />
+        <Route path="/book-lessons" element={<LessonBooking />} />
         <Route path="/london" element={<LondonMission />} />
         <Route path="/heathrow-mission" element={<LondonMission />} />
         <Route path="/adventure-prototype" element={<AdventurePrototype />} />

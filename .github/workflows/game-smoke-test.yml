@@ -39,7 +39,8 @@ jobs:
             const errors = [];
             const isExpectedLocalBase44Error = (text) =>
               text.includes('[Base44 SDK Error] 404') ||
-              text.includes('Failed to load resource: the server responded with a status of 404');
+              text.includes('Failed to load resource: the server responded with a status of 404') ||
+              (text.includes('HTTPException') && text.includes('App not found'));
 
             page.on('console', msg => {
               if (msg.type() === 'error' && !isExpectedLocalBase44Error(msg.text())) errors.push(msg.text());

@@ -8,19 +8,20 @@ Last updated: 2026-09-20
 - Working branch: `agent/lesson-booking-blueprint`.
 - Draft PR: #16.
 - Default branch refreshed at the start of this run: `main` at `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
-- Engineering checkpoint for this run: `c49da882fbe625049e0f9d75bdc2df373159d27f`.
-- `main` remains untouched. Nothing from this branch has been merged, deployed, published, or applied to a live Supabase, Stripe, Daily, Base44, cron, or email environment.
-- Stripe execution remains repository-locked to test/sandbox credentials and objects. Live Stripe credentials/objects remain inadmissible.
+- Verified Phase 4C5E engineering checkpoint: `29bc71b87eee0b3bd7ec02e959f2f4f94ca06abe`.
+- `main` remains untouched. Nothing has been merged or published to Base44/production.
+- The approved Supabase PREVIEW/TEST project is `mrzzbhqzxshtbqvxkcjn` (`eu-west-1`, `https://mrzzbhqzxshtbqvxkcjn.supabase.co`). It is not production.
+- Stripe execution remains locked to test/sandbox credentials and objects. Live Stripe credentials/objects are inadmissible.
 - Marketplace / Stripe Connect remains out of scope until the single-school path is stable.
 
 ## Architecture lock
 
 - Base44/React is the application shell.
-- Supabase Postgres/Auth/RLS/Edge Functions/Cron is authoritative for booking, identity, policy, evidence, time, payment state, cancellation, settlement, compliance, retention governance, provider-rehearsal readiness, and operations state.
-- Browser time, identity, attendance time, tutor/price/policy fields, cancellation fees, payment transitions, compliance delivery, provider dispute state, retention decisions, provider-environment identity, provider-rehearsal readiness, and admin evidence decisions are never authoritative.
+- Supabase Postgres/Auth/RLS/Edge Functions/Cron is authoritative for booking, identity, policy, evidence, time, payment state, cancellation, settlement, compliance, retention governance, provider-rehearsal readiness, and preview-run continuation state.
+- Browser time, identity, attendance time, tutor/price/policy fields, cancellation fees, payment transitions, provider state, retention decisions, and preview checkpoints are never authoritative.
 - Stripe uses hold-before/capture-after. Near-term lessons authorize at Checkout; later lessons save a payment method and a secret-authenticated worker authorizes when due.
 - Daily supplies online attendance evidence. Rooms are private and booking-scoped; signed provider/server evidence remains separate from browser state.
-- Preview/test orchestration must reuse the real authoritative server boundaries. A preview driver is not allowed to recreate payment, attendance, settlement, or time logic in the browser or in an independent provider script.
+- Preview/test orchestration must reuse the real authoritative server boundaries. The driver may coordinate approved endpoints but may not recreate payment, attendance, settlement, or time logic client-side.
 
 ## Completed phases
 
@@ -28,129 +29,149 @@ Last updated: 2026-09-20
 - **Phase 1A–1C:** atomic booking/consent, Stripe test-only Checkout + manual authorization, deferred off-session holds, failed-hold evidence and customer-present recovery.
 - **Phase 2A–2B:** signed/replay-safe Daily/server attendance evidence and deterministic test-only settlement/capture/release.
 - **Phase 3A–3B:** server-authoritative cancellation/withdrawal foundation, compliance acknowledgement outbox, My Lessons UX, immutable policy view, retry/dead-letter handling.
-- **Phase 4A–4C3:** admin review/evidence operations, test-only dispute intake, out-of-order dispute hardening, launch health/readiness, retention/legal-hold controls, preview-project identity protection, and provider-write-disabled preview E2E gate.
-- **Phase 4C4:** separate provider identity/readiness checks, disposable test-provider rehearsal with deterministic cleanup, and audited retention-duration approval/revocation hooks.
-- **Phase 4C5A:** append-only preview-rehearsal evidence registry, cleanup-reconciliation signals, reviewed retention approval/revocation UI, and launch-health rehearsal signals.
-- **Phase 4C5B1:** server-authoritative recent-rehearsal readiness and minimized admin rehearsal history, including fail-closed stale/failed/latest-run and unresolved-cleanup gates.
-- **Phase 4C5B2:** authenticated operator rehearsal history/reconciliation UX plus a separately gated, read-only full-preview-path preflight.
-- **Phase 4C5C:** repository-only full-preview driver contract, scenario matrix, fail-closed execution gate, and append-only test-evidence/cleanup lifecycle contract.
-- **Phase 4C5D (current checkpoint):** still-disabled preview execution shell, disposable fixture namespace, and minimized server-authoritative evidence observer.
+- **Phase 4A–4C4:** admin review/evidence operations, test-only dispute intake, launch health/readiness, retention/legal-hold controls, preview identity protection, provider staging and reviewed retention approval hooks.
+- **Phase 4C5A–4C5D:** append-only provider-rehearsal evidence, rehearsal readiness/history, operator preflight, full-preview contract, disabled execution shell, disposable fixture namespace, and minimized authoritative booking observer.
+- **Phase 4C5E (current checkpoint):** approved Supabase preview transport contract + durable server-authoritative full-preview run/checkpoint registry.
 
-## Phase 4C5D — disabled preview execution shell + authoritative evidence observer — complete in repository, not deployed
+## Phase 4C5E — approved preview transport + durable continuation — complete
 
-Verified engineering checkpoint: `c49da882fbe625049e0f9d75bdc2df373159d27f`.
+Verified engineering checkpoint: `29bc71b87eee0b3bd7ec02e959f2f4f94ca06abe`.
 
 ### Implemented
 
-- Added `supabase/migrations/20260920210500_lesson_booking_phase4c5d_preview_observer.sql` with admin-only `admin_observe_booking_preview_run(...)`.
-  - It reads the authoritative booking row plus consent, ledger, attendance, and settlement evidence.
-  - It returns only minimized statuses, booleans, timestamps, and counts needed to drive the preview state machine.
-  - It does **not** return Stripe Customer/PaymentMethod/PaymentIntent/Checkout/SetupIntent IDs, Daily room names, webhook IDs, raw webhook/provider payloads, secrets, IP addresses, user agents, card details, or evidence hashes.
-  - Authorization is server-side via the existing `private.smart_parrot_require_admin(auth.uid())` boundary.
-- Added `scripts/lesson-booking-full-preview-observer.mjs`.
-  - It validates an allowlisted observer schema and rejects unknown or provider-sensitive fields.
-  - It fail-closes on unsupported schema versions, invalid booking IDs/statuses, invalid counts/booleans, or invalid timestamps.
-- Added `scripts/lesson-booking-full-preview-execution-shell.mjs`.
-  - It consumes the Phase 4C5C run contract and adds a second explicit shell gate: `SMART_PARROT_FULL_PREVIEW_SHELL_ENABLED=1`.
-  - It can address only an allowlisted set of existing authoritative server operations: `create-booking`, the admin observer RPC, `place-holds`, `fix-payment`, `settle-lessons`, and the existing cleanup-reconciliation RPC.
-  - It contains no direct Stripe API URL, PaymentIntent creation/capture primitive, Daily API URL, room API call, or attendance mutation.
-  - When invoked directly in CI it remains inert. Even if both preview gates are set, no network transport is auto-configured; an approved preview adapter is still required before execution.
-- Added deterministic disposable fixture namespacing (`sp-preview-*`) for run/student/tutor/lesson/room references without customer PII.
-- Added server-state progress classification:
-  - `pending_checkout` pauses for Checkout/customer action rather than faking completion;
-  - `card_saved` routes to the existing deferred-hold worker;
-  - `hold_failed` pauses for the existing customer-present `fix-payment` recovery;
-  - `hold_placed` waits for authoritative attendance evidence and server time;
-  - `awaiting_settlement` routes to the existing settlement worker;
-  - `settled` is terminal.
-- Duplicate reservation attempts deliberately reuse the same full-preview run UUID as the existing booking `request_id`, so the existing reservation/Checkout idempotency boundary remains the source of truth rather than a second client-side lock.
-- Cleanup ambiguity still becomes reconciliation work. The shell explicitly forbids blind/automatic provider retry after an ambiguous Daily-room cleanup outcome.
-- Added `scripts/check-lesson-booking-full-preview-execution-shell.mjs` covering:
-  - closed shell gate and production-project refusal;
-  - duplicate execution request identity;
-  - SCA/customer-action pause;
-  - deferred-hold and failed-hold recovery routing;
-  - attendance and settlement state progression;
-  - settlement server-operation allowlisting;
-  - rejection of direct Stripe capture/provider-write primitives;
-  - minimized observer field enforcement;
-  - cleanup ambiguity/reconciliation behavior.
-- Added executable PostgreSQL scenario `supabase/tests/lesson_booking_full_preview_observer_scenarios.sql`.
-  - It seeds deliberately sensitive Stripe IDs, Checkout IDs, IP/user-agent data, raw Daily evidence, and notes in an ephemeral transaction.
-  - The admin observer must return the correct minimized counts/statuses while proving none of those sensitive values escape.
-  - A non-admin observer call must fail with insufficient privilege.
-- Updated `.github/workflows/lesson-booking-foundation.yml` to run the Phase 4C5D static regression, verify the execution-shell gate remains closed, apply the new migration, and execute the new PostgreSQL observer scenario.
+- Added `supabase/migrations/20260920221000_lesson_booking_phase4c5e_preview_run_registry.sql`.
+  - Added server-only `lesson_booking_full_preview_runs` keyed by the immutable run UUID, with optional unique booking binding, bounded scenario/state/pause values, monotonic revision, server observation time, and terminal state.
+  - Added append-only `lesson_booking_full_preview_run_checkpoints` keyed by `(run_id, revision)`.
+  - Both tables are RLS-enabled with direct `anon` / `authenticated` table access revoked. They are intentionally server/RPC-only; the Supabase `rls_enabled_no_policy` advisor notice is expected for this boundary.
+  - No Stripe object ID, payment method, Checkout ID, Daily room name, raw provider payload, webhook secret, IP, user-agent, card detail, or evidence hash is stored in the run registry.
+  - Added admin-only, `SECURITY DEFINER`, empty-search-path RPCs:
+    - `admin_begin_booking_full_preview_run(...)` — idempotent run creation; conflicting scenario reuse fails closed.
+    - `admin_bind_booking_full_preview_run(...)` — binds only a booking whose authoritative `bookings.client_request_id` exactly equals the run UUID; conflicting/ambiguous booking bindings fail closed.
+    - `admin_refresh_booking_full_preview_run(...)` — derives the next minimized checkpoint from authoritative booking state, attendance evidence, and server time. Browser-supplied state cannot advance a run.
+  - Repeated unchanged refreshes are replay-safe and do not append duplicate checkpoints. Real state transitions increment the revision and append a checkpoint.
+  - Terminal `settled`/`cancelled` states cannot regress through the preview registry.
+- Hardened existing append-only trigger helper `public.forbid_change()` by pinning `search_path=''`. The function only raises an exception and references no schema objects, so this is behavior-preserving and directly addresses the Supabase mutable-search-path advisor warning rather than silencing it.
+- Added `scripts/lesson-booking-full-preview-run-registry.mjs`.
+  - Strict allowlist validator for minimized run snapshots.
+  - Unknown/provider-sensitive fields, bad UUIDs, invalid revisions, malformed timestamps, and terminal/completion inconsistencies fail closed.
+- Added `scripts/lesson-booking-full-preview-supabase-transport.mjs`.
+  - Hard-locks network identity to the approved Smart Parrot preview project ref `mrzzbhqzxshtbqvxkcjn` and exact Supabase URL.
+  - Maps existing operation classes to the correct Supabase surfaces without embedding provider credentials:
+    - `student_user` → Edge Function with `sb_publishable_...` + short-lived student JWT;
+    - `admin_rpc` → PostgREST RPC with `sb_publishable_...` + short-lived admin JWT;
+    - `secret_worker` → Edge Function with backend `sb_secret_...` on `apikey` and no secret-as-user-JWT shortcut.
+  - Target/auth mismatches and unapproved targets fail closed. Stripe/Daily webhook endpoints are not invokable through this adapter.
+  - The module is inert when executed directly; it does not auto-load or send credentials.
+- Extended `scripts/lesson-booking-full-preview-execution-shell.mjs`.
+  - Reservation now begins a durable run, calls the existing `create-booking` boundary using the same run UUID as `request_id`, then binds the returned booking to the run and validates the server snapshot.
+  - Added server-authoritative `refreshRun({runId})`; continuation no longer depends on a browser-local checkpoint.
+  - Existing payment/attendance/settlement operations remain delegated to their authoritative Edge Functions. The shell still contains no Stripe PaymentIntent creation/capture or Daily room mutation primitive.
+- Added regressions in `scripts/check-lesson-booking-full-preview-run-registry.mjs` and extended the Phase 4C5D shell regression.
+  - Exact approved project identity is enforced.
+  - Student/admin/secret auth classes are mapped separately and tested.
+  - Secret worker credentials are never sent as a bearer user token.
+  - Duplicate reservation attempts reuse the same run/request identity.
+  - Direct webhook/unauthorized target calls fail closed.
+  - Provider-sensitive fields are rejected from the durable registry contract.
+- Added executable PostgreSQL scenario `supabase/tests/lesson_booking_full_preview_run_registry_scenarios.sql`.
+  - Tests run creation/replay, conflicting scenario rejection, booking/request identity mismatch rejection, pending Checkout, deferred hold, failed-hold recovery, attendance wait, in-progress lesson, settlement wait, terminal completion, stable terminal replay, append-only revision count, search-path hardening, and non-admin denial.
+- Updated `.github/workflows/lesson-booking-foundation.yml` so every booking build now runs the 4C5E transport/registry regression and PostgreSQL scenario.
 
 ### Verification
 
-All exact-head workflows passed on engineering SHA `c49da882fbe625049e0f9d75bdc2df373159d27f`:
+- `Lesson booking foundation` run **#160** passed on exact engineering SHA `29bc71b87eee0b3bd7ec02e959f2f4f94ca06abe`.
+  - Phase 4C5E JS transport/run-registry regression passed.
+  - All prior booking/payment/security regressions passed.
+  - All preview/provider/full-path execution gates remained closed in normal CI.
+  - Every migration and PostgreSQL booking scenario, including the new 4C5E registry scenario, passed.
+  - Edge Function Deno checks and the Vite production build passed.
+- The Phase 4C5E migration was first transactionally dry-run against the approved Supabase preview project and rolled back successfully.
+- After CI passed, `lesson_booking_phase4c5e_preview_run_registry` was applied successfully to preview project `mrzzbhqzxshtbqvxkcjn` as migration version `20260920202213`.
+- Post-apply catalog verification confirms:
+  - both new tables exist with RLS enabled and zero preview rows;
+  - all three new RPCs are `SECURITY DEFINER` with an empty `search_path`;
+  - `public.forbid_change()` now has an empty `search_path`.
+- A second attempt to run the full CI fixture directly through the Supabase connector was stopped by the connector database role's lack of write permission on the `auth` schema. This did **not** alter preview data; the same scenario already passed in ephemeral PostgreSQL CI. No production/provider write was attempted.
 
-- `Lesson booking foundation` run **#158** — passed. The Phase 4C5D execution-shell/minimized-observer regression passed, all earlier booking/payment/security regressions passed, all preview/provider/full-path gates remained closed in CI, every migration and PostgreSQL booking scenario including the new observer scenario passed, Deno checks passed, and the Vite build passed.
-- `Heathrow Piccadilly Compatibility` run **#195** — passed.
-- `Game Smoke Test` run **#265** — passed.
+## Supabase advisor review after Phase 4C5E
 
-No provider credentials were supplied to CI and no provider-writing full-preview journey ran.
+Security advisor was rerun after applying the migration:
 
-## Research refreshed for Phase 4C5D on 2026-09-20
+- The previous mutable-search-path warning for `public.forbid_change` is gone.
+- `btree_gist` remains in `public`; this is unchanged and should be handled only with a dedicated extension-move compatibility test, not by blind relocation.
+- RLS-with-no-policy notices remain for server-only tables, including the two new preview registry tables. These are intentional because direct client table privileges are revoked and access is via guarded admin RPCs.
+- Supabase flags authenticated-callable `SECURITY DEFINER` RPCs, including the three new admin RPCs. That is intentional for the current API shape: each new RPC immediately calls `private.smart_parrot_require_admin(auth.uid())`, has an empty `search_path`, and has executable access granted only so authenticated admins can reach the server-side role check. Non-admin denial is covered by the SQL scenario.
+
+Performance advisor was also rerun:
+
+- Unindexed-FK notices remain, including three on the new registry (`created_by`, checkpoint `booking_id`, checkpoint `recorded_by`). No indexes were added blindly because the current continuation path is keyed by run PK / unique booking binding and there is no query evidence that those FK-side indexes are needed yet.
+- Existing unused-index notices are expected in a nearly empty preview database and are not evidence that launch-critical indexes should be removed.
+
+Advisor references:
+- https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
+- https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public
+- https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
+- https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys
+
+## Research refreshed for Phase 4C5E on 2026-09-20
 
 ### Stripe
 
-- Stripe's current idempotency guidance continues to support idempotency keys on POST requests so retry-safe server operations do not accidentally duplicate provider mutations. The preview shell therefore keeps the existing server-owned booking/Checkout/settlement idempotency keys rather than creating a second money-transition implementation.
-- Manual authorization/capture remains the correct hold primitive for near-term bookings, and the real authorization `capture_before` evidence must remain authoritative rather than assuming a universal fixed hold lifetime.
-- Test/sandbox credentials and objects remain mandatory for preview execution.
+- Stripe's current idempotency guidance supports idempotency keys on POST mutations; the full-preview run UUID continues to anchor the existing booking idempotency instead of inventing a second money state machine.
+- Manual capture remains the correct hold primitive. The real provider `capture_before` deadline remains authoritative because authorization windows vary.
+- Preview execution remains sandbox/test only; no live key or live object is admissible.
 - References: https://docs.stripe.com/api/idempotent_requests , https://docs.stripe.com/payments/place-a-hold-on-a-payment-method , https://docs.stripe.com/testing
 
 ### Supabase
 
-- Current Edge Function guidance distinguishes authenticated user calls (`auth: 'user'`), secret-authenticated service/worker calls (`auth: 'secret'`), and unauthenticated entry points for independently signed webhooks (`auth: 'none'`). The new shell preserves those existing function boundaries instead of bypassing them.
-- Publishable keys remain suitable for browser/client use only with RLS; secret keys bypass RLS and must remain controlled backend credentials. Hosted functions expose deployment identity through `DENO_DEPLOYMENT_ID`, which remains part of preview-project identity protection.
-- Supabase continues its 2026 migration from legacy `anon`/`service_role` keys toward `sb_publishable_...`/`sb_secret_...` keys.
-- References: https://supabase.com/docs/guides/functions/auth , https://supabase.com/docs/guides/functions/secrets , https://supabase.com/docs/guides/getting-started/api-keys , https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys
+- Current Edge Function authentication guidance keeps user JWT, backend secret-key, and independently signed webhook entry points separate. The new transport adapter preserves those classes rather than reusing one credential everywhere.
+- Publishable keys are client-safe only with RLS/least privilege; `sb_secret_...` keys are backend-only and bypass RLS. The adapter therefore never exposes the backend secret to the browser contract.
+- Supabase's current scheduling guidance uses Cron/pg_net with secrets kept outside client code; the existing worker boundaries remain the place to add preview scheduling once provider credentials are present.
+- References: https://supabase.com/docs/guides/functions/auth , https://supabase.com/docs/guides/functions/secrets , https://supabase.com/docs/guides/getting-started/api-keys , https://supabase.com/docs/guides/functions/schedule-functions
 
 ### Daily
 
-- Daily webhook evidence includes a provider event ID/timestamp and signed webhook configuration; provider event identity remains useful for replay-safe evidence while the HMAC stays secret and out of browser/operator surfaces.
-- Disposable preview rooms may be deleted by an authenticated server operation, but an unknown delete outcome must be reconciled rather than blindly retried as if no public/provider-side mutation occurred.
-- References: https://docs.daily.co/reference/rest-api/webhooks/get-webhook , https://docs.daily.co/reference/rest-api/rooms/delete-room , https://docs.daily.co/reference/webhooks/events
+- Daily's current REST/webhook model continues to support server-authenticated disposable rooms plus signed webhook evidence. Unknown provider cleanup outcomes remain reconciliation work rather than a reason for blind automatic retries.
+- References: https://docs.daily.co/reference/rest-api/rooms/delete-room , https://docs.daily.co/reference/rest-api/webhooks/get-webhook , https://docs.daily.co/reference/webhooks/events
 
 ### Base44
 
-- Base44 remains the frontend/application shell. Sensitive secrets, external-provider calls, and authoritative business logic stay server-side; browser-facing permissions stay least-privilege.
-- Reference: https://base44.com/developers
+- Base44 remains the browser/application shell. The Supabase transport contract deliberately keeps backend secrets and provider mutations outside the Base44 browser bundle.
+- Reference: https://docs.base44.com/
 
 ### France/EU / CNIL
 
-- CNIL guidance updated in April 2026 continues to require purpose-based, non-indefinite retention and data minimisation. Logging/evidence should be targeted to the operational/legal purpose rather than collected wholesale.
-- The new observer therefore exposes only the minimum state/count information necessary to operate a preview run and keeps raw/provider identifiers out of that surface.
-- No French booking/payment retention duration has been guessed or hard-coded; reviewed retention classes and legal holds remain the launch authority.
+- CNIL's 2026 retention guidance continues to require purpose-based, non-indefinite retention and data minimisation.
+- The durable preview registry therefore stores operational state only and deliberately excludes raw Stripe/Daily payloads and customer/payment identifiers.
+- No legal retention period or French consumer-law wording has been guessed; reviewed retention classes and approved legal copy remain separate launch gates.
 - References: https://www.cnil.fr/fr/passer-laction/les-durees-de-conservation-des-donnees , https://www.cnil.fr/fr/securite-tracer-les-operations , https://www.cnil.fr/fr/minimiser-les-donnees-collectees
 
 ## Next coherent slice
 
-**Phase 4C5E — approved-preview transport contract + durable run checkpointing:**
+**Phase 4C5F — resumable preview executor + credential/readiness handoff:**
 
-1. add a dedicated preview transport adapter contract that maps the shell's user/admin/secret operation classes to the approved Supabase preview endpoint without ever embedding provider credentials in the shell;
-2. add a server-authoritative full-preview run/checkpoint registry keyed by run UUID and booking ID, so repeated orchestration requests resume a known run instead of creating parallel bookings or trusting browser state;
-3. persist only minimized stage/checkpoint metadata, pause reasons, and reconciliation state — no raw provider payloads, payment-method IDs, card data, or webhook secrets;
-4. formalize continuation behavior for customer Checkout/SCA, failed-hold recovery, real attendance evidence, settlement replay, and terminal completion;
-5. add fail-closed regressions for conflicting run IDs/bookings, stale checkpoints, duplicate execution attempts, invalid project identity, and unauthorized transport classes;
-6. keep the adapter and run driver inert in normal CI and do not perform provider writes until the approved preview environment and test credentials are explicitly configured.
+1. build a repository-only resumable preview executor that composes the approved Supabase transport and durable run registry, and always resumes from server state rather than browser/local state;
+2. add explicit pause/resume envelopes for customer Checkout/SCA and failed-hold `fix-payment` so unattended automation cannot fake customer-present steps;
+3. add a fail-closed credential/readiness manifest that verifies only presence/class/preview identity — never logs credential values — for publishable key, short-lived student/admin sessions, backend `sb_secret_...`, Stripe test account/webhooks, and Daily preview identity;
+4. add a preview-safe worker invocation contract for hold/settlement cron calls without enabling provider writes in CI;
+5. add regressions for credential-class confusion, expired/missing auth sessions, duplicate resume, stale run revision, terminal replay, provider cleanup ambiguity, and live Stripe refusal;
+6. keep all provider-writing execution disabled until the missing Stripe/Daily TEST secrets are installed in Supabase preview and the user explicitly starts the real rehearsal.
 
 ## External configuration still needed for real provider rehearsal/E2E
 
-Repository engineering can continue without these, but the real provider integration cannot be exercised until a safe preview environment is explicitly configured:
+The Supabase preview project itself is now configured and migrated. Remaining external requirements are:
 
-- dedicated Smart Parrot Supabase preview/test project (or explicit approval of an existing safe project);
-- `SMART_PARROT_PREVIEW_PROJECT_REF`, preview `VITE_SUPABASE_URL`, browser `sb_publishable_...` key, and short-lived preview student/admin access paths;
-- modern backend `sb_secret_...` context stored only server-side/Vault;
-- explicit preview-only execution gates only in the approved preview project;
-- Stripe sandbox/test `STRIPE_SECRET_KEY`, expected Stripe test account ID, Checkout webhook signing secret, and separate dispute webhook signing secret;
-- Daily preview API key, webhook ID/domain identity, preview-only room prefix, webhook HMAC secret, and a test webhook delivery;
-- HTTPS `APP_URL` and public HTTPS `TERMS_OF_SERVICE_URL`;
+- browser `sb_publishable_...` key plus a safe short-lived preview student/admin authentication path for the executor;
+- backend `sb_secret_...` context available only to the approved preview executor/worker path;
+- Stripe **test-mode** `STRIPE_SECRET_KEY`, expected Stripe test account ID, Checkout webhook signing secret, and separate dispute webhook signing secret stored in Supabase preview Edge Function secrets;
+- Daily preview API key, webhook ID/domain identity, preview-only room prefix, webhook HMAC secret, and a successful signed test webhook delivery;
+- HTTPS `APP_URL=https://asmartparrot.com` and public HTTPS `TERMS_OF_SERVICE_URL` in the preview provider configuration;
 - real durable-medium delivery provider for consumer-law acknowledgements;
-- reviewed retention durations plus source authority/review reference for each mandatory class;
+- reviewed retention durations/source authority for each mandatory class;
 - before compliance launch: approved French consumer-law classification/copy and consumer mediator details.
+
+Connecting Stripe in Base44 alone does not satisfy the Supabase Edge Function secret requirements.
 
 ## Release status
 
-**NO DEPLOY / NO MERGE.** Phase 4C5D is repository-complete and verified at `c49da882fbe625049e0f9d75bdc2df373159d27f`. The execution shell is still inert and has no approved preview network transport. PR #16 remains intentionally draft and unmerged until preview/provider/legal gates are explicitly approved and verified.
+**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5E is engineering-complete at `29bc71b87eee0b3bd7ec02e959f2f4f94ca06abe`, CI-verified, and its bounded migration is installed only in the approved Supabase PREVIEW/TEST project. The approved transport contract exists but no Stripe/Daily provider-writing rehearsal was run because those test provider secrets are still absent. PR #16 remains intentionally draft and unmerged.

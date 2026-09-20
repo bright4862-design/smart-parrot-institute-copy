@@ -58,7 +58,7 @@ jobs:
         run: npm install
       - name: Typecheck booking Edge Functions
         run: >-
-          deno check
+          deno check --node-modules-dir=auto
           supabase/functions/create-booking/index.ts
           supabase/functions/fix-payment/index.ts
           supabase/functions/place-holds/index.ts

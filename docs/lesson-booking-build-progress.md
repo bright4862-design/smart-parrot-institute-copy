@@ -130,11 +130,11 @@ Key Phase 1A commits:
 
 ## CI status
 
-On engineering head `d54ee0228ff2b3939eb79dce9976f79e80acf27a`:
+On verified engineering/harness head `b87a0c3155a1be7059ccb70b5a41a3321accf64f`:
 
-- `Lesson booking foundation` run #46 passed dependency install, database invariant checks, browser/auth checks, reservation/consent checks, and the full Vite build.
-- `Heathrow Piccadilly Compatibility` run #126 passed.
-- The repository-wide game smoke harness previously failed because local Base44 emitted `HTTPException: App not found` while no Base44 app id is configured in CI. The harness was patched on this branch to ignore that specific expected local Base44 condition while still failing on other browser errors; its rerun was still in progress when this checkpoint was written.
+- `Lesson booking foundation` run #48 passed dependency install, database invariant checks, browser/auth checks, reservation/consent checks, and the full Vite build.
+- `Heathrow Piccadilly Compatibility` run #128 passed.
+- `Game Smoke Test` run #199 passed its desktop interaction and responsive-mobile checks. The harness now ignores only the expected local Base44 `App not found` noise when no Base44 app id is configured, exercises mobile resizing without reloading the full 3D scene, and uses Node 22 so the current dependency graph is within supported engine bounds.
 
 The SQL pgTAP suite is committed but still requires a booted local/test Supabase Postgres project before it can be executed. No existing connected Supabase project was repurposed because none can safely be identified as Smart Parrot.
 

@@ -24,6 +24,7 @@ on:
       - "scripts/check-lesson-booking-settlement-boundary.mjs"
       - "scripts/check-lesson-booking-cancellation-boundary.mjs"
       - "scripts/check-lesson-booking-compliance-ux-boundary.mjs"
+      - "scripts/check-lesson-booking-admin-ops-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -46,6 +47,7 @@ on:
       - "scripts/check-lesson-booking-settlement-boundary.mjs"
       - "scripts/check-lesson-booking-cancellation-boundary.mjs"
       - "scripts/check-lesson-booking-compliance-ux-boundary.mjs"
+      - "scripts/check-lesson-booking-admin-ops-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 
 permissions:
@@ -98,6 +100,8 @@ jobs:
         run: node scripts/check-lesson-booking-cancellation-boundary.mjs
       - name: Verify Phase 3B compliance/UX boundary
         run: node scripts/check-lesson-booking-compliance-ux-boundary.mjs
+      - name: Verify Phase 4A admin operations boundary
+        run: node scripts/check-lesson-booking-admin-ops-boundary.mjs
       - name: Execute migrations + booking behavior scenarios
         run: |
           set -euo pipefail
@@ -113,5 +117,7 @@ jobs:
             -f supabase/tests/lesson_booking_cancellation_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/tests/lesson_booking_compliance_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/tests/lesson_booking_admin_ops_scenarios.sql
       - name: Build application
         run: npm run build

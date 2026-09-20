@@ -16,26 +16,25 @@ The default branch remains untouched. This work does not deploy, publish, config
 
 - Default branch: `main`
 - Current `main`: `210345bbe09bc46c468fb6a7e0eee0596e8d902b`
-- Booking branch is ahead of `main` and not behind it.
-- Other open PRs remain #10 (Piccadilly platform foundation) and #11 (release hardening); both are drafts and unrelated to lesson booking.
-- The booking branch continues to use its own narrow CI workflow and remains isolated from production.
+- Booking branch remains ahead of `main` and not behind it.
+- Draft PR #16 remains open and mergeable.
+- Other open booking-unrelated draft work is left untouched.
+- The booking branch continues to use its own CI workflow and remains isolated from production.
 
 ## Research checkpoint
 
-Official documentation checked on 2026-09-20 before Phase 0B:
+Official/current references checked on 2026-09-20:
 
-- Supabase RLS: grants and policies must both be least-privilege; RLS should be enabled on exposed tables.
-  https://supabase.com/docs/guides/database/postgres/row-level-security
-- Supabase Database Functions: prefer SECURITY INVOKER; when SECURITY DEFINER is required, pin `search_path` and schema-qualify relations. Function execution privileges should be explicitly revoked/granted.
-  https://supabase.com/docs/guides/database/functions
-- Supabase Auth user management: profile rows can be populated from an `auth.users` trigger, and trigger code must be tested because a failed trigger can block signups.
-  https://supabase.com/docs/guides/auth/managing-user-data
-- Supabase schemas/API security: custom schemas such as `private` are not reachable through the Data API unless explicitly exposed; internal helpers should stay outside the exposed API surface.
-  https://supabase.com/docs/guides/database/tables
-  https://supabase.com/docs/guides/api/securing-your-api
-- Supabase frontend security: browser code should use a publishable key with RLS; secret/service-role keys must never be exposed in the frontend.
-  https://supabase.com/docs/guides/database/secure-data
-- Stripe manual capture remains the planned payment model for Phase 1: authorization now, deterministic partial capture later, with `capture_before` treated as the authoritative authorization deadline.
+- Supabase API keys: browser code should use a publishable key; secret/service-role keys must stay server-side. Supabase is deprecating legacy anon/service-role keys by the end of 2026.
+  https://supabase.com/docs/guides/getting-started/api-keys
+- Supabase Auth: the browser client persists sessions by default; `getSession()` initializes the current session and `onAuthStateChange()` keeps UI state synchronized.
+  https://supabase.com/docs/reference/javascript/auth-getsession
+  https://supabase.com/docs/reference/javascript/auth-onauthstatechange
+- Supabase Auth client initialization automatically handles redirect-based auth flows such as magic links when URL session detection is enabled.
+  https://supabase.com/docs/reference/javascript/auth-initialize
+- Current `@supabase/supabase-js` is newer than the repository's Node 20 smoke-test runtime. Supabase states Node 20 support ended after `2.109.0`, so this branch pins `2.109.0` instead of taking a newer incompatible SDK while the existing smoke workflow remains on Node 20.
+  https://www.npmjs.com/package/@supabase/supabase-js
+- Stripe manual capture remains the planned Phase 1 payment model; no Stripe secret, PaymentIntent creation, or capture path is added in Phase 0C.
   https://docs.stripe.com/payments/place-a-hold-on-a-payment-method
 
 Daily/video attendance and French/EU withdrawal implementation are later phases and were not changed in this run.
@@ -93,7 +92,7 @@ Tests/verification were strengthened:
 - Added checks that the generic Auth trigger is gone and the project-specific trigger exists.
 - Added checks that the privileged Auth helper and slot helper live in `private`.
 - Added checks that the public slot RPC is `SECURITY INVOKER` and executable by `anon`/`authenticated`.
-- Repository invariant checker now validates both migrations and the Phase 0B security boundary.
+- Repository invariant checker validates both migrations and the Phase 0B security boundary.
 
 ### Phase 0B checkpoint commits
 
@@ -101,30 +100,92 @@ Tests/verification were strengthened:
 - pgTAP extension: `8ebed74b45fe07e3bcbe3f7c65daaad7c24336ed`
 - Repository contract extension: `ef7b35c06a282d2b48f901bc151ffbe4cd9bd590`
 
+## Completed slice: Phase 0C — browser-safe Supabase/Auth boundary
+
+Added a booking-only browser integration without replacing or weakening the existing Base44 auth used by the rest of Smart Parrot.
+
+### Browser client
+
+- Added `@supabase/supabase-js` pinned to `2.109.0` for compatibility with the repository's existing Node 20 smoke workflow.
+- Added `src/lib/lessonBookingSupabase.js`.
+- Reads only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- Fails closed if the key is missing or does not use the modern `sb_publishable_` format.
+- Allows HTTPS hosted projects and localhost/127.0.0.1 HTTP only for local development.
+- Enables session persistence, token refresh, and redirect-session detection.
+- Does not expose a secret/service-role key path in browser code.
+
+### Booking-only Supabase Auth
+
+- Added `src/lib/LessonBookingAuthContext.jsx`.
+- Initializes from `supabase.auth.getSession()`.
+- Subscribes to `supabase.auth.onAuthStateChange()` and unsubscribes on teardown.
+- Supports email magic-link sign-in via `signInWithOtp()` and Supabase sign-out.
+- The provider is mounted only inside the `/book-lessons` subtree; the existing Base44 `AuthProvider` remains unchanged for all pre-existing app routes.
+
+### Read-only availability adapter + preview route
+
+- Added `src/lib/lessonBookingApi.js`.
+- Validates lesson type UUID and date range before calling `rpc('available_slots', ...)`.
+- Enforces the same 31-day maximum request window as the database.
+- Contains no insert/update/upsert/delete, Edge Function invocation, Stripe, booking creation, or payment logic.
+- Added `/book-lessons` as an isolated lazy-loaded preview route.
+- The route can show Supabase auth state and available slots but explicitly cannot create a booking or charge a card.
+- If preview Supabase environment variables are absent, the route fails closed with a configuration message instead of affecting the existing application.
+
+### Regression guard and CI
+
+Added `scripts/check-lesson-booking-browser-boundary.mjs`.
+
+It verifies:
+
+- the Supabase SDK stays pinned to the Node-20-compatible version while the smoke workflow remains on Node 20;
+- only the publishable Vite environment variables are used in the browser client;
+- session initialization, auth-state subscription, magic-link auth, and sign-out remain present;
+- the availability adapter remains read-only and calls only `available_slots`;
+- the `/book-lessons` route remains isolated from existing Base44 auth behavior;
+- all `src/**/*.{js,jsx,ts,tsx}` files are scanned for browser references to `sb_secret_`, `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, or `VITE_*SECRET/SERVICE_ROLE*` credentials.
+
+The `Lesson booking foundation` workflow now installs dependencies, runs both booking contract checkers, and builds the complete Vite application on Node 22. Run #18 passed all of those steps on branch head `1ee7946c66339aa370a6c7ecfd3c86167a5ef9fc`.
+
+### Phase 0C checkpoint commits
+
+- Supabase SDK dependency: `f3e7dd2f694af8cd77ccc0f56752e496f1d2e523`
+- Browser-safe Supabase client: `5f934f3a5a0eb45e3cd11d49554f01449e0a594d`
+- Booking-only auth provider: `cb6dd2e6b4b677d1489f8cb1447c520af9b757be`
+- Read-only availability adapter: `925deb6ab6fa82938442d9932f2ce6833199e6a2`
+- Isolated booking preview page: `8ba61af34ac57a590d109d4b4681cb939299f534`
+- Booking route wiring: `9bf7f74783a0fd877aec2ce4c3cf5bbf6b6d6d32`
+- Browser security regression guard: `27560a6ae87f8f3a61a60e1e55af35c0cfaeb25d`
+- CI build + browser-boundary verification: `1ee7946c66339aa370a6c7ecfd3c86167a5ef9fc`
+
 ## Verification
 
-GitHub Actions `Lesson booking foundation` passed on branch head `ef7b35c06a282d2b48f901bc151ffbe4cd9bd590` (run #8). The job checked out the PR merge ref and successfully ran `node scripts/check-lesson-booking-foundation.mjs`.
+- `Lesson booking foundation` run #18: passed database invariant checker, browser/auth boundary checker, and full Vite build.
+- `Heathrow Piccadilly Compatibility` run #110 on the same head: passed.
+- Repository-wide `Game Smoke Test` is still monitored separately because it exercises the pre-existing Heathrow Playwright interaction path rather than booking functionality.
+- pgTAP remains committed but still needs execution against a booted local/test Supabase Postgres instance. No production Supabase project was touched.
 
-The repository-wide `Game Smoke Test` is unrelated to the booking SQL slice. A previous run on the booking PR timed out during the Heathrow Playwright keyboard interaction even though install/build/start all passed; the current run is being observed separately and does not indicate a booking-schema failure.
-
-The pgTAP suite is committed but still has not been executed against a booted local/test Supabase Postgres instance. No production Supabase project was touched.
+Connected Supabase inspection found projects named `fixlist-testlab`, `bright4862-design's Project` (inactive), and `community-agent`; none can safely be assumed to be Smart Parrot. No project was created or repurposed.
 
 ## Next coherent slice
 
-Phase 0C / Phase 1 entry:
+Phase 1A — server-authoritative booking creation and consent capture:
 
-1. Add the Supabase browser client using only `VITE_SUPABASE_URL` plus a publishable key environment variable; no secret key in frontend code.
-2. Add Supabase Auth session integration for the booking routes while leaving the existing Smart Parrot site behavior intact.
-3. Add a minimal booking-page data adapter that calls `available_slots` through `supabase.rpc` and contains no booking/payment mutation logic.
-4. Add tests that fail if secret/service-role credentials are referenced in browser code.
-5. After the browser/auth boundary is green, implement server-authoritative `create-booking`, consent capture, and the two Stripe Checkout paths with webhook idempotency before any capture path is enabled.
+1. Add a Supabase Edge Function for `create-booking` using authenticated Supabase identity and an elevated server client only inside the function.
+2. Re-read lesson type and latest policy server-side; never trust browser-provided prices, tutor id, duration, or policy version.
+3. Re-check `available_slots`/overlap protection at write time and convert exclusion violations into a stable `slot_taken` response.
+4. Persist the booking plus consent evidence before starting payment setup.
+5. Add idempotency so repeated browser submits cannot create duplicate bookings.
+6. Keep Stripe Checkout creation separate until the database booking/consent transaction has behavioral tests.
+7. After that boundary is green, add Stripe test-mode Checkout: manual-capture payment flow for lessons inside 48 hours and Setup mode for later lessons.
 
 ## Blockers requiring external configuration later
 
 Not blocking repository engineering yet:
 
-- Supabase test/preview project URL and publishable key.
-- Supabase backend secret key for Edge Functions, stored only as a secret.
+- A dedicated Smart Parrot Supabase preview/test project, or an explicit instruction naming which existing Supabase project is safe to use.
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in the preview environment.
+- Supabase backend secret key for Edge Functions, stored only as a server secret.
 - Stripe test-mode secret and webhook signing secret.
 - Daily test account/domain and webhook secret for attendance phase.
 - French consumer-law review and consumer mediator details before compliance launch.

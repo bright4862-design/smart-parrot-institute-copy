@@ -17,7 +17,7 @@ Last updated: 2026-09-20
 
 - Base44/React is the app shell.
 - Supabase Postgres/Auth/RLS/Edge Functions/Cron is authoritative for booking, identity, policy, evidence, time, payment state, cancellation, settlement, compliance, and operations state.
-- The browser may read explicitly safe data and invoke authenticated functions, but browser time, identity, attendance time, tutor/price/policy fields, cancellation fees, payment transitions, compliance delivery, provider dispute state, and admin evidence decisions are never authoritative.
+- The browser may read explicitly safe data and invoke authenticated functions, but browser time, identity, attendance time, tutor/price/policy fields, cancellation fees, payment transitions, compliance delivery, provider dispute state, retention decisions, and admin evidence decisions are never authoritative.
 - Stripe uses hold-before/capture-after. Near-term lessons authorize at Checkout; later lessons save the card and a secret-authenticated worker authorizes when due.
 - Daily provides online attendance evidence. Rooms are private and booking-scoped; server/provider evidence remains separate from browser state.
 
@@ -35,116 +35,131 @@ Last updated: 2026-09-20
 - **Phase 3B:** authenticated My Lessons cancellation/withdrawal UX, server-side action preview, explicit withdrawal declaration evidence, immutable versioned policy view, safe acknowledgement status, and leased delivery retries/dead-letter alerts.
 - **Phase 4A:** admin review queue, append-only operator/audit evidence, purpose-limited booking evidence export, admin-only authority checks, and no provider-dispute write.
 - **Phase 4B:** authenticated lesson-operations UI, leased case claiming/stale recovery, append-only notes, temporary alert acknowledgement/escalation, signed test-only Stripe dispute intake, minimized dispute correlation evidence, and DSAR/retention triage boundaries.
-- **Phase 4C (current checkpoint):** out-of-order Stripe dispute hardening plus launch-health metrics. Current dispute state is now refreshed from Stripe's test API rather than inferred from webhook order; terminal-state regressions fail closed into an operator reconciliation signal; old event-only service-role intake is revoked; pre-4C unmatched evidence remains visible as legacy refresh-required work; operator health exposes counts only.
+- **Phase 4C:** out-of-order Stripe dispute hardening plus launch-health metrics. Current dispute state is refreshed from Stripe's test API rather than inferred from webhook order; terminal-state regressions fail closed into an operator reconciliation signal; old event-only service-role intake is revoked; pre-4C unmatched evidence remains visible as legacy refresh-required work; operator health exposes counts only.
+- **Phase 4C2 (current checkpoint):** admin-only preview-readiness reporting, operations-UI launch health/readiness panels, a provider-write-disabled preview E2E gate, and configurable retention/legal-hold governance metadata with no automatic erasure.
 
-## Phase 4C — launch hardening — complete in repository, not deployed
+## Phase 4C2 — preview readiness + retention/legal-hold governance — complete in repository, not deployed
 
-Verified engineering checkpoint: `b8d632a44375520795de1eeb50bd8349daea7beb`.
-
-Primary implementation checkpoint: `199e0f115e3a6e25836ca9109dd19704e0f55ebc`.
-
-Compatibility follow-up: `b8d632a44375520795de1eeb50bd8349daea7beb`.
+Verified engineering checkpoint: `588bbac2b15198dd086c68df7cbb928ca94a3099`.
 
 ### Implemented
 
-- Added server-only `stripe_dispute_current_state` as a mutable operational projection while retaining `stripe_dispute_events` as the append-only evidence stream.
-- Updated the signed `stripe-dispute-webhook` so, after raw-body signature validation and live-event rejection, it retrieves the current dispute from Stripe using the repository's test-key-only Stripe client.
-- Added `record_stripe_dispute_event_v2(...)`, which stores the signed event evidence but updates operator current state only from the freshly retrieved Stripe dispute snapshot. Webhook arrival order and `event.created` do not define current state.
-- Revoked `service_role` execution of the Phase 4B event-only `record_stripe_dispute_event(...)` pathway so external dispute intake cannot bypass the provider refresh.
-- Provider snapshot updates are monotonic by server fetch time. Same-fetch conflicts are flagged for reconciliation rather than silently overwriting state.
-- Once the projected dispute is terminal (`warning_closed`, `won`, `lost`, or `prevented`), a later contradictory/non-terminal snapshot does not downgrade it. The projection remains terminal and sets `needs_reconciliation=true` for operator review.
-- Booking correlation prefers payment identifiers from the freshly retrieved provider object. Existing server-owned booking/ledger evidence remains the authority for the booking link.
-- Dispute-open/dispute-close ledger evidence uses explicit duplicate guards. No provider dispute update, acceptance, closure, evidence submission, or live Stripe write was added.
-- Rebuilt the unmatched-dispute queue to use provider-refreshed current state instead of webhook receipt ordering.
-- Added a compatibility migration so unmatched evidence created by the pre-4C event-only path remains visible as urgent `provider refresh required` work until a provider-refreshed projection exists.
-- Added `admin_booking_launch_health(...)`, an admin-only count summary for near-term failed holds, stale settlement claims, settlement errors, cancellation errors, overdue/dead-lettered compliance notices, unmatched disputes, disputes needing reconciliation, open cases, active claims, and stale claims. It returns no customer IDs, provider IDs, raw evidence, or secrets.
+- Added authenticated/admin-only `booking-preview-readiness` Edge Function. It re-checks `profiles.role='admin'` server-side and returns only readiness booleans/status codes, blocker names, warning names, and the expected preview flow. It never returns secret values and does not call Stripe, Daily, email, Base44, or any other provider.
+- Readiness fails closed unless Stripe is configured with a `sk_test_` key, the normal and dispute webhook secrets are valid-looking and distinct, `APP_URL` and `TERMS_OF_SERVICE_URL` are HTTPS, Daily API/HMAC settings are present, a real durable-medium delivery provider is configured, and retention periods have an approved authority.
+- Added support for Supabase's current publishable/secret key transition. A modern `sb_secret_` backend context is ready; a legacy `SUPABASE_SERVICE_ROLE_KEY` is reported as a migration warning rather than silently treated as the preferred final state.
+- Surfaced authoritative `admin_booking_launch_health(...)` counts and the no-secret readiness result in `/lesson-booking-admin`. The browser still receives no service-role/secret key and cannot move money or mutate provider disputes.
+- Added `lesson_booking_retention_classes`, `booking_retention_controls`, and append-only `booking_retention_control_events`.
+- Seeded purpose classes for booking operations, payment evidence, consumer compliance, and legal-claim archive, but deliberately left retention durations `NULL`. The database refuses a duration unless an approval timestamp and source authority are supplied.
+- Added audited admin-only retention/legal-hold RPCs. A booking can be classified, placed on/released from a legal hold, and assigned a review date; every change produces append-only evidence. Direct authenticated table access is revoked.
+- Retention/legal-hold records and classes cannot be deleted through ordinary table operations. No purge, deletion, anonymization, or automatic erasure worker exists in this phase.
+- Added `scripts/lesson-booking-preview-e2e.mjs`. In normal CI it is a closed execution gate and performs no provider calls. When an operator explicitly enables it with preview-only credentials, it only verifies the admin readiness endpoint and expected end-to-end flow contract; it still does not create a booking, Stripe object, Daily room, charge, email, or deployment.
+- Added browser/static regressions that fail if secret markers leak into the admin React/API surface or if destructive retention primitives are introduced.
 
 ### Executable regression coverage
 
-`supabase/tests/lesson_booking_launch_hardening_scenarios.sql` verifies:
+`supabase/tests/lesson_booking_preview_retention_scenarios.sql` verifies:
 
-- a webhook snapshot cannot override a different current status retrieved from Stripe;
-- an older event arriving later stays in the append-only evidence stream without downgrading current state;
-- replay of the same Stripe event ID is idempotent;
-- a provider terminal state creates one terminal ledger entry;
-- a later contradictory provider snapshot cannot regress the terminal state and instead creates a reconciliation signal;
-- the deprecated Phase 4B event-only function is no longer executable by `service_role`;
-- launch-health output is admin-only and count-only, without Stripe/customer identifiers;
-- unmatched provider-refreshed disputes remain visible in the operations queue;
-- non-admin launch-health access fails closed.
+- unclassified retention state fails closed and reports automatic erasure disabled;
+- legal-hold/classification changes are audited;
+- legal-hold release is separately audited;
+- retention audit events are append-only;
+- retention controls cannot be deleted;
+- an unapproved retention duration violates the database constraint;
+- authenticated browser roles have no direct retention-table read access;
+- a non-admin cannot call the retention admin RPCs.
 
-The workflow now executes the Phase 4C SQL behavior scenario after all migrations and all earlier settlement/cancellation/compliance/admin/dispute scenarios. The existing Deno typecheck also covers the updated Stripe dispute webhook.
+`scripts/check-lesson-booking-preview-readiness-boundary.mjs` verifies:
 
-### Phase 4C verification
+- the readiness endpoint uses authenticated user mode and re-checks admin role;
+- only Stripe test-key configuration is admissible;
+- separate Checkout/dispute webhook secrets, Terms URL, Daily configuration, delivery provider, Supabase secret context, and retention approval gates exist;
+- the readiness endpoint makes no external provider call;
+- the browser admin surface contains none of the backend secret names/value prefixes;
+- retention migration contains no destructive erasure/purge primitive;
+- the preview E2E probe is disabled unless explicitly gated.
 
-`Lesson booking foundation` run **#123** passed on `b8d632a44375520795de1eeb50bd8349daea7beb`.
+### Phase 4C2 verification
 
-The green run covered:
+`Lesson booking foundation` run **#126** passed on `588bbac2b15198dd086c68df7cbb928ca94a3099`.
 
-- Deno typechecking for Phase 2/3/4 Edge Functions, including the provider-refreshing Stripe dispute webhook;
-- database foundation and browser/auth boundaries;
-- reservation/consent, Stripe Checkout/webhook, deferred hold/recovery, attendance/lesson access, settlement, cancellation/compliance, Phase 3B, Phase 4A, and Phase 4B regressions;
+That run passed:
+
+- Deno typechecking for the Phase 2/3/4 Edge Functions including the new readiness endpoint;
+- all earlier database/browser/reservation/Stripe/hold/attendance/settlement/cancellation/compliance/admin/dispute boundary regressions;
+- the new Phase 4C2 preview-readiness/retention static regression;
+- the closed preview-E2E execution gate;
 - every booking migration on ephemeral PostgreSQL;
-- settlement, cancellation, compliance, admin-operations, Phase 4B dispute, and new Phase 4C launch-hardening behavioral scenarios;
+- all settlement, cancellation, compliance, admin, dispute, launch-hardening, and Phase 4C2 retention behavior scenarios;
 - the full Vite application build.
 
-`Heathrow Piccadilly Compatibility` run **#173** passed on the same engineering checkpoint. `Game Smoke Test` run **#243** was still running when this document checkpoint was prepared; it had already completed dependency installation, application build, Playwright installation, and app startup successfully before entering its browser smoke step.
+Compatibility on the same engineering checkpoint also passed:
 
-## Research refreshed for Phase 4C on 2026-09-20
+- `Heathrow Piccadilly Compatibility` run **#175**: passed.
+- `Game Smoke Test` run **#245**: passed.
+
+## Research refreshed for Phase 4C2 on 2026-09-20
 
 ### Stripe
 
-Official Stripe webhook guidance says event delivery order is not guaranteed and that distinct events may share the same `created` timestamp, so `event.created` should not be used to establish delivery order or deduplicate events. Stripe recommends event IDs for duplicate handling and supports retrieving the API resource when current object state is needed. Phase 4C therefore treats signed webhook snapshots as append-only evidence while retrieving the current **test-mode** dispute before changing the operational projection.
+Current Stripe Checkout documentation continues to use server-created Checkout Sessions. `payment` mode is the one-time payment path and `setup` mode is the save-payment-details path. The existing Smart Parrot implementation retains its stricter test-only boundary and manual-capture/hold-before-capture behavior; Phase 4C2 only checks whether test configuration is present and performs no provider write.
 
+- https://docs.stripe.com/api/checkout/sessions/create
+- https://docs.stripe.com/payments/checkout
 - https://docs.stripe.com/webhooks
-- https://docs.stripe.com/api/disputes/retrieve
 
 ### Supabase
 
-Current Supabase guidance continues to separate browser publishable keys from backend secret/service-role credentials. Edge Function environment/secrets checks can expose configuration presence as booleans without returning secret values. External-provider webhooks can use an unauthenticated platform entry point only when provider authentication/signature verification is enforced inside the function. This remains the boundary for the planned preview-readiness endpoint.
+Current Supabase guidance separates browser-safe publishable keys from backend secret keys. Secret keys are backend-only and bypass RLS; user-facing Edge Functions should authenticate a user and privileged server-to-server functions should use a secret context. Supabase is also moving projects away from legacy `anon`/`service_role` keys toward publishable/secret keys, so the readiness endpoint reports a legacy backend key as a migration warning rather than exposing it or treating it as browser configuration.
 
-- https://supabase.com/docs/guides/functions/secrets
 - https://supabase.com/docs/guides/api/api-keys
-- https://supabase.com/docs/guides/functions
+- https://supabase.com/docs/guides/platform/migrating-to-publishable-and-secret-api-keys
+- https://supabase.com/docs/guides/functions/secrets
+- https://supabase.com/docs/guides/functions/auth
 
 ### Daily
 
-Daily webhook guidance says webhook events are roughly but not strictly ordered and may be duplicated; event IDs should be used for idempotency, and participant join/leave evidence may require session-aware duplicate handling. Daily also signs webhook deliveries and retries failures. The existing attendance boundary already follows this provider-evidence model; preview readiness will validate configuration without exposing the HMAC secret.
+Daily webhook configuration exposes an HMAC secret and retry behavior, and webhook deliveries have provider event IDs/timestamps. The readiness endpoint therefore checks only that the required Daily server-side configuration is present; the HMAC/API values never cross to React. The existing webhook remains signature-verified and idempotent.
 
 - https://docs.daily.co/reference/rest-api/webhooks
 
 ### Base44
 
-Base44's frontend remains user-scoped and elevated/service-role behavior is backend-only. Phase 4C does not put configuration secrets, payment authority, dispute authority, or launch-health source data into Base44 browser state.
+Base44's normal frontend client is user-scoped; elevated/service-role behavior belongs in backend functions rather than React. The booking admin page therefore consumes only authenticated Supabase RPC/Edge Function results, not Base44 or Supabase service credentials.
+
+- https://docs.base44.com/developers/backend/client
 
 ### France/EU retention
 
-CNIL guidance requires personal data to be kept identifiable no longer than necessary for the purpose and supports case-by-case intermediate/evidentiary archiving where litigation or legal-claim risk justifies it. Phase 4C therefore does **not** invent a statutory number of years or add destructive automatic deletion. Retention classes and legal holds remain configurable policy metadata pending French legal/accounting approval.
+CNIL's April 2, 2026 retention guidance reiterates that personal data cannot be kept indefinitely: duration follows the purpose, with separately controlled intermediate/evidentiary archiving when a legal obligation or litigation/legal-claim need justifies it. GDPR Article 5 likewise requires purpose limitation, data minimisation, storage limitation, security, and accountability. Phase 4C2 therefore does not invent one universal French statutory period: duration fields remain unset until the school has a documented legal/accounting/DPO authority for each class.
 
 - https://www.cnil.fr/fr/les-durees-de-conservation-des-donnees
+- https://www.cnil.fr/fr/archivage-des-donnees
+- https://eur-lex.europa.eu/eli/reg/2016/679/art_5/oj
 
 ## Next coherent slice
 
-**Phase 4C2 — preview integration readiness + retention/legal-hold policy metadata:**
+**Phase 4C3 — retention operations + preview E2E driver hardening:**
 
-1. add an authenticated/admin-only readiness endpoint that returns booleans/status codes only for required preview configuration: Supabase browser config, backend secret context, Stripe test key, Checkout webhook secret, dispute webhook secret, Terms URL, Daily API/HMAC config, and durable-medium delivery provider; never return a secret value;
-2. surface `admin_booking_launch_health(...)` and readiness status in the lesson-operations UI without making the browser authoritative;
-3. add a preview-only E2E harness contract for booking → Checkout authorization/save-card → hold/recovery → attendance → deterministic settlement/cancellation → ledger/evidence graph, with provider calls disabled unless explicitly safe preview credentials are present;
-4. add configurable retention classes and per-record legal-hold metadata, with no automatic erasure and no hard-coded French statutory periods until legal/accounting approval;
-5. preserve all existing live/deploy/provider-write gates.
+1. surface per-booking retention class/legal-hold state in the admin case/evidence workflow, with audited class/hold/review-date controls and no direct table writes;
+2. add count-only launch-health/queue signals for unclassified evidence, overdue legal-hold reviews, and retention classes still missing approved durations/source authority;
+3. add explicit preview-environment identity guards so a future provider E2E driver refuses unknown/project-production Supabase targets before any provider write is possible;
+4. extend the provider-E2E driver contract so, once an explicitly approved preview environment exists, it can test booking → test Checkout/save-card → test hold/recovery → Daily/server attendance → deterministic test settlement/cancellation → ledger/evidence graph while retaining hard live-mode rejection;
+5. keep deploy, publish, cron activation, production email, live Stripe, automatic retention deletion, and Stripe Connect disabled.
 
-## External configuration still needed for provider E2E
+## External configuration still needed for real provider E2E
 
-Repository engineering can continue without these, but real provider integration cannot:
+Repository engineering can continue without these, but the real provider path cannot be exercised until they are configured in a safe preview environment:
 
 - a dedicated Smart Parrot Supabase preview/test project, or explicit approval of an existing safe project;
-- preview `VITE_SUPABASE_URL` and browser publishable key;
-- a dedicated Supabase backend secret key for cron/service calls, stored server-side/Vault and never in browser code;
-- Stripe **test/sandbox** secret key, normal Checkout webhook signing secret, and separate dispute-webhook signing secret;
-- a public Terms of Service URL for Stripe Checkout terms collection;
-- Daily test account/domain, API key, webhook HMAC secret, and one preview webhook delivery to verify exact transport in the target environment;
-- before compliance launch: approved French consumer-law classification/copy, consumer mediator details, and a real durable-medium delivery provider.
+- preview `VITE_SUPABASE_URL` and browser `sb_publishable_...` key;
+- a dedicated modern Supabase backend `sb_secret_...` key/secret context stored only server-side/Vault; if the preview project still uses legacy `service_role`, migrate it before launch;
+- Stripe **test/sandbox** `STRIPE_SECRET_KEY`, normal Checkout `STRIPE_WEBHOOK_SECRET`, and a separate `STRIPE_DISPUTE_WEBHOOK_SECRET`;
+- HTTPS `APP_URL` and a public HTTPS `TERMS_OF_SERVICE_URL`;
+- Daily test API key, webhook HMAC secret, and at least one preview webhook delivery to confirm the target environment transport;
+- a real durable-medium delivery provider for consumer-law acknowledgements;
+- approved retention durations and their legal/accounting/DPO source authority for each configured retention class;
+- before compliance launch: approved French consumer-law classification/copy and consumer mediator details.
 
 ## Release status
 
-**NO DEPLOY / NO MERGE.** Phase 4C is repository-complete and CI-verified at the engineering checkpoint, but preview provider E2E and legal/configuration gates remain open. The draft PR stays intentionally unmerged until those gates are explicitly approved and verified.
+**NO DEPLOY / NO MERGE.** Phase 4C2 is repository-complete and CI-verified at `588bbac2b15198dd086c68df7cbb928ca94a3099`. Provider E2E, legal wording, retention-duration approval, and environment configuration remain gated. The draft PR stays intentionally unmerged until those gates are explicitly approved and verified.

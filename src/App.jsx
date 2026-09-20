@@ -12,6 +12,7 @@ const LessonPage = lazy(() => import('@/pages/LessonPage'));
 const LessonBooking = lazy(() => import('@/pages/LessonBooking'));
 const MyLessons = lazy(() => import('@/pages/MyLessons'));
 const LessonBookingPolicy = lazy(() => import('@/pages/LessonBookingPolicy'));
+const LessonBookingAdmin = lazy(() => import('@/pages/LessonBookingAdmin'));
 const Leaderboard = lazy(() => import('@/pages/Leaderboard'));
 const Profile = lazy(() => import('@/pages/Profile'));
 const LondonMission = lazy(() => import('@/pages/LondonMission'));
@@ -53,6 +54,7 @@ const AuthenticatedApp = () => {
         <Route path="/book-lessons" element={<LessonBooking />} />
         <Route path="/my-lessons" element={<MyLessons />} />
         <Route path="/lesson-booking-policy/:policyVersionId" element={<LessonBookingPolicy />} />
+        <Route path="/lesson-booking-admin" element={<LessonBookingAdmin />} />
         <Route path="/london" element={<LondonMission />} />
         <Route path="/heathrow-mission" element={<LondonMission />} />
         <Route path="/adventure-prototype" element={<AdventurePrototype />} />

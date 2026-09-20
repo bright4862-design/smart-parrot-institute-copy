@@ -21,6 +21,11 @@ verify_jwt = true
 [functions.stripe-webhook]
 verify_jwt = false
 
+# Separate test-only dispute endpoint and signing secret. It records minimized
+# review evidence only and contains no Stripe dispute write primitive.
+[functions.stripe-dispute-webhook]
+verify_jwt = false
+
 # Daily is an external provider: it authenticates with the configured webhook
 # HMAC. The handler verifies the raw request before parsing or writing evidence.
 [functions.daily-webhook]

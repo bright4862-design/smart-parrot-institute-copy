@@ -13,6 +13,7 @@ on:
       - "src/pages/LessonBooking.jsx"
       - "src/pages/MyLessons.jsx"
       - "src/pages/LessonBookingPolicy.jsx"
+      - "src/pages/LessonBookingAdmin.jsx"
       - "package.json"
       - "package-lock.json"
       - "scripts/check-lesson-booking-foundation.mjs"
@@ -25,6 +26,7 @@ on:
       - "scripts/check-lesson-booking-cancellation-boundary.mjs"
       - "scripts/check-lesson-booking-compliance-ux-boundary.mjs"
       - "scripts/check-lesson-booking-admin-ops-boundary.mjs"
+      - "scripts/check-lesson-booking-admin-dispute-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -36,6 +38,7 @@ on:
       - "src/pages/LessonBooking.jsx"
       - "src/pages/MyLessons.jsx"
       - "src/pages/LessonBookingPolicy.jsx"
+      - "src/pages/LessonBookingAdmin.jsx"
       - "package.json"
       - "package-lock.json"
       - "scripts/check-lesson-booking-foundation.mjs"
@@ -48,6 +51,7 @@ on:
       - "scripts/check-lesson-booking-cancellation-boundary.mjs"
       - "scripts/check-lesson-booking-compliance-ux-boundary.mjs"
       - "scripts/check-lesson-booking-admin-ops-boundary.mjs"
+      - "scripts/check-lesson-booking-admin-dispute-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 
 permissions:
@@ -74,7 +78,7 @@ jobs:
           sudo apt-get install -y postgresql postgresql-client
           sudo systemctl start postgresql
           sudo -u postgres pg_isready
-      - name: Typecheck Phase 2/3 Edge Functions
+      - name: Typecheck Phase 2/3/4 Edge Functions
         run: >-
           deno check --node-modules-dir=none
           supabase/functions/create-video-token/index.ts
@@ -82,6 +86,7 @@ jobs:
           supabase/functions/check-in/index.ts
           supabase/functions/settle-lessons/index.ts
           supabase/functions/cancel-booking/index.ts
+          supabase/functions/stripe-dispute-webhook/index.ts
       - name: Verify database foundation invariants
         run: node scripts/check-lesson-booking-foundation.mjs
       - name: Verify browser/auth boundary
@@ -102,6 +107,8 @@ jobs:
         run: node scripts/check-lesson-booking-compliance-ux-boundary.mjs
       - name: Verify Phase 4A admin operations boundary
         run: node scripts/check-lesson-booking-admin-ops-boundary.mjs
+      - name: Verify Phase 4B admin/dispute boundary
+        run: node scripts/check-lesson-booking-admin-dispute-boundary.mjs
       - name: Execute migrations + booking behavior scenarios
         run: |
           set -euo pipefail
@@ -119,5 +126,7 @@ jobs:
             -f supabase/tests/lesson_booking_compliance_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/tests/lesson_booking_admin_ops_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/tests/lesson_booking_admin_dispute_scenarios.sql
       - name: Build application
         run: npm run build

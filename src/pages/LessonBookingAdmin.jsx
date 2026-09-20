@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import BookingRetentionControls from '@/components/lesson/BookingRetentionControls';
 import { LessonBookingAuthProvider, useLessonBookingAuth } from '@/lib/LessonBookingAuthContext';
 import {
   acknowledgeAdminAlert,
@@ -40,12 +41,14 @@ function AdminContent() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [busy, setBusy] = useState('');
   const [evidence, setEvidence] = useState(null);
+  const [retentionBookingId, setRetentionBookingId] = useState('');
 
   useEffect(() => {
     if (!client || !isAuthenticated) {
       setItems([]);
       setHealth(null);
       setReadiness(null);
+      setRetentionBookingId('');
       return;
     }
     let active = true;
@@ -143,7 +146,7 @@ function AdminContent() {
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-black">Launch health</h2>{health && <StatusPill ready={health.status === 'healthy'} status={health.status} />}</div>
-          <p className="mt-2 text-xs text-slate-500">Server-computed counts only. A warning is an operator signal, never authority to move money.</p>
+          <p className="mt-2 text-xs text-slate-500">Server-computed counts only. A warning is an operator signal, never authority to move money or erase evidence.</p>
           {!health ? <p className="mt-4 text-sm text-slate-500">Health unavailable.</p> : (
             <div className="mt-4 grid grid-cols-2 gap-2">
               {Object.entries(health.counts || {}).map(([name, count]) => <div key={name} className="rounded-lg bg-slate-50 p-3"><div className="text-xl font-black">{count}</div><div className="text-xs text-slate-600">{label(name)}</div></div>)}
@@ -153,7 +156,7 @@ function AdminContent() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-black">Preview readiness</h2>{readiness && <StatusPill ready={readiness.status === 'ready'} status={readiness.status} />}</div>
-          <p className="mt-2 text-xs text-slate-500">No secret values are shown. The server reports configuration presence and policy gates only.</p>
+          <p className="mt-2 text-xs text-slate-500">No secret values or project refs are shown. The server reports configuration presence, preview identity status, and policy gates only.</p>
           {!readiness ? <p className="mt-4 text-sm text-slate-500">Readiness unavailable.</p> : (
             <div className="mt-4 space-y-2">
               {Object.entries(readiness.checks || {}).map(([name, check]) => <div key={name} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-2 text-xs"><span>{label(name)}</span><StatusPill ready={Boolean(check?.ready)} status={check?.status} /></div>)}
@@ -180,11 +183,11 @@ function AdminContent() {
                   <div>
                     <div className="flex flex-wrap gap-2 text-xs font-black uppercase tracking-wide"><span>{item.severity}</span><span>•</span><span>{item.category}</span><span>•</span><span>{item.source}</span></div>
                     <h3 className="mt-2 font-bold">{item.summary}</h3>
-                    <p className="mt-1 text-xs opacity-75">Booking: {item.booking_id || 'unmatched provider event'} · {item.occurred_at ? new Date(item.occurred_at).toLocaleString() : 'time unavailable'}</p>
+                    <p className="mt-1 text-xs opacity-75">Booking: {item.booking_id || 'unmatched/provider-wide signal'} · {item.occurred_at ? new Date(item.occurred_at).toLocaleString() : 'time unavailable'}</p>
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {!manual && item.booking_id && (
+                  {!manual && item.booking_id && item.category !== 'retention' && (
                     <button disabled={busy===key} className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white disabled:opacity-50" onClick={() => run(key, () => openAdminReviewCase(client, { bookingId:item.booking_id, kind:item.category==='dispute'?'dispute':'other', reason:item.summary, priority:item.severity }), 'Review case opened.')}>Open case</button>
                   )}
                   {manual && (
@@ -195,13 +198,16 @@ function AdminContent() {
                     </>
                   )}
                   {canAcknowledge && <button disabled={busy===key} className="rounded-lg border bg-white px-3 py-2 text-sm font-bold" onClick={() => run(key, () => acknowledgeAdminAlert(client, { source:item.source, bookingId:item.booking_id, snoozeMinutes:30 }), 'Alert acknowledged for 30 minutes; it will reappear if the condition persists.')}>Acknowledge 30m</button>}
-                  {item.booking_id && <button disabled={busy===key} className="rounded-lg border bg-white px-3 py-2 text-sm font-bold" onClick={() => run(key, async () => { const packet=await exportAdminBookingEvidence(client, item.booking_id, item.category==='dispute'?'payment_dispute':'customer_support'); setEvidence(packet); }, 'Minimized evidence packet generated and access logged.')}>View evidence</button>}
+                  {item.booking_id && <button disabled={busy===key} className="rounded-lg border bg-white px-3 py-2 text-sm font-bold" onClick={() => run(key, async () => { const packet=await exportAdminBookingEvidence(client, item.booking_id, item.category==='dispute'?'payment_dispute':'customer_support'); setEvidence(packet); setRetentionBookingId(item.booking_id); }, 'Minimized evidence packet generated and access logged.')}>View evidence</button>}
+                  {item.booking_id && <button className="rounded-lg border bg-white px-3 py-2 text-sm font-bold" onClick={() => setRetentionBookingId(item.booking_id)}>Retention / legal hold</button>}
                 </div>
               </article>
             );
           })}
         </div>
       )}
+
+      {retentionBookingId && <BookingRetentionControls client={client} bookingId={retentionBookingId} onClose={() => setRetentionBookingId('')} onChanged={() => setRefreshKey((value) => value + 1)} />}
 
       {evidence && (
         <section className="mt-8 rounded-2xl border bg-slate-950 p-5 text-slate-100">

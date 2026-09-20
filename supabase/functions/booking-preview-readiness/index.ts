@@ -29,6 +29,20 @@ function validHttpsUrl(value: string) {
   }
 }
 
+function validProjectRef(value: string) {
+  return /^[a-z0-9]{15,40}$/.test(value);
+}
+
+function previewProjectIdentity(): ReadinessCheck {
+  const expected = env('SMART_PARROT_PREVIEW_PROJECT_REF');
+  const deploymentId = env('DENO_DEPLOYMENT_ID');
+  if (!expected) return { ready: false, status: 'preview_project_ref_required' };
+  if (!validProjectRef(expected)) return { ready: false, status: 'invalid_preview_project_ref' };
+  if (!deploymentId) return { ready: false, status: 'deployment_identity_unavailable' };
+  if (!deploymentId.startsWith(`${expected}_`)) return { ready: false, status: 'preview_project_mismatch' };
+  return { ready: true, status: 'ready' };
+}
+
 function supabaseBackendSecretContext(): ReadinessCheck {
   const modern = env('SUPABASE_SECRET_KEYS');
   if (modern) {
@@ -42,8 +56,8 @@ function supabaseBackendSecretContext(): ReadinessCheck {
     }
   }
 
-  // Kept as a warning-only bridge while Supabase completes its 2026 migration
-  // from legacy service_role keys to revocable secret keys.
+  // Warning-only bridge while Supabase completes its 2026 migration from legacy
+  // service_role keys to revocable secret keys.
   if (env('SUPABASE_SERVICE_ROLE_KEY')) {
     return { ready: true, status: 'legacy_key_migration_required' };
   }
@@ -101,6 +115,7 @@ export default {
     const checks: Record<string, ReadinessCheck> = {
       supabase_browser_authenticated: { ready: true, status: 'ready' },
       supabase_backend_secret_context: backendSecret,
+      preview_project_identity: previewProjectIdentity(),
       stripe_test_secret: basicCheck(stripeKey.startsWith('sk_test_'), stripeKey ? 'test_key_required' : 'missing'),
       stripe_checkout_webhook_secret: basicCheck(checkoutWebhookSecret.startsWith('whsec_'), 'missing_or_invalid'),
       stripe_dispute_webhook_secret: basicCheck(disputeWebhookSecret.startsWith('whsec_'), 'missing_or_invalid'),
@@ -132,7 +147,7 @@ export default {
       .map(([name]) => name);
 
     return Response.json({
-      schema_version: 'smart_parrot_booking_preview_readiness_v1',
+      schema_version: 'smart_parrot_booking_preview_readiness_v2',
       generated_at: new Date().toISOString(),
       status: blockers.length ? 'blocked' : warnings.length ? 'ready_with_warning' : 'ready',
       checks,
@@ -147,9 +162,10 @@ export default {
         'append_only_ledger_and_evidence_review',
       ],
       boundaries: [
-        'No secret value is returned by this endpoint.',
+        'No secret value or Supabase project ref is returned by this endpoint.',
         'Readiness never moves money, creates provider objects, sends email, deploys, or publishes.',
         'Stripe readiness accepts test keys only.',
+        'Preview identity must match the explicitly configured Supabase project ref before provider E2E can proceed.',
         'Retention readiness is blocked until approved durations and their authority are configured.',
       ],
     });

@@ -159,6 +159,13 @@ export async function getAdminBookingPreviewReadiness(client) {
   return data;
 }
 
+export async function listAdminBookingRetentionOptions(client) {
+  if (!client) throw new Error('Lesson booking Supabase client is unavailable.');
+  const { data, error } = await client.rpc('admin_booking_retention_options');
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function getAdminBookingRetentionStatus(client, bookingId) {
   if (!client) throw new Error('Lesson booking Supabase client is unavailable.');
   const { data, error } = await client.rpc('admin_booking_retention_status', { p_booking_id: assertUuid(bookingId,'bookingId') });

@@ -17,7 +17,8 @@ requireAll(readiness,[
   "withSupabase({ auth: 'user' }","profile?.role !== 'admin'","STRIPE_SECRET_KEY","sk_test_",
   "STRIPE_WEBHOOK_SECRET","STRIPE_DISPUTE_WEBHOOK_SECRET","TERMS_OF_SERVICE_URL","DAILY_API_KEY","DAILY_WEBHOOK_SECRET",
   "COMPLIANCE_DELIVERY_PROVIDER","SUPABASE_SECRET_KEYS","legacy_key_migration_required",
-  "No secret value is returned by this endpoint.","retention_policy_approved","status: blockers.length ? 'blocked'",
+  "No secret value or Supabase project ref is returned by this endpoint.","retention_policy_approved","status: blockers.length ? 'blocked'",
+  "preview_project_identity","SMART_PARROT_PREVIEW_PROJECT_REF","DENO_DEPLOYMENT_ID",
 ], 'Preview readiness function');
 
 if (readiness.includes('sk_live_')) throw new Error('Preview readiness must never accept or reference a live Stripe key.');
@@ -36,10 +37,11 @@ for (const forbidden of ['delete_booking_evidence','purge_booking','automatic_er
 
 requireAll(config,['[functions.booking-preview-readiness]','verify_jwt = true'],'Supabase config');
 requireAll(api,['getAdminBookingLaunchHealth','getAdminBookingPreviewReadiness','getAdminBookingRetentionStatus','setAdminBookingRetentionControl'],'Admin browser API');
-requireAll(page,['Launch health','Preview readiness','getAdminBookingLaunchHealth','getAdminBookingPreviewReadiness','No secret values are shown'],'Admin operations page');
+requireAll(page,['Launch health','Preview readiness','getAdminBookingLaunchHealth','getAdminBookingPreviewReadiness','No secret values or project refs are shown'],'Admin operations page');
 requireAll(harness,[
   "SMART_PARROT_PREVIEW_E2E !== '1'","VITE_SUPABASE_PUBLISHABLE_KEY","sb_publishable_",
   'booking-preview-readiness','stripe_test_checkout_or_setup','append_only_ledger_and_evidence_review',
+  'SMART_PARROT_PREVIEW_PROJECT_REF',
 ], 'Preview E2E gate');
 
 const browserSurface = `${api}\n${page}`;

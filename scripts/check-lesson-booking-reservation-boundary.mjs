@@ -58,7 +58,8 @@ for (const requiredBoundary of [
 }
 
 expect(
-  /v_lesson\.on_time_price_cents[\s\S]*?v_policy\.config[\s\S]*?late_surcharge_pct/i.test(migration),
+  /v_late_surcharge_pct\s*:=\s*\(v_policy\.config\s*->>\s*'late_surcharge_pct'\)::numeric/i.test(migration)
+    && /v_max_charge_cents\s*:=\s*round\([\s\S]*?v_lesson\.on_time_price_cents[\s\S]*?v_late_surcharge_pct/i.test(migration),
   'reservation price must be recomputed from server-owned lesson/policy rows',
 );
 expect(

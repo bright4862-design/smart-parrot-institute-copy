@@ -48,7 +48,7 @@ requireAll(api,[
 ], 'Admin retention API');
 requireAll(retentionPanel,[
   'Retention governance','Automatic erasure','Save audited control','legalHold && !reviewAfter',
-  'Approved retention durations remain controlled by the server-side policy table',
+  'Approved retention durations remain server-controlled',
 ], 'Admin retention panel');
 requireAll(page,[
   'BookingRetentionControls','Retention / legal hold','unmatched/provider-wide signal','never authority to move money or erase evidence',

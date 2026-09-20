@@ -81,7 +81,7 @@ CI now starts an ephemeral PostgreSQL 16 instance, applies every lesson-booking 
 - all migrations + executable PostgreSQL settlement scenarios: passed.
 - full Vite application build: passed.
 
-`Heathrow Piccadilly Compatibility` run #157 also passed on the same engineering head.
+`Heathrow Piccadilly Compatibility` run #157 and `Game Smoke Test` run #228 also passed on the same engineering head.
 
 The first Phase 2B CI attempt used a Postgres service container and spent too long initializing it. The workflow was hardened to start the runner's ephemeral PostgreSQL directly. A second attempt then exposed two overly specific static string assertions; those assertions were corrected without weakening the behavioral test. Run #98 is the resulting green checkpoint.
 

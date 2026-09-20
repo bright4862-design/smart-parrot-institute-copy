@@ -10,79 +10,98 @@ Last updated: 2026-09-20
 - Base branch: `main` at `210345bbe09bc46c468fb6a7e0eee0596e8d902b`
 - `main` remains untouched.
 - Nothing from this branch has been deployed/published or applied to a live Supabase/Stripe/Daily environment.
-- No live Stripe key/object is allowed and no `PaymentIntent.capture(...)` path exists yet.
+- Stripe execution remains repository-locked to test-mode credentials/objects. Phase 2B introduces the first capture/release path, but `getStripe()` rejects non-`sk_test_` secrets and the worker rejects live Stripe objects.
 
 ## Architecture
 
 - Base44/React remains the app shell.
-- Supabase Postgres/Auth/RLS/Edge Functions/Cron owns booking, evidence, timing, payment state and later settlement.
+- Supabase Postgres/Auth/RLS/Edge Functions/Cron owns booking, evidence, timing, payment state and settlement.
 - Browser code may read safe catalog/availability data and invoke authenticated functions, but browser time, user identity, attendance time, tutor/price/policy fields and payment transitions are never authoritative.
-- Stripe is repository-locked to test mode. Near-term lessons authorize at Checkout; later lessons save the card and use a secret-authenticated worker to authorize when due.
+- Stripe uses hold-before/capture-after. Near-term lessons authorize at Checkout; later lessons save the card and a secret-authenticated worker authorizes when due.
 - Daily is the Phase 2 online attendance provider. Rooms are private and booking-scoped; meeting tokens carry the verified Supabase user UUID.
 
-## Completed through Phase 1C
+## Completed through Phase 2A
 
 - Phase 0A: authoritative Supabase booking/payment/evidence schema, overlap exclusions, append-only evidence, RLS/least privilege, server-only Stripe identifiers/events.
 - Phase 0B: immutable evidence hardening, project-specific Auth trigger, bounded `available_slots(...)` RPC backed by a private helper.
 - Phase 0C: browser-safe Supabase publishable-key client, booking-scoped Auth, read-only availability adapter, isolated `/book-lessons` preview, frontend secret scanning.
 - Phase 1A: atomic/idempotent server-authoritative reservation + consent; server-owned tutor/price/duration/currency/policy/hold strategy; database race protection.
-- Phase 1B: Stripe test-only Checkout + signed/idempotent webhook. Near-term bookings authorize with manual capture; later bookings save the card with SetupIntent. No capture path.
+- Phase 1B: Stripe test-only Checkout + signed/idempotent webhook. Near-term bookings authorize with manual capture; later bookings save the card with SetupIntent.
 - Phase 1C: deferred test-only off-session holds, failed-hold evidence, customer-present recovery/3DS Checkout, policy-deadline cancellation and Stripe-aware stale Checkout cleanup. Cron activation remains documented but disabled.
+- Phase 2A: signed/replay-safe Daily evidence, server-time fallback/QR check-in, private booking-scoped rooms/tokens, and no browser-authoritative attendance time.
 
-## Phase 2A — attendance evidence + lesson access — complete in repository, not deployed
+## Phase 2B — deterministic settlement + test-only capture/release — complete in repository, not deployed
 
-Verified engineering checkpoint: `e6c4f6fec791f6fc763b4cbff1cd8e9153089d2e`.
+Verified engineering checkpoint: `0a941c90d01833550d06ecb38d519fda15b635b2`.
 
 Implemented:
 
-- migration `20260920080500_lesson_booking_phase2a_attendance_evidence.sql` adds service-role-only attendance writers and a booking-scoped room identity constraint.
-- Daily and fallback evidence is admitted only for confirmed `hold_placed` lessons and only from `start - 30 minutes` through lesson end.
-- actor identity is derived from the booking's student/tutor UUIDs; callers cannot choose an actor label.
-- Daily event replay is deduplicated on provider event id and conflicting reuse of an event id is rejected.
-- `record_server_check_in(...)` uses PostgreSQL `clock_timestamp()`; no browser-authored attendance time is accepted.
-- app-button and QR check-ins use a deterministic 30-second replay bucket; QR evidence is student-only.
-- `create-video-token` is authenticated-user-only and available only to a participant in a confirmed booking during the lesson access window.
-- Daily rooms are private, named exactly by booking UUID, bounded by lesson times, and configured to eject at expiry.
-- Daily meeting tokens carry the verified Supabase `user_id`, room name, role (`is_owner` for tutor), not-before and expiry times.
-- `daily-webhook` is externally reachable only because Daily cannot send a Supabase JWT; it authenticates the raw request with the configured HMAC before JSON parsing.
-- participant.joined uses Daily `joined_at`; participant.left derives provider event time from `joined_at + duration`.
-- rotating QR tokens are HMAC-SHA256 signed, booking-bound, 30-second scoped, and accept only the current/previous window.
-- `create-video-token` and `check-in` keep Supabase JWT verification enabled; `daily-webhook` uses provider-HMAC authentication.
-- no settlement or Stripe capture is introduced by Phase 2A.
+- migration `20260920090500_lesson_booking_phase2b_settlement.sql` adds a settlement lease/attempt/error state to bookings.
+- `compute_lesson_settlement(...)` deterministically derives the outcome and amount from the booking's immutable policy version plus immutable attendance evidence.
+- policy cases implemented: on-time, grace-edge, student late, student no-show, tutor late with pro-rata price, tutor no-show, tutor early-leave, and tutor leave-then-rejoin before the decision point.
+- finished `hold_placed` lessons are claimed only after their policy's `capture_delay_minutes`; `FOR UPDATE SKIP LOCKED` prevents overlapping workers from claiming the same row at once.
+- an `awaiting_settlement` lease older than ten minutes can be reclaimed so a crashed worker does not permanently strand the lesson.
+- each claim increments `settlement_attempts`; finalization must present the matching attempt and stale attempts are rejected.
+- `settle-lessons` is secret-authenticated and test-mode-only. It re-retrieves the PaymentIntent, verifies booking metadata, amount, currency and non-live mode before touching money.
+- amount due `0`: cancel the uncaptured PaymentIntent and treat the full authorization as released.
+- positive amount due: capture exactly the database-computed amount with `amount_to_capture` and `final_capture: true`; Stripe releases any unused authorization.
+- Stripe calls use stable per-booking idempotency keys, while database lease/attempt guards and Stripe-state verification provide retry safety even beyond Stripe's idempotency cache lifetime.
+- database finalization recomputes the amount after Stripe succeeds, verifies captured/released cents, writes captured/released/credit ledger evidence, and atomically moves the booking to `settled`.
+- tutor no-show credit evidence is unique per booking.
+- cron activation is documented in `supabase/cron/lesson_booking_phase2b.sql.example` but deliberately not activated.
 
-### Phase 2A verification
+### Executable behavioral coverage
 
-`Lesson booking foundation` run #91 passed on `e6c4f6fec791f6fc763b4cbff1cd8e9153089d2e`:
+CI now starts an ephemeral PostgreSQL 16 instance, applies every lesson-booking migration in order, and executes real SQL settlement scenarios. The scenario pack covers:
 
-- Deno typecheck of all new Phase 2A Edge Functions and their imports: passed.
+- student exactly at +5 minutes -> on-time price.
+- student at +6 minutes -> late/standard price.
+- absent student -> no-show/standard price.
+- tutor at +6 minutes -> tutor-late pro-rata price.
+- absent tutor -> zero charge.
+- tutor leaves before student arrives -> tutor no-show/zero charge.
+- tutor leaves then rejoins before student arrival -> normal student-late result.
+- student exactly at the 15-minute cutoff -> late rather than no-show.
+- tutor exactly at the 15-minute cutoff -> tutor-late rather than tutor no-show.
+- claim/finalize path for a zero-charge tutor no-show -> full hold release + one service credit.
+- repeated finalization -> idempotent and no duplicate settlement ledger evidence.
+
+### Phase 2B verification
+
+`Lesson booking foundation` run #98 passed on `0a941c90d01833550d06ecb38d519fda15b635b2`:
+
+- Deno typecheck of Phase 2 Edge Functions, including `settle-lessons`: passed.
 - database foundation invariants: passed.
 - browser/auth boundary: passed.
 - reservation/consent boundary: passed.
 - Stripe Checkout/webhook boundary: passed.
 - deferred hold/recovery boundary: passed.
 - attendance/lesson-access boundary: passed.
+- settlement boundary: passed.
+- all migrations + executable PostgreSQL settlement scenarios: passed.
 - full Vite application build: passed.
 
-`Heathrow Piccadilly Compatibility` run #153 also passed on the same engineering head. The Deno check was deliberately scoped to the Phase 2A Edge Functions because the repository's unrelated Base44 dependency graph currently includes a non-npm dependency that Deno refuses to auto-install; the first all-function attempt correctly exposed that tooling incompatibility rather than an application type error.
+`Heathrow Piccadilly Compatibility` run #157 also passed on the same engineering head.
 
-## Research refreshed for Phase 2A on 2026-09-20
+The first Phase 2B CI attempt used a Postgres service container and spent too long initializing it. The workflow was hardened to start the runner's ephemeral PostgreSQL directly. A second attempt then exposed two overly specific static string assertions; those assertions were corrected without weakening the behavioral test. Run #98 is the resulting green checkpoint.
 
-- Daily's current meeting-token API supports `room_name`, `user_id`, `user_name`, `is_owner`, `nbf`, `exp` and `eject_at_token_exp`; Phase 2A uses those fields to bind access to the verified booking participant and lesson window.
-- Daily's room API supports private rooms with `nbf`, `exp` and `eject_at_room_exp`; room name is fixed to the booking UUID.
-- Daily's current participant webhook payloads expose the booking room, token-provided `user_id`, provider `session_id`, `joined_at`, and (for participant.left) `duration`.
-- Daily's webhook API accepts an `hmac` secret used to verify webhook signatures. The public reference confirms the HMAC facility but does not currently document the exact delivery-header encoding in the same detail as the event schemas. The repository follows the blueprint's `X-Webhook-Timestamp` + `X-Webhook-Signature` / HMAC-SHA256 contract and keeps deployment gated until a Daily preview webhook confirms the exact transport format.
-- Supabase's current Edge Function guidance says authenticated user functions should use `withSupabase({ auth: 'user' })` with JWT verification, while external signed webhooks use `auth: 'none'`, `verify_jwt = false`, and provider signature verification inside the handler.
+## Research refreshed for Phase 2B on 2026-09-20
+
+- Stripe's current manual-capture guidance requires an uncaptured PaymentIntent in `requires_capture`; partial `amount_to_capture` capture releases the remaining authorization, and most card payments permit one capture. The worker therefore computes once from database evidence, performs a final capture, and never tries to add a later surcharge.
+- Stripe supports idempotency keys on POST operations, but the implementation does not rely on idempotency alone: it re-reads the PaymentIntent state and uses database settlement attempts because provider idempotency records are not a permanent database.
+- Supabase currently documents scheduled Edge Function invocation with `pg_cron` + `pg_net`, and recommends keeping credentials in Vault. The repository ships activation examples only; no remote cron has been scheduled.
+- Supabase secret keys remain server-only and never enter the browser bundle.
 
 ## Next coherent slice
 
-Phase 2B — deterministic settlement, still test-only:
+Phase 3A — cancellation + withdrawal/compliance foundation:
 
-1. implement deterministic `compute_settlement(...)` from immutable attendance + accepted policy version.
-2. cover on-time, grace-edge, late, no-show, tutor-late, tutor-no-show/early-leave and cancellation outcomes with executable database scenarios.
-3. claim finished `hold_placed` lessons safely and compute the final amount exactly once.
-4. add a Stripe **test-mode-only** capture/release boundary using the already-authorized PaymentIntent and exact computed amount.
-5. write captured/released/credit ledger evidence once and preserve retry safety.
-6. keep production deployment/live keys blocked.
+1. add one server-authoritative cancellation function for student cancellation, tutor cancellation and voluntary withdrawal flows.
+2. compute cancellation outcome/amount from the accepted policy version and server time; never trust a browser-supplied fee.
+3. capture or release only the exact computed cancellation amount using the existing test-only Stripe boundary and retry-safe ledger pattern.
+4. add policy page / acknowledgement evidence and durable-medium notification hooks without sending production mail.
+5. verify the current France/EU legal basis for the 14-day service withdrawal flow and the scope of the newer online withdrawal-function requirement before encoding a legal claim in UI copy.
+6. keep mediator details and final policy copy blocked on French consumer-law review.
 
 ## External configuration still needed for end-to-end integration testing
 

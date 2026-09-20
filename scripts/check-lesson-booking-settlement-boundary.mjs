@@ -42,8 +42,8 @@ for (const required of [
   'stale_settlement_attempt',
   'settlement_amount_mismatch',
   "kind = 'credit_issued'",
-  "kind = 'captured'",
-  "kind = 'hold_released'",
+  "'captured',",
+  "'hold_released',",
 ]) {
   expect(migration.includes(required), `Phase 2B migration missing invariant: ${required}`);
 }

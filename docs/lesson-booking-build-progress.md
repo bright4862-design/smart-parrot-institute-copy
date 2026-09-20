@@ -16,8 +16,8 @@ Last updated: 2026-09-20
 - Base44/React remains the application shell.
 - Supabase Postgres/Auth/RLS/Edge Functions/Cron is the authoritative booking, evidence, timing, and settlement layer.
 - Browser code may read safe catalog/availability data and call authenticated Edge Functions; it never owns money/time transitions.
-- Stripe will use hold-before/capture-after, but Stripe Checkout/PaymentIntent creation is deliberately not enabled until the reservation/consent boundary is stable.
-- Attendance evidence and settlement remain later phases.
+- Stripe Checkout is now implemented repository-side in **test mode only**: near-term reservations use `payment` mode with manual capture, later reservations use `setup` mode, and signed webhooks own the state transition into `hold_placed` or `card_saved`.
+- No capture/settlement path exists yet. Attendance evidence and deterministic settlement remain later phases.
 
 ## Phase 0A — authoritative data boundary — complete
 
@@ -57,12 +57,12 @@ Key commits:
 
 Implemented:
 
-- `@supabase/supabase-js` pinned to `2.109.0`, with resolved lockfile synced, because the repository still has a Node 20 smoke path and newer Supabase JS releases dropped Node 20 support.
-- browser client reads only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` and fails closed unless the key is an `sb_publishable_...` key.
+- `@supabase/supabase-js` pinned to `2.109.0`, with resolved lockfile synced.
+- browser client reads only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` and fails closed unless the key is `sb_publishable_...`.
 - booking-only Supabase Auth provider using `getSession`, `onAuthStateChange`, email magic links, and sign-out.
 - existing Base44 auth remains untouched for pre-existing Smart Parrot routes.
 - read-only availability adapter.
-- isolated `/book-lessons` preview route that can authenticate/read availability but cannot create bookings or charge cards.
+- isolated `/book-lessons` preview route.
 - browser credential scanner rejects secret/service-role Supabase references in frontend source.
 
 Key commits:
@@ -75,48 +75,21 @@ Key commits:
 - `9bf7f74783a0fd877aec2ce4c3cf5bbf6b6d6d32` — `/book-lessons` route.
 - `27560a6ae87f8f3a61a60e1e55af35c0cfaeb25d` — browser security regression.
 - `0fd67fdb438191a550863fad79912bf24628ab85` — resolved lockfile sync.
-- `dfca14bac17b47f40c963abaa3d31b201cb9f174` — CI returned to read-only permissions after lockfile generation.
+- `dfca14bac17b47f40c963abaa3d31b201cb9f174` — CI returned to read-only permissions.
 
 ## Phase 1A — server-authoritative reservation + consent boundary — complete in repository, not deployed
 
 Implemented:
 
-### Database transaction boundary
-
-`supabase/migrations/20260920052500_lesson_booking_phase1a_reservation_rpc.sql` now:
-
-- adds `bookings.client_request_id uuid`.
-- adds a partial unique `(student_id, client_request_id)` index for idempotency.
-- adds private response shaping so Stripe/payment identifiers are not returned.
-- adds service-role-only `public.create_booking_reservation(...)` as a pinned-search-path `SECURITY DEFINER` RPC.
-- re-reads active lesson type and latest policy from Postgres; browser-provided tutor, price, duration, currency, or policy values are never accepted.
-- re-checks an exact slot against the private availability authority.
-- relies on database exclusion constraints for the final concurrent tutor/student overlap race.
-- converts overlap races to `slot_taken`.
-- computes the standard/max price from server-owned lesson price + policy surcharge.
-- chooses `at_checkout` vs `deferred` hold strategy from the server-owned policy.
-- enforces the express-start acknowledgement for lessons within 14 days.
-- writes the booking and immutable consent inside one Postgres function transaction.
-- returns the original reservation for an exact idempotent retry and rejects reuse of the same key for different intent.
-- does not call Stripe.
-
-### Authenticated Edge Function
-
-`supabase/functions/create-booking/index.ts` now:
-
-- uses the current `@supabase/server` `withSupabase({ auth: 'user' })` pattern.
-- derives `student_id` only from verified `ctx.userClaims.id`.
-- validates only user-owned request inputs: lesson type id, start time, request id, and express-start acknowledgement.
-- delegates the privileged atomic write to `ctx.supabaseAdmin.rpc('create_booking_reservation', ...)`.
-- maps slot races/unavailability to HTTP 409, missing express-start acknowledgement to 422, missing lesson type to 404, and policy configuration failures to a sanitized 503.
-- contains no Stripe code and does not split booking/consent into separate Edge Function writes.
-- `supabase/config.toml` explicitly keeps `verify_jwt = true` for `create-booking`.
-
-### Regression coverage
-
-- pgTAP plan expanded to 26 assertions, including idempotency column/index and server-only reservation RPC privileges.
-- `scripts/check-lesson-booking-reservation-boundary.mjs` verifies atomic consent, idempotency, server-authoritative price/policy/tutor identity, auth gating, stable error mapping, and absence of Stripe.
-- booking CI runs database invariants, browser boundary, reservation boundary, and the full Vite build.
+- `bookings.client_request_id uuid` plus partial unique `(student_id, client_request_id)` idempotency index.
+- service-role-only `public.create_booking_reservation(...)`, `SECURITY DEFINER`, pinned empty `search_path`.
+- server re-reads active lesson type and latest policy; browser tutor/price/duration/currency/policy values are not accepted.
+- exact slot recheck plus database exclusion constraints for the final concurrency race.
+- server-owned maximum price and `at_checkout` vs `deferred` hold strategy.
+- express-start acknowledgement for lessons inside 14 days.
+- booking and immutable consent written in one Postgres transaction.
+- exact retry returns the same reservation; request-id reuse for different intent is rejected.
+- authenticated `create-booking` Edge Function derives `student_id` from verified claims and delegates privileged writes to the RPC.
 
 Key Phase 1A commits:
 
@@ -128,45 +101,105 @@ Key Phase 1A commits:
 - `d6edd9b439fac5976ce14b6da7a62d7f0b21f904` — booking CI adds reservation verification.
 - `ad118988f09646dce1211602b10fed472db83fe2` — foundation checker extended through Phase 1A.
 
+## Phase 1B — Stripe test Checkout + signed webhook boundary — complete in repository, not deployed
+
+Engineering checkpoint: `418630aa19b027c77dfbdfd8d9f04a7e26325316`.
+
+Implemented:
+
+### Checkout attachment and database safety
+
+- adds `stripe_setup_intent_id`, `stripe_checkout_mode`, and `checkout_expires_at` to bookings.
+- unique SetupIntent, Checkout-consent, and ledger Stripe-object boundaries prevent duplicate evidence/money-event rows.
+- service-role-only `attach_booking_checkout(...)` attaches a Checkout Session to an existing reservation.
+- the RPC derives the required mode from the server-owned hold strategy: `at_checkout -> payment`, `deferred -> setup`.
+- the database refuses non-`cs_test_...` Checkout Session IDs, so enabling live payments requires a later explicit code change rather than a secret swap.
+
+### Stripe server helper
+
+- Stripe client is created only from `STRIPE_SECRET_KEY` and currently requires an `sk_test_...` key.
+- Stripe Customers are created/reused server-side and linked in the private `stripe_links` table.
+- Customer and Checkout creation use deterministic Stripe idempotency keys.
+- no literal Stripe secret is committed.
+- `APP_URL` and webhook-secret configuration fail closed when absent or malformed.
+
+### Authenticated Checkout creation
+
+`create-booking` now:
+
+- still performs the atomic reservation transaction before any Stripe object is created.
+- re-reads the reservation server-side before constructing Checkout.
+- reuses an already-attached open Checkout Session instead of creating duplicates.
+- uses `payment` mode + `capture_method: manual` + `setup_future_usage: off_session` for `at_checkout` bookings.
+- uses `setup` mode for deferred holds so the payment method can be charged off-session later.
+- limits the current implementation to cards.
+- requires Stripe terms-of-service consent and records the specific policy/authorization text in server-created metadata/custom text.
+- rejects any Stripe object that reports `livemode=true`.
+
+### Signed/idempotent Stripe webhook
+
+`stripe-webhook` now:
+
+- runs with Supabase JWT verification disabled because Stripe authenticates the endpoint with `Stripe-Signature`.
+- verifies the raw request body with Stripe before dispatching an event.
+- rejects live Stripe events.
+- stores raw event IDs in `stripe_events` and processes each successful event once; failed events retain `processed_at = null` for safe Stripe retry.
+- validates Checkout booking/session/mode/policy identity against the server-owned booking row.
+- requires recorded Stripe TOS acceptance and writes immutable Checkout consent evidence once.
+- for completed payment-mode Checkout, requires a non-live PaymentIntent in `requires_capture`, records the manual authorization and `capture_before`, and transitions the booking to `hold_placed`.
+- for completed setup-mode Checkout, requires a non-live successful SetupIntent, stores the saved payment method, and transitions the booking to `card_saved`.
+- for expired Checkout, cancels only the matching still-pending reservation.
+- does **not** capture funds; settlement is intentionally a later phase.
+
+### Regression coverage
+
+- `scripts/check-lesson-booking-stripe-boundary.mjs` enforces test-only Stripe configuration, manual authorization, server-owned mode selection, idempotency, raw-body signature verification, webhook state guards, and the explicit absence of capture logic.
+- reservation regression coverage was retained while removing only the obsolete Phase 1A “no Stripe code” assertion.
+- `Lesson booking foundation` CI now runs foundation, browser/auth, reservation/consent, Stripe Checkout/webhook, and full Vite-build checks.
+
 ## CI status
 
-On verified engineering/harness head `b87a0c3155a1be7059ccb70b5a41a3321accf64f`:
+On Stripe engineering head `418630aa19b027c77dfbdfd8d9f04a7e26325316`:
 
-- `Lesson booking foundation` run #48 passed dependency install, database invariant checks, browser/auth checks, reservation/consent checks, and the full Vite build.
-- `Heathrow Piccadilly Compatibility` run #128 passed.
-- `Game Smoke Test` run #199 passed its desktop interaction and responsive-mobile checks. The harness now ignores only the expected local Base44 `App not found` noise when no Base44 app id is configured, exercises mobile resizing without reloading the full 3D scene, and uses Node 22 so the current dependency graph is within supported engine bounds.
+- `Lesson booking foundation` push run #50 passed.
+- `Lesson booking foundation` PR run #51 passed all stages, including the new Stripe Checkout/webhook boundary and full build.
+- `Heathrow Piccadilly Compatibility` run #130 passed.
+- `Game Smoke Test` run #201 reached the responsive-mobile evidence screenshot and timed out while taking a **full-page** WebGL screenshot; the application build, startup, desktop checks, canvas visibility, and artifact upload had already succeeded. This was a harness/evidence-capture failure, not a booking failure.
 
-The SQL pgTAP suite is committed but still requires a booted local/test Supabase Postgres project before it can be executed. No existing connected Supabase project was repurposed because none can safely be identified as Smart Parrot.
+Harness repair commit `e6e40a9363c943adc4743d7f8e909b7d0dffc76c` changes smoke evidence to viewport-only WebGL screenshots, disables screenshot animations, and gives the smoke test a 60-second test budget. Its replacement smoke run #202 is the verification target for that harness repair.
+
+The SQL pgTAP suite is committed but still requires a booted local/test Supabase Postgres project before it can be executed. No existing connected Supabase project has been repurposed because none can safely be identified as Smart Parrot.
 
 ## Research applied this run
 
-Current Supabase documentation was rechecked on 2026-09-20:
+Current official documentation was refreshed on 2026-09-20 before implementing Phase 1B:
 
-- authenticated Edge Functions should use `@supabase/server` with `withSupabase({ auth: 'user' })`; `ctx.supabaseAdmin` is the privileged service-role client.
-- browser function invocation uses the signed-in user JWT and keeps platform JWT verification enabled.
-- `withSupabase` handles browser CORS/preflight automatically.
-- publishable keys are browser-safe; secret/service-role keys remain server-only.
-
-Stripe manual capture remains the approved next payment design, but no Stripe payment path was added in Phase 1A.
+- Supabase: authenticated browser-called Edge Functions should keep user auth/JWT verification; externally signed webhooks may disable Supabase JWT verification and verify the provider signature in code; Stripe webhook verification must use the raw request body.
+- Supabase: server secrets remain Edge-Function-only; browser code continues to use only the publishable key.
+- Stripe Checkout: `payment` mode supports one-time PaymentIntents, `setup` mode saves payment details for future charges, and `payment_intent_data.setup_future_usage = off_session` records future off-session intent.
+- Stripe: Checkout exposes consent, PaymentIntent/SetupIntent, status, expiry, and livemode metadata needed for server verification and replay-safe webhook handling.
+- France/EU: official French guidance still treats online service contracts as generally subject to a 14-day withdrawal period beginning at contract conclusion. The exact treatment of scheduled English lessons, no-shows, late-cancellation fees, and any exception remains lawyer-review territory before launch.
 
 ## Next coherent slice
 
-Phase 1B — Stripe test-mode Checkout and hold setup, after a safe Smart Parrot test Supabase target exists:
+Phase 1C — deferred off-session holds + failed-hold recovery:
 
-1. create Checkout in `payment` mode with `capture_method: manual` for lessons inside the hold-lead window.
-2. create Checkout in `setup` mode for later lessons.
-3. create/reuse Stripe Customer server-side and keep all Stripe identifiers server-only.
-4. persist Checkout session id and mandate/consent evidence with idempotency.
-5. add signed Stripe webhook handling for `checkout.session.completed` / expired events before any capture logic.
-6. add failed-hold recovery only after webhook idempotency tests are green.
+1. add a cron-authenticated `place-holds` Edge Function for due `card_saved` bookings.
+2. create test-mode off-session PaymentIntents with saved Customer/payment method, `confirm: true`, `off_session: true`, and manual capture.
+3. persist `capture_before`, transition successful authorizations to `hold_placed`, and write one idempotent `hold_placed` ledger row.
+4. map authentication-required/declined holds to `hold_failed` with one evidence row and no silent retry loop.
+5. add authenticated `fix-payment` Checkout so the student can re-authorize with 3DS when needed.
+6. auto-cancel still-unresolved `hold_failed` bookings at the policy deadline and clean abandoned pending Checkouts.
+7. keep capture/settlement out of Phase 1C.
 
-## External configuration still needed before live integration tests
+## External configuration still needed before end-to-end payment testing
 
-Repository engineering can continue without these, but end-to-end payment testing cannot:
+Repository engineering can continue without these, but real Stripe/Supabase test-mode integration cannot:
 
 - a dedicated Smart Parrot Supabase preview/test project, or an explicit instruction naming which existing Supabase project is safe to use.
 - preview `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
 - server-side Supabase secret context for deployed Edge Functions.
-- Stripe **test-mode** secret + webhook signing secret.
-- Daily test account/domain + webhook secret for the attendance phase.
-- French consumer-law review and consumer mediator details before compliance launch.
+- Stripe **test-mode** secret key and webhook signing secret.
+- Stripe Dashboard public Terms of Service URL for Checkout terms collection.
+- later: Daily test account/domain + webhook secret for attendance.
+- before compliance launch: French consumer-law review and consumer mediator details.

@@ -3,7 +3,7 @@
 
 begin;
 
-select plan(21);
+select plan(26);
 
 select ok(
   not exists (
@@ -226,6 +226,74 @@ select ok(
   not has_table_privilege('anon', 'public.bookings', 'select')
   and not has_table_privilege('anon', 'public.stripe_links', 'select'),
   'free-slot discovery does not expose booking or Stripe rows to anonymous callers'
+);
+
+select ok(
+  exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'bookings'
+      and column_name = 'client_request_id'
+      and data_type = 'uuid'
+  ),
+  'bookings carry a UUID idempotency key'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_indexes
+    where schemaname = 'public'
+      and tablename = 'bookings'
+      and indexname = 'bookings_student_request_id_unique'
+      and indexdef ilike '%unique%student_id, client_request_id%'
+  ),
+  'booking idempotency key is unique per student'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'create_booking_reservation'
+      and p.prosecdef
+      and array_to_string(p.proconfig, ',') like '%search_path=""%'
+  ),
+  'reservation RPC is SECURITY DEFINER with an empty search_path'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.create_booking_reservation(uuid,uuid,timestamp with time zone,uuid,boolean,text,text)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.create_booking_reservation(uuid,uuid,timestamp with time zone,uuid,boolean,text,text)',
+    'execute'
+  ),
+  'browser roles cannot call the privileged reservation RPC directly'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.create_booking_reservation(uuid,uuid,timestamp with time zone,uuid,boolean,text,text)',
+    'execute'
+  )
+  and exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private'
+      and p.proname = 'smart_parrot_booking_payload'
+      and not p.prosecdef
+  ),
+  'service role alone can reserve and the payload helper stays private/invoker'
 );
 
 select * from finish();

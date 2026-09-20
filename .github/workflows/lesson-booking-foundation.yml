@@ -37,10 +37,13 @@ on:
       - "scripts/check-lesson-booking-rehearsal-readiness-boundary.mjs"
       - "scripts/check-lesson-booking-rehearsal-ux-preflight-boundary.mjs"
       - "scripts/check-lesson-booking-full-preview-driver-contract.mjs"
+      - "scripts/check-lesson-booking-full-preview-execution-shell.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
       - "scripts/lesson-booking-full-preview-driver-contract.mjs"
+      - "scripts/lesson-booking-full-preview-observer.mjs"
+      - "scripts/lesson-booking-full-preview-execution-shell.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -76,10 +79,13 @@ on:
       - "scripts/check-lesson-booking-rehearsal-readiness-boundary.mjs"
       - "scripts/check-lesson-booking-rehearsal-ux-preflight-boundary.mjs"
       - "scripts/check-lesson-booking-full-preview-driver-contract.mjs"
+      - "scripts/check-lesson-booking-full-preview-execution-shell.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
       - "scripts/lesson-booking-full-preview-driver-contract.mjs"
+      - "scripts/lesson-booking-full-preview-observer.mjs"
+      - "scripts/lesson-booking-full-preview-execution-shell.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 permissions:
   contents: read
@@ -151,12 +157,16 @@ jobs:
         run: node scripts/check-lesson-booking-rehearsal-ux-preflight-boundary.mjs
       - name: Verify Phase 4C5C full-preview driver contract/evidence lifecycle
         run: node scripts/check-lesson-booking-full-preview-driver-contract.mjs
+      - name: Verify Phase 4C5D execution shell/minimized observer boundary
+        run: node scripts/check-lesson-booking-full-preview-execution-shell.mjs
       - name: Verify preview E2E execution gate is closed in CI
         run: node scripts/lesson-booking-preview-e2e.mjs
       - name: Verify provider-write preview E2E gate is closed in CI
         run: node scripts/lesson-booking-provider-preview-e2e.mjs
       - name: Verify full-path preview preflight gate is closed in CI
         run: node scripts/lesson-booking-full-preview-preflight.mjs
+      - name: Verify full-preview execution shell gate is closed in CI
+        run: node scripts/lesson-booking-full-preview-execution-shell.mjs
       - name: Execute migrations + booking behavior scenarios
         run: |
           set -euo pipefail
@@ -173,5 +183,6 @@ jobs:
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_retention_approval_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_provider_rehearsal_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_provider_rehearsal_readiness_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_observer_scenarios.sql
       - name: Build application
         run: npm run build

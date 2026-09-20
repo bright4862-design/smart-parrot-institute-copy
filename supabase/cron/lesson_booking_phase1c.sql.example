@@ -1,0 +1,62 @@
+-- Smart Parrot Institute lesson-booking Phase 1C cron activation example.
+-- DO NOT run until a dedicated Smart Parrot Supabase preview/test project exists.
+-- Store values in Vault; never paste keys directly into cron.job command text.
+--
+-- Required Vault secrets before scheduling:
+--   lesson_booking_project_url       -> https://<project-ref>.supabase.co
+--   lesson_booking_cron_secret_key   -> a Supabase sb_secret_... API key
+--
+-- Supabase currently recommends pg_cron + pg_net for scheduled Edge Function
+-- invocation. The place-holds function uses withSupabase({ auth: 'secret' }),
+-- so the cron caller must send the secret key in the apikey header.
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+-- Example secret creation (replace placeholders only in the Supabase SQL editor,
+-- never in Git):
+-- select vault.create_secret(
+--   'https://<project-ref>.supabase.co',
+--   'lesson_booking_project_url'
+-- );
+-- select vault.create_secret(
+--   '<sb_secret_key>',
+--   'lesson_booking_cron_secret_key'
+-- );
+
+select cron.schedule(
+  'smart-parrot-place-holds',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := (
+      select decrypted_secret
+      from vault.decrypted_secrets
+      where name = 'lesson_booking_project_url'
+    ) || '/functions/v1/place-holds',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'apikey', (
+        select decrypted_secret
+        from vault.decrypted_secrets
+        where name = 'lesson_booking_cron_secret_key'
+      )
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+-- Verify the job after activation:
+-- select jobid, jobname, schedule, command, active
+-- from cron.job
+-- where jobname = 'smart-parrot-place-holds';
+--
+-- Inspect recent runs:
+-- select *
+-- from cron.job_run_details
+-- where jobid = (
+--   select jobid from cron.job where jobname = 'smart-parrot-place-holds'
+-- )
+-- order by start_time desc
+-- limit 20;

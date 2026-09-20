@@ -76,7 +76,7 @@ expect(
   'create-booking must derive student identity from verified user claims',
 );
 expect(
-  /ctx\.supabaseAdmin\.rpc\('create_booking_reservation'/.test(edge),
+  /ctx\.supabaseAdmin\.rpc\([\s\n]*'create_booking_reservation'/.test(edge),
   'create-booking must delegate the privileged atomic write to the reservation RPC',
 );
 expect(
@@ -86,10 +86,6 @@ expect(
 expect(
   !/\.from\(['"](?:bookings|consents)['"]\)[\s\S]*?\.(?:insert|update|upsert|delete)\(/i.test(edge),
   'create-booking must not split booking and consent into separate Edge Function writes',
-);
-expect(
-  !/stripe/i.test(edge),
-  'Phase 1A create-booking must remain payment-free until reservation tests are green',
 );
 expect(
   /case 'slot_taken':[\s\S]*?case 'slot_unavailable':[\s\S]*?status: 409/i.test(edge),

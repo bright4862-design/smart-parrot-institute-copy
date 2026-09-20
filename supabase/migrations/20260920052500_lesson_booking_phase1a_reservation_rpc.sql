@@ -23,21 +23,21 @@ security invoker
 set search_path = ''
 as $$
   select jsonb_build_object(
-    'booking_id', p_booking.id,
+    'booking_id', (p_booking).id,
     'created', p_created,
-    'status', p_booking.status,
-    'student_id', p_booking.student_id,
-    'tutor_id', p_booking.tutor_id,
-    'lesson_type_id', p_booking.lesson_type_id,
-    'policy_version_id', p_booking.policy_version_id,
-    'starts_at', p_booking.starts_at,
-    'ends_at', p_booking.ends_at,
-    'currency', p_booking.currency,
-    'on_time_price_cents', p_booking.on_time_price_cents,
-    'max_charge_cents', p_booking.max_charge_cents,
-    'hold_strategy', p_booking.hold_strategy,
-    'hold_due_at', p_booking.hold_due_at,
-    'client_request_id', p_booking.client_request_id
+    'status', (p_booking).status,
+    'student_id', (p_booking).student_id,
+    'tutor_id', (p_booking).tutor_id,
+    'lesson_type_id', (p_booking).lesson_type_id,
+    'policy_version_id', (p_booking).policy_version_id,
+    'starts_at', (p_booking).starts_at,
+    'ends_at', (p_booking).ends_at,
+    'currency', (p_booking).currency,
+    'on_time_price_cents', (p_booking).on_time_price_cents,
+    'max_charge_cents', (p_booking).max_charge_cents,
+    'hold_strategy', (p_booking).hold_strategy,
+    'hold_due_at', (p_booking).hold_due_at,
+    'client_request_id', (p_booking).client_request_id
   );
 $$;
 

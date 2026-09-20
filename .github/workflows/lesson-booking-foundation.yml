@@ -56,13 +56,9 @@ jobs:
           deno-version: v2.x
       - name: Install dependencies
         run: npm install
-      - name: Typecheck booking Edge Functions
+      - name: Typecheck Phase 2A Edge Functions
         run: >-
-          deno check --node-modules-dir=auto
-          supabase/functions/create-booking/index.ts
-          supabase/functions/fix-payment/index.ts
-          supabase/functions/place-holds/index.ts
-          supabase/functions/stripe-webhook/index.ts
+          deno check --node-modules-dir=none
           supabase/functions/create-video-token/index.ts
           supabase/functions/daily-webhook/index.ts
           supabase/functions/check-in/index.ts

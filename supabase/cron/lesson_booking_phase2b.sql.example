@@ -1,0 +1,50 @@
+-- Smart Parrot Institute lesson-booking Phase 2B settlement cron example.
+-- DO NOT run until a dedicated Smart Parrot Supabase preview/test project exists.
+-- This schedules only the test-mode settlement worker; it does not enable live payments.
+--
+-- Reuses the Vault secrets documented in lesson_booking_phase1c.sql.example:
+--   lesson_booking_project_url
+--   lesson_booking_cron_secret_key
+--
+-- Supabase recommends pg_cron + pg_net for scheduled Edge Function invocation,
+-- with credentials held in Vault instead of embedded in cron.job command text.
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select cron.schedule(
+  'smart-parrot-settle-lessons',
+  '*/5 * * * *',
+  $$
+  select net.http_post(
+    url := (
+      select decrypted_secret
+      from vault.decrypted_secrets
+      where name = 'lesson_booking_project_url'
+    ) || '/functions/v1/settle-lessons',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'apikey', (
+        select decrypted_secret
+        from vault.decrypted_secrets
+        where name = 'lesson_booking_cron_secret_key'
+      )
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+-- Verify after activation:
+-- select jobid, jobname, schedule, command, active
+-- from cron.job
+-- where jobname = 'smart-parrot-settle-lessons';
+--
+-- Inspect recent runs:
+-- select *
+-- from cron.job_run_details
+-- where jobid = (
+--   select jobid from cron.job where jobname = 'smart-parrot-settle-lessons'
+-- )
+-- order by start_time desc
+-- limit 20;

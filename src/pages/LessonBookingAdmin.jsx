@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import BookingProviderRehearsalPanel from '@/components/lesson/BookingProviderRehearsalPanel';
 import BookingRetentionControls from '@/components/lesson/BookingRetentionControls';
 import { LessonBookingAuthProvider, useLessonBookingAuth } from '@/lib/LessonBookingAuthContext';
 import {
@@ -165,6 +166,8 @@ function AdminContent() {
           )}
         </section>
       </div>
+
+      <BookingProviderRehearsalPanel client={client} refreshKey={refreshKey} onChanged={() => setRefreshKey((value) => value + 1)} />
 
       <div className="mt-6 flex items-center justify-between">
         <h2 className="text-xl font-black">Review queue</h2>

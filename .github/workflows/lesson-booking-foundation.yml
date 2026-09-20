@@ -36,9 +36,11 @@ on:
       - "scripts/check-lesson-booking-launch-rehearsal-boundary.mjs"
       - "scripts/check-lesson-booking-rehearsal-readiness-boundary.mjs"
       - "scripts/check-lesson-booking-rehearsal-ux-preflight-boundary.mjs"
+      - "scripts/check-lesson-booking-full-preview-driver-contract.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
+      - "scripts/lesson-booking-full-preview-driver-contract.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -73,9 +75,11 @@ on:
       - "scripts/check-lesson-booking-launch-rehearsal-boundary.mjs"
       - "scripts/check-lesson-booking-rehearsal-readiness-boundary.mjs"
       - "scripts/check-lesson-booking-rehearsal-ux-preflight-boundary.mjs"
+      - "scripts/check-lesson-booking-full-preview-driver-contract.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
+      - "scripts/lesson-booking-full-preview-driver-contract.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 permissions:
   contents: read
@@ -145,6 +149,8 @@ jobs:
         run: node scripts/check-lesson-booking-rehearsal-readiness-boundary.mjs
       - name: Verify Phase 4C5B2 rehearsal UX/full-preview preflight boundary
         run: node scripts/check-lesson-booking-rehearsal-ux-preflight-boundary.mjs
+      - name: Verify Phase 4C5C full-preview driver contract/evidence lifecycle
+        run: node scripts/check-lesson-booking-full-preview-driver-contract.mjs
       - name: Verify preview E2E execution gate is closed in CI
         run: node scripts/lesson-booking-preview-e2e.mjs
       - name: Verify provider-write preview E2E gate is closed in CI

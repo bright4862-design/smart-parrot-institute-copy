@@ -91,7 +91,7 @@ begin
 end $$;
 
 -- Unmatched provider events are surfaced as urgent queue items without inventing a booking link.
-perform public.record_stripe_dispute_event('evt_phase4b_unmatched','du_phase4b_unmatched','charge.dispute.created','needs_response','unrecognized',1200,'eur','pi_test_unknown','ch_test_unknown','2026-10-28 12:00+00','2026-10-25 14:00+00');
+select public.record_stripe_dispute_event('evt_phase4b_unmatched','du_phase4b_unmatched','charge.dispute.created','needs_response','unrecognized',1200,'eur','pi_test_unknown','ch_test_unknown','2026-10-28 12:00+00','2026-10-25 14:00+00');
 do $$
 declare n int;
 begin

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 const migration = fs.readFileSync('supabase/migrations/20260920160500_lesson_booking_phase4c3_retention_ops_preview_guard.sql','utf8');
+const compatibilityMigration = fs.readFileSync('supabase/migrations/20260920160600_lesson_booking_phase4c3_legacy_queue_guard.sql','utf8');
 const readiness = fs.readFileSync('supabase/functions/booking-preview-readiness/index.ts','utf8');
 const api = fs.readFileSync('src/lib/lessonBookingApi.js','utf8');
 const page = fs.readFileSync('src/pages/LessonBookingAdmin.jsx','utf8');
@@ -19,8 +20,15 @@ requireAll(migration,[
   'smart_parrot_booking_launch_health_v2','A nonzero count is an operator signal','never erases evidence',
 ], 'Phase 4C3 migration');
 
-for (const forbidden of ['delete from public.bookings','delete from public.ledger_entries','truncate public.','automatic_erasure_worker','purge_booking']) {
-  if (migration.toLowerCase().includes(forbidden)) throw new Error(`Phase 4C3 migration contains destructive primitive: ${forbidden}`);
+requireAll(compatibilityMigration,[
+  'Legacy unmatched Stripe test dispute','provider refresh required','stripe_dispute_events','stripe_dispute_current_state',
+  'retention_unclassified','retention_review_overdue','retention_policy_unapproved','no provider/payment write authority',
+], 'Phase 4C3 legacy queue compatibility migration');
+
+for (const [labelName, text] of [['Phase 4C3 migration', migration], ['Phase 4C3 compatibility migration', compatibilityMigration]]) {
+  for (const forbidden of ['delete from public.bookings','delete from public.ledger_entries','truncate public.','automatic_erasure_worker','purge_booking']) {
+    if (text.toLowerCase().includes(forbidden)) throw new Error(`${labelName} contains destructive primitive: ${forbidden}`);
+  }
 }
 
 requireAll(readiness,[

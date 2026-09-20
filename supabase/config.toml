@@ -7,9 +7,20 @@ verify_jwt = true
 [functions.fix-payment]
 verify_jwt = true
 
+[functions.create-video-token]
+verify_jwt = true
+
+[functions.check-in]
+verify_jwt = true
+
 # Stripe is an external provider: it authenticates with Stripe-Signature, not a
 # Supabase Authorization header. The handler verifies the raw body signature.
 [functions.stripe-webhook]
+verify_jwt = false
+
+# Daily is an external provider: it authenticates with the configured webhook
+# HMAC. The handler verifies the raw request before parsing or writing evidence.
+[functions.daily-webhook]
 verify_jwt = false
 
 # Cron/service-to-service calls send a Supabase secret key in the apikey header.

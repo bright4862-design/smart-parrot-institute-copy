@@ -8,12 +8,20 @@ const OPERATION_AUTH = Object.freeze({
   'fix-payment': 'student_user',
   'place-holds': 'secret_worker',
   'settle-lessons': 'secret_worker',
+  'booking-preview-readiness': 'admin_user',
+  'booking-provider-preview-readiness': 'admin_user',
+  'admin_provider_rehearsal_readiness': 'admin_rpc',
+  'admin_booking_webhook_readiness_proof': 'admin_rpc',
+  'admin_get_booking_full_preview_run': 'admin_rpc',
   'admin_observe_booking_preview_run': 'admin_rpc',
   'admin_reconcile_booking_provider_rehearsal_cleanup': 'admin_rpc',
   'admin_begin_booking_full_preview_run': 'admin_rpc',
   'admin_bind_booking_full_preview_run': 'admin_rpc',
   'admin_refresh_booking_full_preview_run': 'admin_rpc',
 });
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PROFILE_ROLES = new Set(['student', 'tutor', 'admin']);
 
 function required(value, label) {
   const normalized = String(value ?? '').trim();
@@ -74,13 +82,25 @@ export function createApprovedPreviewSupabaseTransport({
   const identity = assertPreviewIdentity({ previewRef, supabaseUrl });
   if (typeof fetchImpl !== 'function') throw new Error('preview_fetch_transport_required');
 
+  function userHeaders(accessToken, label) {
+    return {
+      apikey: assertPublishableKey(publishableKey),
+      authorization: `Bearer ${required(accessToken, label)}`,
+      'content-type': 'application/json',
+    };
+  }
+
   async function invokeEdgeFunction(target, payload, auth) {
-    const headers = { 'content-type': 'application/json' };
+    let headers;
     if (auth === 'student_user') {
-      headers.apikey = assertPublishableKey(publishableKey);
-      headers.authorization = `Bearer ${required(studentAccessToken, 'student_access_token')}`;
+      headers = userHeaders(studentAccessToken, 'student_access_token');
+    } else if (auth === 'admin_user') {
+      headers = userHeaders(adminAccessToken, 'admin_access_token');
     } else if (auth === 'secret_worker') {
-      headers.apikey = assertSecretKey(secretKey);
+      headers = {
+        apikey: assertSecretKey(secretKey),
+        'content-type': 'application/json',
+      };
     } else {
       throw new Error(`unsupported_preview_edge_auth:${auth}`);
     }
@@ -95,18 +115,53 @@ export function createApprovedPreviewSupabaseTransport({
   async function invokeRpc(target, payload) {
     const response = await fetchImpl(`${identity.url}/rest/v1/rpc/${target}`, {
       method: 'POST',
-      headers: {
-        apikey: assertPublishableKey(publishableKey),
-        authorization: `Bearer ${required(adminAccessToken, 'admin_access_token')}`,
-        'content-type': 'application/json',
-      },
+      headers: userHeaders(adminAccessToken, 'admin_access_token'),
       body: JSON.stringify(payload ?? {}),
     });
     return decodeResponse(response);
   }
 
+  async function probeUserSession(authClass) {
+    let token;
+    let label;
+    if (authClass === 'student_user') {
+      token = studentAccessToken;
+      label = 'student_access_token';
+    } else if (authClass === 'admin_user') {
+      token = adminAccessToken;
+      label = 'admin_access_token';
+    } else {
+      throw new Error(`unsupported_preview_session_probe:${authClass}`);
+    }
+
+    const headers = userHeaders(token, label);
+    const user = await decodeResponse(await fetchImpl(`${identity.url}/auth/v1/user`, {
+      method: 'GET',
+      headers,
+    }));
+    const subject = required(user?.id, `${authClass}_subject`);
+    if (!UUID_RE.test(subject)) throw new Error(`${authClass}_subject_invalid`);
+
+    const profileUrl = new URL(`${identity.url}/rest/v1/profiles`);
+    profileUrl.searchParams.set('select', 'id,role');
+    profileUrl.searchParams.set('id', `eq.${subject}`);
+    profileUrl.searchParams.set('limit', '1');
+    const profiles = await decodeResponse(await fetchImpl(profileUrl.toString(), {
+      method: 'GET',
+      headers,
+    }));
+    if (!Array.isArray(profiles) || profiles.length !== 1 || profiles[0]?.id !== subject) {
+      throw new Error(`${authClass}_profile_unavailable`);
+    }
+    const role = required(profiles[0]?.role, `${authClass}_profile_role`);
+    if (!PROFILE_ROLES.has(role)) throw new Error(`${authClass}_profile_role_invalid`);
+
+    return Object.freeze({ subject, role });
+  }
+
   return Object.freeze({
     identity: Object.freeze({ project_ref: identity.ref, supabase_url: identity.url }),
+    probeUserSession,
     async invokeServer(call) {
       if (!call || typeof call !== 'object') throw new Error('invalid_preview_transport_call');
       const target = required(call.target, 'preview_target');

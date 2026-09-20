@@ -40,6 +40,7 @@ on:
       - "scripts/check-lesson-booking-full-preview-execution-shell.mjs"
       - "scripts/check-lesson-booking-full-preview-run-registry.mjs"
       - "scripts/check-lesson-booking-full-preview-resumable-executor.mjs"
+      - "scripts/check-lesson-booking-full-preview-operator-bootstrap.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
@@ -50,6 +51,7 @@ on:
       - "scripts/lesson-booking-full-preview-execution-shell.mjs"
       - "scripts/lesson-booking-full-preview-readiness-manifest.mjs"
       - "scripts/lesson-booking-full-preview-resumable-executor.mjs"
+      - "scripts/lesson-booking-full-preview-operator-bootstrap.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -88,6 +90,7 @@ on:
       - "scripts/check-lesson-booking-full-preview-execution-shell.mjs"
       - "scripts/check-lesson-booking-full-preview-run-registry.mjs"
       - "scripts/check-lesson-booking-full-preview-resumable-executor.mjs"
+      - "scripts/check-lesson-booking-full-preview-operator-bootstrap.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
@@ -98,6 +101,7 @@ on:
       - "scripts/lesson-booking-full-preview-execution-shell.mjs"
       - "scripts/lesson-booking-full-preview-readiness-manifest.mjs"
       - "scripts/lesson-booking-full-preview-resumable-executor.mjs"
+      - "scripts/lesson-booking-full-preview-operator-bootstrap.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 permissions:
   contents: read
@@ -175,6 +179,8 @@ jobs:
         run: node scripts/check-lesson-booking-full-preview-run-registry.mjs
       - name: Verify Phase 4C5F resumable executor/credential readiness boundary
         run: node scripts/check-lesson-booking-full-preview-resumable-executor.mjs
+      - name: Verify Phase 4C5G operator bootstrap/webhook proof boundary
+        run: node scripts/check-lesson-booking-full-preview-operator-bootstrap.mjs
       - name: Verify preview E2E execution gate is closed in CI
         run: node scripts/lesson-booking-preview-e2e.mjs
       - name: Verify provider-write preview E2E gate is closed in CI
@@ -183,6 +189,8 @@ jobs:
         run: node scripts/lesson-booking-full-preview-preflight.mjs
       - name: Verify full-preview execution shell gate is closed in CI
         run: node scripts/lesson-booking-full-preview-execution-shell.mjs
+      - name: Verify full-preview operator bootstrap gate is closed in CI
+        run: node scripts/lesson-booking-full-preview-operator-bootstrap.mjs
       - name: Execute migrations + booking behavior scenarios
         run: |
           set -euo pipefail
@@ -201,5 +209,6 @@ jobs:
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_provider_rehearsal_readiness_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_observer_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_run_registry_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_operator_scenarios.sql
       - name: Build application
         run: npm run build

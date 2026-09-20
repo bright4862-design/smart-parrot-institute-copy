@@ -3,10 +3,20 @@ import { withSupabase } from 'npm:@supabase/server@^1';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SIGNATURE_TOLERANCE_MS = 5 * 60 * 1000;
 
-function webhookSecret() {
-  const secret = Deno.env.get('DAILY_WEBHOOK_SECRET')?.trim();
-  if (!secret || secret.length < 16) throw new Error('daily_webhook_secret_required');
-  return secret;
+function webhookSecretBytes() {
+  const secret = Deno.env.get('DAILY_WEBHOOK_SECRET')?.trim() ?? '';
+  if (!secret || secret.length < 24 || secret.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(secret)) {
+    throw new Error('daily_webhook_secret_required');
+  }
+
+  try {
+    const decoded = atob(secret);
+    const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+    if (bytes.byteLength < 16) throw new Error('daily_webhook_secret_required');
+    return bytes;
+  } catch {
+    throw new Error('daily_webhook_secret_required');
+  }
 }
 
 function signatureBytes(value: string) {
@@ -47,7 +57,7 @@ async function signatureOk(req: Request, rawBody: string) {
 
   const key = await crypto.subtle.importKey(
     'raw',
-    new TextEncoder().encode(webhookSecret()),
+    webhookSecretBytes(),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['verify'],
@@ -100,6 +110,13 @@ export default {
       event = JSON.parse(rawBody);
     } catch {
       return new Response('invalid json', { status: 400 });
+    }
+
+    // Daily signs this endpoint-verification request just like a real delivery.
+    // Keep the response path fast: signature verification happens before this branch,
+    // then we return 200 without a database or provider network round-trip.
+    if (event.test === 'test' && Object.keys(event).length === 1) {
+      return Response.json({ received: true, verified: true });
     }
 
     if (event.type !== 'participant.joined' && event.type !== 'participant.left') {

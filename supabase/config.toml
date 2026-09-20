@@ -7,6 +7,9 @@ verify_jwt = true
 [functions.fix-payment]
 verify_jwt = true
 
+[functions.cancel-booking]
+verify_jwt = true
+
 [functions.create-video-token]
 verify_jwt = true
 

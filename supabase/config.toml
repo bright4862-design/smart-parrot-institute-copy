@@ -1,0 +1,5 @@
+# Smart Parrot Institute Supabase function security settings.
+# Authenticated browser functions keep platform JWT verification enabled.
+
+[functions.create-booking]
+verify_jwt = true

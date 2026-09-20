@@ -6,6 +6,8 @@ import {
   addAdminReviewNote,
   claimAdminReviewCase,
   exportAdminBookingEvidence,
+  getAdminBookingLaunchHealth,
+  getAdminBookingPreviewReadiness,
   listAdminReviewQueue,
   openAdminReviewCase,
   resolveAdminReviewCase,
@@ -17,12 +19,23 @@ const severityClass = {
   normal: 'border-slate-200 bg-white text-slate-900',
 };
 
+function label(value) {
+  return String(value || '').replaceAll('_', ' ');
+}
+
+function StatusPill({ ready, status }) {
+  return <span className={`rounded-full px-2 py-1 text-xs font-bold ${ready ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>{label(status)}</span>;
+}
+
 function AdminContent() {
   const { client, configStatus, isAuthenticated, isLoading: authLoading, user, sendMagicLink, signOut } = useLessonBookingAuth();
   const [email, setEmail] = useState('');
   const [items, setItems] = useState([]);
+  const [health, setHealth] = useState(null);
+  const [readiness, setReadiness] = useState(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [opsError, setOpsError] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [busy, setBusy] = useState('');
@@ -31,19 +44,30 @@ function AdminContent() {
   useEffect(() => {
     if (!client || !isAuthenticated) {
       setItems([]);
+      setHealth(null);
+      setReadiness(null);
       return;
     }
     let active = true;
     setLoading(true);
     setError('');
-    listAdminReviewQueue(client)
-      .then((rows) => { if (active) setItems(rows); })
-      .catch((err) => {
-        if (!active) return;
-        const message = err?.message || 'Could not load the operations queue.';
+    setOpsError('');
+    Promise.allSettled([
+      listAdminReviewQueue(client),
+      getAdminBookingLaunchHealth(client),
+      getAdminBookingPreviewReadiness(client),
+    ]).then(([queueResult, healthResult, readinessResult]) => {
+      if (!active) return;
+      if (queueResult.status === 'fulfilled') setItems(queueResult.value);
+      else {
+        const message = queueResult.reason?.message || 'Could not load the operations queue.';
         setError(message.includes('admin_required') ? 'Admin access is required for this page.' : message);
-      })
-      .finally(() => { if (active) setLoading(false); });
+      }
+      if (healthResult.status === 'fulfilled') setHealth(healthResult.value);
+      else setOpsError((current) => current || healthResult.reason?.message || 'Launch health is unavailable.');
+      if (readinessResult.status === 'fulfilled') setReadiness(readinessResult.value);
+      else setOpsError((current) => current || readinessResult.reason?.message || 'Preview readiness is unavailable.');
+    }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [client, isAuthenticated, refreshKey]);
 
@@ -75,7 +99,7 @@ function AdminContent() {
   };
 
   if (!client) {
-    return <main className="mx-auto max-w-3xl p-8"><h1 className="text-2xl font-black">Lesson operations</h1><p className="mt-3 text-slate-600">Supabase booking configuration is not available in this build.</p><pre className="mt-4 rounded bg-slate-100 p-3 text-xs">{JSON.stringify(configStatus, null, 2)}</pre></main>;
+    return <main className="mx-auto max-w-3xl p-8"><h1 className="text-2xl font-black">Lesson operations</h1><p className="mt-3 text-slate-600">Supabase booking configuration is not available in this build.</p><p className="mt-4 rounded bg-slate-100 p-3 text-xs">Status: {configStatus?.reason || 'not configured'}</p></main>;
   }
 
   if (authLoading) return <main className="p-8 text-center">Loading secure lesson operations…</main>;
@@ -114,6 +138,30 @@ function AdminContent() {
       </div>
       {notice && <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
       {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {opsError && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{opsError}</p>}
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-black">Launch health</h2>{health && <StatusPill ready={health.status === 'healthy'} status={health.status} />}</div>
+          <p className="mt-2 text-xs text-slate-500">Server-computed counts only. A warning is an operator signal, never authority to move money.</p>
+          {!health ? <p className="mt-4 text-sm text-slate-500">Health unavailable.</p> : (
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {Object.entries(health.counts || {}).map(([name, count]) => <div key={name} className="rounded-lg bg-slate-50 p-3"><div className="text-xl font-black">{count}</div><div className="text-xs text-slate-600">{label(name)}</div></div>)}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-black">Preview readiness</h2>{readiness && <StatusPill ready={readiness.status === 'ready'} status={readiness.status} />}</div>
+          <p className="mt-2 text-xs text-slate-500">No secret values are shown. The server reports configuration presence and policy gates only.</p>
+          {!readiness ? <p className="mt-4 text-sm text-slate-500">Readiness unavailable.</p> : (
+            <div className="mt-4 space-y-2">
+              {Object.entries(readiness.checks || {}).map(([name, check]) => <div key={name} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-2 text-xs"><span>{label(name)}</span><StatusPill ready={Boolean(check?.ready)} status={check?.status} /></div>)}
+              {readiness.blockers?.length > 0 && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-950">Blocked by: {readiness.blockers.map(label).join(', ')}</p>}
+            </div>
+          )}
+        </section>
+      </div>
 
       <div className="mt-6 flex items-center justify-between">
         <h2 className="text-xl font-black">Review queue</h2>

@@ -143,3 +143,40 @@ export async function getAdminDataSubjectInventory(client, subjectId) {
   if (error) throw error;
   return data;
 }
+
+export async function getAdminBookingLaunchHealth(client) {
+  if (!client) throw new Error('Lesson booking Supabase client is unavailable.');
+  const { data, error } = await client.rpc('admin_booking_launch_health');
+  if (error) throw error;
+  return data;
+}
+
+export async function getAdminBookingPreviewReadiness(client) {
+  if (!client) throw new Error('Lesson booking Supabase client is unavailable.');
+  const { data, error } = await client.functions.invoke('booking-preview-readiness', { body: {} });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function getAdminBookingRetentionStatus(client, bookingId) {
+  if (!client) throw new Error('Lesson booking Supabase client is unavailable.');
+  const { data, error } = await client.rpc('admin_booking_retention_status', { p_booking_id: assertUuid(bookingId,'bookingId') });
+  if (error) throw error;
+  return data;
+}
+
+export async function setAdminBookingRetentionControl(client, { bookingId, retentionClass, legalHold, reasonCode, reviewAfter = null }) {
+  if (!client) throw new Error('Lesson booking Supabase client is unavailable.');
+  const reason = String(reasonCode ?? '').trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_.-]{2,79}$/.test(reason)) throw new Error('reasonCode must be a short machine-readable code.');
+  const { data, error } = await client.rpc('admin_set_booking_retention_control', {
+    p_booking_id: assertUuid(bookingId,'bookingId'),
+    p_retention_class: String(retentionClass ?? '').trim(),
+    p_legal_hold: Boolean(legalHold),
+    p_reason_code: reason,
+    p_review_after: reviewAfter || null,
+  });
+  if (error) throw error;
+  return data;
+}

@@ -27,6 +27,8 @@ on:
       - "scripts/check-lesson-booking-compliance-ux-boundary.mjs"
       - "scripts/check-lesson-booking-admin-ops-boundary.mjs"
       - "scripts/check-lesson-booking-admin-dispute-boundary.mjs"
+      - "scripts/check-lesson-booking-preview-readiness-boundary.mjs"
+      - "scripts/lesson-booking-preview-e2e.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -52,6 +54,8 @@ on:
       - "scripts/check-lesson-booking-compliance-ux-boundary.mjs"
       - "scripts/check-lesson-booking-admin-ops-boundary.mjs"
       - "scripts/check-lesson-booking-admin-dispute-boundary.mjs"
+      - "scripts/check-lesson-booking-preview-readiness-boundary.mjs"
+      - "scripts/lesson-booking-preview-e2e.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 permissions:
   contents: read
@@ -85,6 +89,7 @@ jobs:
           supabase/functions/settle-lessons/index.ts
           supabase/functions/cancel-booking/index.ts
           supabase/functions/stripe-dispute-webhook/index.ts
+          supabase/functions/booking-preview-readiness/index.ts
       - name: Verify database foundation invariants
         run: node scripts/check-lesson-booking-foundation.mjs
       - name: Verify browser/auth boundary
@@ -107,6 +112,10 @@ jobs:
         run: node scripts/check-lesson-booking-admin-ops-boundary.mjs
       - name: Verify Phase 4B admin/dispute boundary
         run: node scripts/check-lesson-booking-admin-dispute-boundary.mjs
+      - name: Verify Phase 4C2 preview/retention boundary
+        run: node scripts/check-lesson-booking-preview-readiness-boundary.mjs
+      - name: Verify preview E2E execution gate is closed in CI
+        run: node scripts/lesson-booking-preview-e2e.mjs
       - name: Execute migrations + booking behavior scenarios
         run: |
           set -euo pipefail
@@ -118,5 +127,6 @@ jobs:
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_admin_ops_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_admin_dispute_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_launch_hardening_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_preview_retention_scenarios.sql
       - name: Build application
         run: npm run build

@@ -16,6 +16,11 @@ verify_jwt = true
 [functions.check-in]
 verify_jwt = true
 
+# Admin-only configuration/readiness probe. The handler re-checks profiles.role
+# and returns status/boolean metadata only; it never returns secret values.
+[functions.booking-preview-readiness]
+verify_jwt = true
+
 # Stripe is an external provider: it authenticates with Stripe-Signature, not a
 # Supabase Authorization header. The handler verifies the raw body signature.
 [functions.stripe-webhook]

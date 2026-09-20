@@ -39,6 +39,7 @@ on:
       - "scripts/check-lesson-booking-full-preview-driver-contract.mjs"
       - "scripts/check-lesson-booking-full-preview-execution-shell.mjs"
       - "scripts/check-lesson-booking-full-preview-run-registry.mjs"
+      - "scripts/check-lesson-booking-full-preview-resumable-executor.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
@@ -47,6 +48,8 @@ on:
       - "scripts/lesson-booking-full-preview-run-registry.mjs"
       - "scripts/lesson-booking-full-preview-supabase-transport.mjs"
       - "scripts/lesson-booking-full-preview-execution-shell.mjs"
+      - "scripts/lesson-booking-full-preview-readiness-manifest.mjs"
+      - "scripts/lesson-booking-full-preview-resumable-executor.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -84,6 +87,7 @@ on:
       - "scripts/check-lesson-booking-full-preview-driver-contract.mjs"
       - "scripts/check-lesson-booking-full-preview-execution-shell.mjs"
       - "scripts/check-lesson-booking-full-preview-run-registry.mjs"
+      - "scripts/check-lesson-booking-full-preview-resumable-executor.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - "scripts/lesson-booking-full-preview-preflight.mjs"
@@ -92,6 +96,8 @@ on:
       - "scripts/lesson-booking-full-preview-run-registry.mjs"
       - "scripts/lesson-booking-full-preview-supabase-transport.mjs"
       - "scripts/lesson-booking-full-preview-execution-shell.mjs"
+      - "scripts/lesson-booking-full-preview-readiness-manifest.mjs"
+      - "scripts/lesson-booking-full-preview-resumable-executor.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 permissions:
   contents: read
@@ -167,6 +173,8 @@ jobs:
         run: node scripts/check-lesson-booking-full-preview-execution-shell.mjs
       - name: Verify Phase 4C5E approved preview transport/run registry boundary
         run: node scripts/check-lesson-booking-full-preview-run-registry.mjs
+      - name: Verify Phase 4C5F resumable executor/credential readiness boundary
+        run: node scripts/check-lesson-booking-full-preview-resumable-executor.mjs
       - name: Verify preview E2E execution gate is closed in CI
         run: node scripts/lesson-booking-preview-e2e.mjs
       - name: Verify provider-write preview E2E gate is closed in CI

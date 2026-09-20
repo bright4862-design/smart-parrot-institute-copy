@@ -8,11 +8,18 @@ import {
 
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
+type AdminClient = any;
+
+type AttachedBooking = {
+  kind: 'initial' | 'recovery';
+  booking: any;
+};
+
 function response(error: string, status: number) {
   return Response.json({ error }, { status });
 }
 
-async function recordStripeConsent(admin: any, booking: any, session: Stripe.Checkout.Session) {
+async function recordStripeConsent(admin: AdminClient, booking: any, session: Stripe.Checkout.Session) {
   if (session.consent?.terms_of_service !== 'accepted') {
     throw new Error('stripe_terms_not_accepted');
   }
@@ -47,13 +54,127 @@ async function recordStripeConsent(admin: any, booking: any, session: Stripe.Che
   if (consentError?.code !== '23505' && consentError) throw consentError;
 }
 
-async function insertLedgerOnce(admin: any, entry: Record<string, unknown>) {
+async function insertLedgerOnce(admin: AdminClient, entry: Record<string, unknown>) {
   const { error } = await admin.from('ledger_entries').insert(entry);
   if (error?.code !== '23505' && error) throw error;
 }
 
+const bookingSelection = [
+  'id',
+  'student_id',
+  'policy_version_id',
+  'status',
+  'hold_strategy',
+  'max_charge_cents',
+  'currency',
+  'stripe_checkout_session_id',
+  'stripe_checkout_mode',
+  'hold_recovery_checkout_session_id',
+].join(', ');
+
+async function bookingForSession(admin: AdminClient, sessionId: string): Promise<AttachedBooking | null> {
+  const { data: initial, error: initialError } = await admin
+    .from('bookings')
+    .select(bookingSelection)
+    .eq('stripe_checkout_session_id', sessionId)
+    .maybeSingle();
+  if (initialError) throw initialError;
+  if (initial) return { kind: 'initial', booking: initial };
+
+  const { data: recovery, error: recoveryError } = await admin
+    .from('bookings')
+    .select(bookingSelection)
+    .eq('hold_recovery_checkout_session_id', sessionId)
+    .maybeSingle();
+  if (recoveryError) throw recoveryError;
+  if (recovery) return { kind: 'recovery', booking: recovery };
+
+  return null;
+}
+
+async function verifyCheckoutCustomer(admin: AdminClient, booking: any, session: Stripe.Checkout.Session) {
+  const sessionCustomerId = stripeObjectId(session.customer as any);
+  const { data: link, error } = await admin
+    .from('stripe_links')
+    .select('stripe_customer_id')
+    .eq('user_id', booking.student_id)
+    .single();
+  if (error || !link?.stripe_customer_id) throw error ?? new Error('stripe_customer_not_found');
+  if (!sessionCustomerId || sessionCustomerId !== link.stripe_customer_id) {
+    throw new Error('checkout_customer_mismatch');
+  }
+}
+
+async function applyManualAuthorization(
+  admin: AdminClient,
+  stripe: Stripe,
+  booking: any,
+  session: Stripe.Checkout.Session,
+  attachmentKind: 'initial' | 'recovery',
+) {
+  const paymentIntentId = stripeObjectId(session.payment_intent as any);
+  if (!paymentIntentId) throw new Error('payment_intent_missing');
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(
+    paymentIntentId,
+    { expand: ['latest_charge'] },
+  );
+  if (paymentIntent.livemode || paymentIntent.status !== 'requires_capture') {
+    throw new Error('payment_intent_not_authorized');
+  }
+  if (paymentIntent.amount !== booking.max_charge_cents
+    || paymentIntent.currency !== String(booking.currency).toLowerCase()) {
+    throw new Error('payment_intent_amount_mismatch');
+  }
+
+  const paymentMethodId = stripeObjectId(paymentIntent.payment_method as any);
+  const latestCharge = typeof paymentIntent.latest_charge === 'object'
+    ? paymentIntent.latest_charge as Stripe.Charge
+    : null;
+  const captureBefore = latestCharge?.payment_method_details?.card?.capture_before ?? null;
+  if (!captureBefore) throw new Error('capture_deadline_missing');
+
+  let query = admin
+    .from('bookings')
+    .update({
+      status: 'hold_placed',
+      stripe_payment_intent_id: paymentIntent.id,
+      stripe_payment_method_id: paymentMethodId,
+      capture_before: new Date(captureBefore * 1000).toISOString(),
+      hold_last_error_code: null,
+      hold_last_error_at: null,
+    })
+    .eq('id', booking.id);
+
+  if (attachmentKind === 'initial') {
+    query = query
+      .eq('status', 'pending_checkout')
+      .eq('stripe_checkout_session_id', session.id);
+  } else {
+    query = query
+      .eq('status', 'hold_failed')
+      .eq('hold_recovery_checkout_session_id', session.id);
+  }
+
+  const { data: moved, error: moveError } = await query.select('id');
+  if (moveError) throw moveError;
+
+  if (moved?.length) {
+    await insertLedgerOnce(admin, {
+      booking_id: booking.id,
+      kind: 'hold_placed',
+      amount_cents: paymentIntent.amount,
+      currency: booking.currency,
+      stripe_object_id: paymentIntent.id,
+      note: attachmentKind === 'recovery'
+        ? 'Customer-present recovery Checkout manual authorization confirmed'
+        : 'Stripe Checkout manual-capture authorization confirmed',
+    });
+  }
+}
+
 async function handleCompleted(
-  admin: any,
+  admin: AdminClient,
   stripe: Stripe,
   session: Stripe.Checkout.Session,
 ) {
@@ -62,73 +183,35 @@ async function handleCompleted(
     throw new Error('checkout_booking_identity_mismatch');
   }
 
-  const { data: booking, error: bookingError } = await admin
-    .from('bookings')
-    .select(
-      'id, student_id, policy_version_id, status, hold_strategy, max_charge_cents, currency, stripe_checkout_session_id, stripe_checkout_mode',
-    )
-    .eq('id', bookingId)
-    .single();
-
-  if (bookingError || !booking) throw bookingError ?? new Error('booking_not_found');
-  if (booking.stripe_checkout_session_id !== session.id) {
+  const attached = await bookingForSession(admin, session.id);
+  if (!attached || attached.booking.id !== bookingId) {
     throw new Error('checkout_session_not_attached');
   }
-  if (booking.stripe_checkout_mode !== session.mode) {
-    throw new Error('checkout_mode_mismatch');
-  }
+  const booking = attached.booking;
+
   if (session.metadata?.policy_version !== booking.policy_version_id) {
     throw new Error('checkout_policy_mismatch');
   }
-
+  await verifyCheckoutCustomer(admin, booking, session);
   await recordStripeConsent(admin, booking, session);
+
+  if (attached.kind === 'recovery') {
+    if (session.mode !== 'payment'
+      || booking.hold_strategy !== 'deferred'
+      || session.metadata?.hold_recovery !== 'true') {
+      throw new Error('hold_recovery_checkout_mismatch');
+    }
+    await applyManualAuthorization(admin, stripe, booking, session, 'recovery');
+    return;
+  }
+
+  if (booking.stripe_checkout_mode !== session.mode) {
+    throw new Error('checkout_mode_mismatch');
+  }
 
   if (session.mode === 'payment') {
     if (booking.hold_strategy !== 'at_checkout') throw new Error('checkout_mode_mismatch');
-
-    const paymentIntentId = stripeObjectId(session.payment_intent as any);
-    if (!paymentIntentId) throw new Error('payment_intent_missing');
-
-    const paymentIntent = await stripe.paymentIntents.retrieve(
-      paymentIntentId,
-      { expand: ['latest_charge'] },
-    );
-    if (paymentIntent.livemode || paymentIntent.status !== 'requires_capture') {
-      throw new Error('payment_intent_not_authorized');
-    }
-
-    const paymentMethodId = stripeObjectId(paymentIntent.payment_method as any);
-    const latestCharge = typeof paymentIntent.latest_charge === 'object'
-      ? paymentIntent.latest_charge as Stripe.Charge
-      : null;
-    const captureBefore = latestCharge?.payment_method_details?.card?.capture_before ?? null;
-
-    const { data: moved, error: moveError } = await admin
-      .from('bookings')
-      .update({
-        status: 'hold_placed',
-        stripe_payment_intent_id: paymentIntent.id,
-        stripe_payment_method_id: paymentMethodId,
-        capture_before: captureBefore ? new Date(captureBefore * 1000).toISOString() : null,
-      })
-      .eq('id', booking.id)
-      .eq('status', 'pending_checkout')
-      .eq('stripe_checkout_session_id', session.id)
-      .select('id');
-
-    if (moveError) throw moveError;
-
-    if (moved?.length) {
-      await insertLedgerOnce(admin, {
-        booking_id: booking.id,
-        kind: 'hold_placed',
-        amount_cents: paymentIntent.amount,
-        currency: booking.currency,
-        stripe_object_id: paymentIntent.id,
-        note: 'Stripe Checkout manual-capture authorization confirmed',
-      });
-    }
-
+    await applyManualAuthorization(admin, stripe, booking, session, 'initial');
     return;
   }
 
@@ -164,9 +247,24 @@ async function handleCompleted(
   throw new Error('unsupported_checkout_mode');
 }
 
-async function handleExpired(admin: any, session: Stripe.Checkout.Session) {
-  const bookingId = session.client_reference_id ?? session.metadata?.booking_id ?? null;
-  if (!bookingId) return;
+async function handleExpired(admin: AdminClient, session: Stripe.Checkout.Session) {
+  const attached = await bookingForSession(admin, session.id);
+  if (!attached) return;
+
+  const booking = attached.booking;
+  if (attached.kind === 'recovery') {
+    const { error } = await admin
+      .from('bookings')
+      .update({
+        hold_recovery_checkout_session_id: null,
+        hold_recovery_checkout_expires_at: null,
+      })
+      .eq('id', booking.id)
+      .eq('status', 'hold_failed')
+      .eq('hold_recovery_checkout_session_id', session.id);
+    if (error) throw error;
+    return;
+  }
 
   const { error } = await admin
     .from('bookings')
@@ -176,7 +274,7 @@ async function handleExpired(admin: any, session: Stripe.Checkout.Session) {
       cancelled_by: 'system',
       cancel_kind: 'expired',
     })
-    .eq('id', bookingId)
+    .eq('id', booking.id)
     .eq('status', 'pending_checkout')
     .eq('stripe_checkout_session_id', session.id);
 

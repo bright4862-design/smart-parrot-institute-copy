@@ -9,6 +9,10 @@ const hardeningPath = new URL(
   '../supabase/migrations/20260920033000_lesson_booking_phase0b_hardening_and_slots.sql',
   import.meta.url,
 );
+const reservationPath = new URL(
+  '../supabase/migrations/20260920052500_lesson_booking_phase1a_reservation_rpc.sql',
+  import.meta.url,
+);
 const testPath = new URL(
   '../supabase/tests/lesson_booking_foundation_rls.test.sql',
   import.meta.url,
@@ -16,7 +20,8 @@ const testPath = new URL(
 
 const foundation = readFileSync(foundationPath, 'utf8');
 const hardening = readFileSync(hardeningPath, 'utf8');
-const combined = `${foundation}\n${hardening}`;
+const reservation = readFileSync(reservationPath, 'utf8');
+const combined = `${foundation}\n${hardening}\n${reservation}`;
 const pgtap = readFileSync(testPath, 'utf8');
 
 const failures = [];
@@ -156,7 +161,23 @@ expect(
 );
 
 expect(
-  /select plan\(21\);/i.test(pgtap),
+  /add column if not exists client_request_id uuid;/i.test(reservation),
+  'Phase 1A must add a booking idempotency key',
+);
+expect(
+  /create or replace function public\.create_booking_reservation\([\s\S]*?security definer[\s\S]*?set search_path = ''/i.test(
+    reservation,
+  ),
+  'Phase 1A reservation RPC must be privileged with a pinned search_path',
+);
+expect(
+  /grant execute on function public\.create_booking_reservation\([\s\S]*?to service_role;/i.test(reservation)
+    && /revoke all on function public\.create_booking_reservation\([\s\S]*?from public, anon, authenticated;/i.test(reservation),
+  'Phase 1A reservation RPC must be service-role-only',
+);
+
+expect(
+  /select plan\(26\);/i.test(pgtap),
   'pgTAP plan count changed unexpectedly',
 );
 for (const assertion of [
@@ -168,6 +189,9 @@ for (const assertion of [
   'Supabase Auth profile trigger is project-specific rather than generic',
   'public available_slots RPC executes as the caller',
   'booking-inspection helper is isolated in the private schema',
+  'bookings carry a UUID idempotency key',
+  'browser roles cannot call the privileged reservation RPC directly',
+  'service role alone can reserve and the payload helper stays private/invoker',
 ]) {
   expect(pgtap.includes(assertion), `pgTAP suite is missing assertion: ${assertion}`);
 }
@@ -179,5 +203,5 @@ if (failures.length) {
 }
 
 console.log(
-  `Lesson booking foundation contract passed (${tables.length} RLS tables, immutable evidence, private privileged helpers, bounded slot RPC).`,
+  `Lesson booking foundation contract passed (${tables.length} RLS tables, immutable evidence, bounded slot RPC, atomic reservation authority).`,
 );

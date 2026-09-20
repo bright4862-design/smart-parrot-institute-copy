@@ -4,7 +4,7 @@ create or replace function public.finalize_booking_cancellation(
 ) returns jsonb language plpgsql security definer set search_path='' as $$
 declare
   b public.bookings%rowtype; r public.booking_cancellation_requests%rowtype;
-  want_capture int; want_release int; notice_kind text; cancelled_by text;
+  want_capture int; want_release int; notice_kind text; cancel_actor text;
 begin
   if p_booking_id is null or p_cancellation_attempt is null or p_cancellation_attempt<1
      or p_captured_cents is null or p_captured_cents<0 or p_released_cents is null or p_released_cents<0 then
@@ -35,9 +35,9 @@ begin
   if p_released_cents>0 then insert into public.ledger_entries(booking_id,kind,amount_cents,currency,stripe_object_id,note)
     values(b.id,'hold_released',p_released_cents,b.currency,b.stripe_payment_intent_id,'Authorization remainder released after cancellation') on conflict do nothing; end if;
 
-  cancelled_by:=case when r.actor_role='tutor' then 'tutor' else 'student' end;
+  cancel_actor:=case when r.actor_role='tutor' then 'tutor' else 'student' end;
   notice_kind:=case when r.kind='withdrawal' then 'withdrawal_acknowledgement' else 'cancellation_confirmation' end;
-  update public.bookings set status='cancelled',cancelled_at=r.requested_at,cancelled_by=cancelled_by,cancel_kind=r.kind,
+  update public.bookings set status='cancelled',cancelled_at=r.requested_at,cancelled_by=cancel_actor,cancel_kind=r.kind,
     outcome=r.outcome,final_amount_cents=r.amount_cents,settled_at=clock_timestamp(),cancellation_last_error_code=null,cancellation_last_error_at=null
   where id=b.id returning * into b;
 

@@ -42,12 +42,12 @@ end $$;
 
 -- Updates append notes; close never auto-resolves the human review case.
 do $$
-declare case_id uuid; note_count int; case_status text; closed_ledger int;
+declare v_case_id uuid; note_count int; case_status text; closed_ledger int;
 begin
   perform public.record_stripe_dispute_event('evt_phase4b_2','du_phase4b_1','charge.dispute.updated','under_review','general',3000,'eur','pi_test_phase4b','ch_test_phase4b',null,'2026-10-26 10:00+00');
   perform public.record_stripe_dispute_event('evt_phase4b_3','du_phase4b_1','charge.dispute.closed','won','general',3000,'eur','pi_test_phase4b','ch_test_phase4b',null,'2026-10-27 10:00+00');
-  select id,status into case_id,case_status from public.admin_review_cases where booking_id='61000000-0000-0000-0000-000000000001' and kind='dispute';
-  select count(*) into note_count from public.admin_review_case_events where case_id=case_id and action='note' and actor_source='stripe_webhook';
+  select id,status into v_case_id,case_status from public.admin_review_cases where booking_id='61000000-0000-0000-0000-000000000001' and kind='dispute';
+  select count(*) into note_count from public.admin_review_case_events e where e.case_id=v_case_id and e.action='note' and e.actor_source='stripe_webhook';
   select count(*) into closed_ledger from public.ledger_entries where booking_id='61000000-0000-0000-0000-000000000001' and kind='dispute_closed' and stripe_object_id='du_phase4b_1';
   if note_count<>2 or case_status='resolved' or closed_ledger<>1 then raise exception 'Dispute update/close boundary failed notes=% status=% ledger=%',note_count,case_status,closed_ledger; end if;
 end $$;

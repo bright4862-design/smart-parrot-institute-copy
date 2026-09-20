@@ -30,7 +30,9 @@ on:
       - "scripts/check-lesson-booking-admin-dispute-boundary.mjs"
       - "scripts/check-lesson-booking-preview-readiness-boundary.mjs"
       - "scripts/check-lesson-booking-retention-ops-boundary.mjs"
+      - "scripts/check-lesson-booking-provider-staging-boundary.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
+      - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -59,7 +61,9 @@ on:
       - "scripts/check-lesson-booking-admin-dispute-boundary.mjs"
       - "scripts/check-lesson-booking-preview-readiness-boundary.mjs"
       - "scripts/check-lesson-booking-retention-ops-boundary.mjs"
+      - "scripts/check-lesson-booking-provider-staging-boundary.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
+      - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 permissions:
   contents: read
@@ -94,6 +98,7 @@ jobs:
           supabase/functions/cancel-booking/index.ts
           supabase/functions/stripe-dispute-webhook/index.ts
           supabase/functions/booking-preview-readiness/index.ts
+          supabase/functions/booking-provider-preview-readiness/index.ts
       - name: Verify database foundation invariants
         run: node scripts/check-lesson-booking-foundation.mjs
       - name: Verify browser/auth boundary
@@ -120,8 +125,12 @@ jobs:
         run: node scripts/check-lesson-booking-preview-readiness-boundary.mjs
       - name: Verify Phase 4C3 retention ops/preview identity boundary
         run: node scripts/check-lesson-booking-retention-ops-boundary.mjs
+      - name: Verify Phase 4C4 provider staging/retention approval boundary
+        run: node scripts/check-lesson-booking-provider-staging-boundary.mjs
       - name: Verify preview E2E execution gate is closed in CI
         run: node scripts/lesson-booking-preview-e2e.mjs
+      - name: Verify provider-write preview E2E gate is closed in CI
+        run: node scripts/lesson-booking-provider-preview-e2e.mjs
       - name: Execute migrations + booking behavior scenarios
         run: |
           set -euo pipefail
@@ -135,5 +144,6 @@ jobs:
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_launch_hardening_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_preview_retention_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_retention_ops_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_retention_approval_scenarios.sql
       - name: Build application
         run: npm run build

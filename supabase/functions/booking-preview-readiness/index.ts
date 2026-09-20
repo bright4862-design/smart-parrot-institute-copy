@@ -94,7 +94,7 @@ export default {
 
     const { data: retentionRows, error: retentionError } = await ctx.supabaseAdmin
       .from('lesson_booking_retention_classes')
-      .select('code, active_retention_days, source_authority, approved_at');
+      .select('code, active_retention_days, source_authority, approved_at, approved_by, approval_reference');
 
     const retentionByCode = new Map(
       (retentionRows ?? []).map((row: Record<string, unknown>) => [String(row.code), row]),
@@ -107,7 +107,11 @@ export default {
         Number(row.active_retention_days) > 0 &&
         typeof row.source_authority === 'string' &&
         row.source_authority.trim() &&
-        row.approved_at,
+        row.approved_at &&
+        typeof row.approved_by === 'string' &&
+        row.approved_by &&
+        typeof row.approval_reference === 'string' &&
+        row.approval_reference.trim(),
       );
     });
 
@@ -135,7 +139,7 @@ export default {
       ),
       retention_policy_approved: basicCheck(
         retentionPolicyReady,
-        retentionError ? 'database_check_failed' : 'approved_durations_required',
+        retentionError ? 'database_check_failed' : 'reviewed_approvals_required',
       ),
     };
 
@@ -166,7 +170,7 @@ export default {
         'Readiness never moves money, creates provider objects, sends email, deploys, or publishes.',
         'Stripe readiness accepts test keys only.',
         'Preview identity must match the explicitly configured Supabase project ref before provider E2E can proceed.',
-        'Retention readiness is blocked until approved durations and their authority are configured.',
+        'Retention readiness is blocked until reviewed approvals include durations, source authority, approver identity, and a review reference.',
       ],
     });
   }),

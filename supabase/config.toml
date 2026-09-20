@@ -21,6 +21,11 @@ verify_jwt = true
 [functions.booking-preview-readiness]
 verify_jwt = true
 
+# Separate admin-only provider identity probe for explicitly gated preview E2E.
+# It performs read-only provider identity checks and returns status metadata only.
+[functions.booking-provider-preview-readiness]
+verify_jwt = true
+
 # Stripe is an external provider: it authenticates with Stripe-Signature, not a
 # Supabase Authorization header. The handler verifies the raw body signature.
 [functions.stripe-webhook]

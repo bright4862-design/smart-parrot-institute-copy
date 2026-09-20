@@ -28,77 +28,73 @@ Last updated: 2026-09-20
 - **Phase 2A–2B:** signed/replay-safe Daily/server attendance evidence and deterministic test-only settlement/capture/release.
 - **Phase 3A–3B:** server-authoritative cancellation/withdrawal foundation, compliance acknowledgement outbox, My Lessons UX, immutable policy view, retry/dead-letter handling.
 - **Phase 4A–4C3:** admin review/evidence operations, test-only dispute intake, out-of-order dispute hardening, launch health/readiness, retention/legal-hold controls, preview-project identity protection, and provider-write-disabled preview E2E gate.
-- **Phase 4C4 (current checkpoint):** separately gated provider identity/readiness checks, a disposable provider-write preview rehearsal with deterministic cleanup evidence, and audited retention-duration approval/revocation hooks.
+- **Phase 4C4:** separate provider identity/readiness checks, disposable test-provider rehearsal with deterministic cleanup, and audited retention-duration approval/revocation hooks.
+- **Phase 4C5A (current checkpoint):** append-only preview-rehearsal evidence registry, cleanup-reconciliation signals, reviewed retention approval/revocation UI, and launch-health rehearsal signals.
 
-## Phase 4C4 — provider E2E staging + retention approval hooks — complete in repository, not deployed
+## Phase 4C5A — launch-rehearsal evidence + operator approval UX — complete in repository, not deployed
 
-Verified engineering checkpoint: `dfb2537f1ba9e8e78b5b35a33392ac56a3f71d55`.
+Verified engineering checkpoint: `b9a8ca938f7923106b0df489f231276a30cc6f5a`.
 
 ### Implemented
 
-- Added authenticated/admin-only `booking-provider-preview-readiness` as a **separate** provider identity gate. The existing `booking-preview-readiness` remains no-network and continues to verify local/configuration readiness only.
-- Provider readiness stays blocked unless `SMART_PARROT_PROVIDER_E2E_ENABLED=1` and the deployed Supabase function identity matches the explicitly configured Smart Parrot preview project.
-- Stripe provider identity is read-only and fail-closed: only a `sk_test_...` secret is accepted, `GET /v1/account` is used to verify the current account against `SMART_PARROT_STRIPE_TEST_ACCOUNT_ID`, and no account ID or provider response body is returned.
-- Daily provider identity is read-only and fail-closed: the configured preview webhook is retrieved from Daily and its `uuid`/`domainId` must match the expected preview values. FAILED/INACTIVE webhook state is rejected. A preview-only Daily domain name and `sp-preview-*` room namespace are also required.
-- Added `scripts/lesson-booking-provider-preview-e2e.mjs` as a second, separately gated provider-write rehearsal. Normal CI exits without any provider call. Running it requires both `SMART_PARROT_PROVIDER_PREVIEW_E2E=1` and `SMART_PARROT_PROVIDER_WRITES_CONFIRMED=preview-only`, exact preview Supabase identity, short-lived admin auth, test Stripe identity, and Daily preview identity.
-- The provider-write rehearsal deliberately creates only two disposable provider objects: a Stripe **test** Customer and a short-lived private Daily preview room. It creates no booking, PaymentIntent, charge, capture, refund, payout, email, deployment, or publish action.
-- Disposable objects are cleaned up in `finally`; a local mode-0600 JSON artifact records non-secret run/correlation IDs, provider identity pass/fail, created/deleted booleans, and cleanup completeness. Incomplete cleanup fails the run so it cannot be mistaken for a successful rehearsal.
-- Added reviewed retention-policy approval metadata: `approved_by` and `approval_reference` are now required alongside duration/source authority before a class can be considered approved.
-- Added admin-only `admin_approve_booking_retention_class(...)` and `admin_revoke_booking_retention_class_approval(...)`. Approval requires explicit positive duration(s), documented source authority, review reference, and reason code; revocation returns the class to fail-closed/unapproved state.
-- Added append-only `lesson_booking_retention_approval_events` so approval and revocation are independently auditable. No automatic deletion, anonymisation, or archive mover was introduced.
-- Base preview readiness now requires each mandatory retention class to have duration, source authority, approver identity, review reference, and approval timestamp. Direct table edits that do not satisfy the reviewed-approval constraint fail closed.
-- Added Phase 4C4 static boundary coverage, executable PostgreSQL approval/revocation scenarios, Deno typechecking of the new provider-readiness function, closed provider-write E2E gate coverage, and CI wiring.
+- Added append-only `lesson_booking_provider_rehearsals` for minimized provider rehearsal evidence. It persists only timestamps, preview/Stripe/Daily verification booleans, disposable-object created/deleted booleans, cleanup completeness, a machine-readable failure code, SHA-256 evidence hash, and admin ingestion metadata. It does **not** persist Stripe Customer IDs, Daily room names, webhook IDs/HMACs, raw provider payloads, secrets, card/payment data, customer data, or raw failure messages.
+- Added admin-only, idempotent `admin_ingest_booking_provider_rehearsal(...)`. Identical replays are accepted as replays; conflicting evidence for the same run ID is rejected. Status is derived server-side as `passed`, `failed`, or `cleanup_incomplete`.
+- The separately gated provider preview rehearsal now hashes its mode-0600 local evidence artifact and ingests only the minimized evidence/hash through the authenticated RPC boundary. Registry persistence failure fails the rehearsal rather than silently discarding operational evidence.
+- Added append-only `lesson_booking_provider_rehearsal_reconciliations` plus `admin_reconcile_booking_provider_rehearsal_cleanup(...)`. Reconciliation records an admin, reason code, and evidence reference after independent cleanup verification; it does not call Stripe or Daily or mutate the original rehearsal evidence.
+- Admin review queue now emits an urgent generic `provider_rehearsal_cleanup` item for unreconciled cleanup-incomplete preview runs without exposing provider/run identifiers through the queue surface.
+- Launch health advanced to `smart_parrot_booking_launch_health_v3`, retaining prior counts and adding `provider_rehearsal_missing`, `provider_rehearsal_latest_failed`, `unreconciled_provider_cleanup_failures`, and `retention_reviews_due_next_30d`. The endpoint remains count-only and returns no customer/provider identifiers, evidence bodies, legal-hold reasons, or secrets.
+- Retention governance UI now exposes the existing reviewed class approval/revocation RPCs. Approval requires positive whole-day active retention, optional archive retention, source authority, review reference, and machine-readable reason; revocation returns the class to fail-closed/unapproved status. The browser performs no direct retention-table writes and cannot enable automatic erasure.
+- Added static Phase 4C5A boundary checks and executable PostgreSQL scenarios covering rehearsal ingest, idempotent replay, conflicting replay rejection, cleanup failure surfacing, reconciliation, append-only evidence, non-admin rejection, launch-health signals, and no identifier/hash leakage.
+- CI keeps both preview E2E drivers closed by default. No provider write was executed during CI.
 
 ### Verification
 
-All three workflows passed on engineering SHA `dfb2537f1ba9e8e78b5b35a33392ac56a3f71d55`:
+All three workflows passed on engineering SHA `b9a8ca938f7923106b0df489f231276a30cc6f5a` after fixing two backward-compatibility regressions caught by CI:
 
-- `Lesson booking foundation` run **#136** — passed. It completed Deno checks, all prior booking/payment/security regressions, the new Phase 4C4 provider-staging boundary regression, both closed E2E gates, every migration on ephemeral PostgreSQL, all behavior scenarios including new retention approval/revocation tests, and the Vite build.
-- `Heathrow Piccadilly Compatibility` run **#181** — passed.
-- `Game Smoke Test` run **#251** — passed, including build, app startup, browser smoke execution, and evidence upload.
+- `Lesson booking foundation` run **#145** — passed. Deno checks, every prior booking/payment/security boundary, the Phase 4C5A boundary regression, both closed preview E2E gates, every migration and all behavioral scenarios on ephemeral PostgreSQL, and the Vite build completed successfully.
+- `Heathrow Piccadilly Compatibility` run **#186** — passed.
+- `Game Smoke Test` run **#256** — passed.
 
-No provider-write rehearsal was executed because the repository does not currently have an explicitly approved Smart Parrot preview Supabase project and preview/test provider credentials. CI verifies that the provider-write gate remains closed without them.
+CI first caught an older Phase 4C3 static assertion that depended on obsolete UI wording, then an older retention scenario that still expected launch-health schema v2. Both were updated to assert the preserved semantic boundary and the new v3 rehearsal signal rather than weakening the implementation.
 
-## Research refreshed for Phase 4C4 on 2026-09-20
+## Research refreshed for Phase 4C5A on 2026-09-20
 
 ### Stripe
 
-- Stripe test/sandbox calls remain isolated from live money movement; test API keys are the required boundary for preview provider calls.
-- Stripe exposes `GET /v1/account` for the account associated with the current API credentials. Phase 4C4 uses that read-only call before any disposable provider object can be created.
-- The staging rehearsal creates only a test Customer and deletes it during deterministic cleanup; it does not create a PaymentIntent or charge.
-- References: https://docs.stripe.com/api/accounts/retrieve , https://docs.stripe.com/testing , https://docs.stripe.com/keys
+- Stripe's current testing guidance says sandbox transactions do not move funds and test API keys should be used for API test calls. The preview rehearsal therefore remains hard-locked to `sk_test_...`, independently verifies the expected account, and creates no payment object.
+- Cleanup continues to delete the disposable test Customer; a cleanup failure is now persisted as minimized operational evidence instead of existing only in a local artifact.
+- References: https://docs.stripe.com/testing , https://docs.stripe.com/keys
 
 ### Supabase
 
-- Hosted Edge Functions expose `DENO_DEPLOYMENT_ID`, which contains the project reference and remains the server-side project-identity signal used before provider rehearsal.
-- Separate staging/preview and production projects remain the intended environment model. Publishable browser keys stay separate from backend secret credentials.
-- References: https://supabase.com/docs/guides/functions/secrets , https://supabase.com/docs/guides/deployment/managing-environments , https://supabase.com/docs/guides/api/api-keys
+- Current Supabase guidance distinguishes browser-safe publishable keys from backend-only secret keys that bypass RLS. Hosted Edge Functions expose deployment identity through `DENO_DEPLOYMENT_ID`, which remains part of the preview-project guard.
+- Supabase is deprecating legacy `anon` / `service_role` keys by the end of 2026, so preview readiness continues to prefer `sb_publishable_...` and modern backend secret context.
+- References: https://supabase.com/docs/guides/functions/secrets , https://supabase.com/docs/guides/getting-started/api-keys
 
 ### Daily
 
-- Daily exposes `GET /webhooks/{id}` with the webhook UUID, state, and associated `domainId`. The response can also contain the webhook HMAC, so Phase 4C4 compares only the necessary identity fields and never returns/logs the provider payload or HMAC.
-- Existing Smart Parrot room creation already uses Daily private rooms; the preview rehearsal uses a separately namespaced `sp-preview-*` room and deletes it after verification.
-- Reference: https://docs.daily.co/reference/rest-api/webhooks/get-webhook
+- Daily exposes webhook configuration including webhook/domain identity and supports deletion of disposable rooms. Phase 4C5A continues to compare only the minimum identity fields and keeps HMAC/provider response data out of the rehearsal registry.
+- References: https://docs.daily.co/reference/rest-api/webhooks/get-webhook , https://docs.daily.co/reference/rest-api/rooms/delete-room
 
 ### Base44
 
-- Base44 remains the React/app shell. Elevated provider, money, retention, and environment-identity authority stays server-side rather than in the user-facing Base44 client.
-- Reference: https://docs.base44.com/developers/backend/client
+- Base44's current developer guidance keeps sensitive operations, secrets, third-party API calls, and elevated business logic server-side, with row-level permissions enforced for client access. The Base44/React UI therefore remains an operator shell over authenticated Supabase RPCs, not the money/evidence/retention authority.
+- References: https://base44.com/developers , https://base44.com/blog/application-security
 
 ### France/EU retention
 
-- CNIL guidance continues to require retention periods to be purpose-based and documented. Where a legal duration is not prescribed, the controller must determine and justify one; intermediate/legal-claim archiving is a distinct restricted purpose.
-- Phase 4C4 therefore adds an auditable approval/revocation mechanism but still does **not** invent a duration or enable erasure automatically.
-- References: https://www.cnil.fr/fr/les-durees-de-conservation-des-donnees , https://www.cnil.fr/fr/archivage-des-donnees
+- CNIL guidance updated in April 2026 continues to require purpose-based retention, with active retention and intermediate archival treated as distinct phases. If no law specifies a duration, the controller must set and justify a non-excessive duration rather than retain data indefinitely.
+- Phase 4C5A therefore records reviewed duration/source approval but still introduces no automatic deletion or guessed French retention period.
+- References: https://www.cnil.fr/fr/passer-laction/les-durees-de-conservation-des-donnees , https://www.cnil.fr/fr/cnil-direct/question/dois-je-fixer-une-duree-de-conservation-des-donnees-dans-mon-fichier
 
 ## Next coherent slice
 
-**Phase 4C5 — launch-rehearsal evidence + operator approval UX:**
+**Phase 4C5B — rehearsal reconciliation UX + disabled full-preview-path preflight:**
 
-1. add an append-only preview-rehearsal registry that can ingest the non-secret provider rehearsal artifact/hash and surface incomplete cleanup/reconciliation to the admin review queue;
-2. expose reviewed retention-class approval/revocation in the admin operations UI through the existing authenticated RPC boundary, with explicit source/reference/reason inputs and no direct table writes;
-3. add count-only launch-health signals for missing provider rehearsal, failed cleanup, and retention approvals approaching their review date without exposing provider/customer identifiers;
-4. prepare (but keep disabled) the full preview booking → Stripe test authorization → Daily attendance → deterministic settlement evidence driver, reusing the two independent readiness gates before any test payment object is created;
+1. add an admin-safe rehearsal registry view that exposes only minimized run/status/timing fields and lets an authorized operator attach a cleanup reconciliation reference without revealing provider object IDs or raw provider evidence;
+2. require a recent successful provider rehearsal and zero unreconciled cleanup failures before any future full provider preview driver is considered ready;
+3. prepare a separately gated, still-disabled preview booking → Stripe test authorization → Daily attendance → deterministic settlement driver with disposable identities, test payment methods, deterministic cleanup/reconciliation evidence, and no browser-authoritative state;
+4. add regressions for stale/failed rehearsal readiness, reconciliation authorization, and refusal to run against production/unknown project/provider identities;
 5. keep deploy, publish, cron activation, production email, live Stripe, automatic retention deletion, and Stripe Connect disabled.
 
 ## External configuration still needed for real provider rehearsal/E2E
@@ -118,4 +114,4 @@ Repository engineering can continue without these, but provider integration cann
 
 ## Release status
 
-**NO DEPLOY / NO MERGE.** Phase 4C4 is repository-complete and verified at `dfb2537f1ba9e8e78b5b35a33392ac56a3f71d55`. The new provider-write driver remains inert by default and was not executed. PR #16 stays intentionally draft and unmerged until preview/provider/legal gates are explicitly approved and verified.
+**NO DEPLOY / NO MERGE.** Phase 4C5A is repository-complete and verified at `b9a8ca938f7923106b0df489f231276a30cc6f5a`. The provider-write driver remains inert by default and was not executed. PR #16 stays intentionally draft and unmerged until preview/provider/legal gates are explicitly approved and verified.

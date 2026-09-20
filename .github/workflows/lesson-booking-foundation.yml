@@ -51,8 +51,21 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Install dependencies
         run: npm install
+      - name: Typecheck booking Edge Functions
+        run: >-
+          deno check
+          supabase/functions/create-booking/index.ts
+          supabase/functions/fix-payment/index.ts
+          supabase/functions/place-holds/index.ts
+          supabase/functions/stripe-webhook/index.ts
+          supabase/functions/create-video-token/index.ts
+          supabase/functions/daily-webhook/index.ts
+          supabase/functions/check-in/index.ts
       - name: Verify database foundation invariants
         run: node scripts/check-lesson-booking-foundation.mjs
       - name: Verify browser/auth boundary

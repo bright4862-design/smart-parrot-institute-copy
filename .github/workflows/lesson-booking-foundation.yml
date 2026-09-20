@@ -53,10 +53,8 @@ on:
       - "scripts/check-lesson-booking-admin-ops-boundary.mjs"
       - "scripts/check-lesson-booking-admin-dispute-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
-
 permissions:
   contents: read
-
 jobs:
   foundation-contract:
     runs-on: ubuntu-latest
@@ -112,21 +110,13 @@ jobs:
       - name: Execute migrations + booking behavior scenarios
         run: |
           set -euo pipefail
-          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
-            -f supabase/tests/bootstrap_minimal_supabase.sql
-          for migration in supabase/migrations/*.sql; do
-            echo "Applying ${migration}"
-            sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f "${migration}"
-          done
-          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
-            -f supabase/tests/lesson_booking_settlement_scenarios.sql
-          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
-            -f supabase/tests/lesson_booking_cancellation_scenarios.sql
-          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
-            -f supabase/tests/lesson_booking_compliance_scenarios.sql
-          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
-            -f supabase/tests/lesson_booking_admin_ops_scenarios.sql
-          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
-            -f supabase/tests/lesson_booking_admin_dispute_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap_minimal_supabase.sql
+          for migration in supabase/migrations/*.sql; do echo "Applying ${migration}"; sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f "${migration}"; done
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_settlement_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_cancellation_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_compliance_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_admin_ops_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_admin_dispute_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_launch_hardening_scenarios.sql
       - name: Build application
         run: npm run build

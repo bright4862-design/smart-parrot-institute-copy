@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Install dependencies
         run: npm install
@@ -59,8 +59,11 @@ jobs:
             await page.keyboard.press('KeyE');
             await page.waitForTimeout(300);
 
+            // Exercise the existing scene's responsive resize path instead of
+            // reloading the entire 3D/Base44 application, which can stall local
+            // CI while external Base44 config is intentionally absent.
             await page.setViewportSize({ width: 390, height: 844 });
-            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForTimeout(750);
             await expect(page.locator('canvas')).toBeVisible({ timeout: 15000 });
             await page.screenshot({ path: 'smoke-mobile.png', fullPage: true });
 

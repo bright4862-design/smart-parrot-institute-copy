@@ -20,62 +20,18 @@ Last updated: 2026-09-20
 - Stripe is repository-locked to test mode. Near-term lessons authorize at Checkout; later lessons save the card and use a secret-authenticated worker to authorize when due.
 - Daily is the Phase 2 online attendance provider. Rooms are private and booking-scoped; meeting tokens carry the verified Supabase user UUID.
 
-## Completed
+## Completed through Phase 1C
 
-### Phase 0A — authoritative data boundary
-
-- 11 booking/payment/evidence tables.
-- tutor/student overlap exclusions with `btree_gist`.
-- append-only policy, attendance, consent and ledger evidence.
-- RLS + revoke-first least privilege.
-- server-only Stripe identifiers and webhook records.
-
-### Phase 0B — evidence hardening + availability
-
-- dispute evidence FKs use `ON DELETE RESTRICT`.
-- project-specific Auth trigger lives in the private schema.
-- bounded public `available_slots(...)` RPC backed by a private helper.
-- 31-day query cap, two-hour lead time, full availability containment and overlap filtering.
-
-### Phase 0C — browser-safe Supabase/Auth boundary
-
-- `@supabase/supabase-js` pinned.
-- browser accepts only `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY`.
-- booking-only Supabase Auth provider leaves existing Base44 auth untouched.
-- read-only availability adapter and isolated `/book-lessons` preview route.
-- frontend secret scanner rejects service/secret credentials.
-
-### Phase 1A — server-authoritative reservation + consent
-
-- per-student UUID idempotency.
-- service-role-only atomic reservation + consent RPC.
-- server owns tutor, duration, price, currency, policy and hold strategy.
-- exact slot recheck plus database overlap constraints.
-- EU express-start acknowledgement captured when required.
-
-### Phase 1B — Stripe test Checkout + signed webhook
-
-- Stripe helper refuses live secrets/objects/events.
-- server-only Stripe Customer creation/reuse.
-- near-term Checkout uses payment mode + manual capture authorization.
-- later Checkout uses setup mode for a future off-session hold.
-- signed raw-body webhook is idempotent and records consent/hold state.
-- no capture path.
-
-### Phase 1C — deferred holds + failed-hold recovery
-
-- secret-authenticated `place-holds` worker creates test-only off-session manual-capture PaymentIntents.
-- Stripe idempotency + database status/attempt guards converge overlapping workers.
-- success requires exact server-owned amount/currency/customer, `requires_capture`, and Stripe `capture_before`.
-- failed/authentication-required holds become `hold_failed` with append-only evidence.
-- authenticated `fix-payment` provides customer-present recovery/3DS Checkout.
-- recovery completion is owned by the signed Stripe webhook.
-- policy-deadline cancellation and Stripe-aware stale Checkout cleanup are implemented.
-- cron activation is documented but deliberately not enabled.
+- Phase 0A: authoritative Supabase booking/payment/evidence schema, overlap exclusions, append-only evidence, RLS/least privilege, server-only Stripe identifiers/events.
+- Phase 0B: immutable evidence hardening, project-specific Auth trigger, bounded `available_slots(...)` RPC backed by a private helper.
+- Phase 0C: browser-safe Supabase publishable-key client, booking-scoped Auth, read-only availability adapter, isolated `/book-lessons` preview, frontend secret scanning.
+- Phase 1A: atomic/idempotent server-authoritative reservation + consent; server-owned tutor/price/duration/currency/policy/hold strategy; database race protection.
+- Phase 1B: Stripe test-only Checkout + signed/idempotent webhook. Near-term bookings authorize with manual capture; later bookings save the card with SetupIntent. No capture path.
+- Phase 1C: deferred test-only off-session holds, failed-hold evidence, customer-present recovery/3DS Checkout, policy-deadline cancellation and Stripe-aware stale Checkout cleanup. Cron activation remains documented but disabled.
 
 ## Phase 2A — attendance evidence + lesson access — complete in repository, not deployed
 
-Engineering checkpoint: `3cc4651c270a06a043e7e820c9ca4e36fa237e3c`.
+Verified engineering checkpoint: `e6c4f6fec791f6fc763b4cbff1cd8e9153089d2e`.
 
 Implemented:
 
@@ -96,8 +52,9 @@ Implemented:
 
 ### Phase 2A verification
 
-`Lesson booking foundation` run #83 passed on `3cc4651c270a06a043e7e820c9ca4e36fa237e3c`:
+`Lesson booking foundation` run #91 passed on `e6c4f6fec791f6fc763b4cbff1cd8e9153089d2e`:
 
+- Deno typecheck of all new Phase 2A Edge Functions and their imports: passed.
 - database foundation invariants: passed.
 - browser/auth boundary: passed.
 - reservation/consent boundary: passed.
@@ -105,6 +62,8 @@ Implemented:
 - deferred hold/recovery boundary: passed.
 - attendance/lesson-access boundary: passed.
 - full Vite application build: passed.
+
+`Heathrow Piccadilly Compatibility` run #153 also passed on the same engineering head. The Deno check was deliberately scoped to the Phase 2A Edge Functions because the repository's unrelated Base44 dependency graph currently includes a non-npm dependency that Deno refuses to auto-install; the first all-function attempt correctly exposed that tooling incompatibility rather than an application type error.
 
 ## Research refreshed for Phase 2A on 2026-09-20
 

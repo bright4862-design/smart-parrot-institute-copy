@@ -15,6 +15,7 @@ on:
       - "package-lock.json"
       - "scripts/check-lesson-booking-foundation.mjs"
       - "scripts/check-lesson-booking-browser-boundary.mjs"
+      - "scripts/check-lesson-booking-reservation-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -28,6 +29,7 @@ on:
       - "package-lock.json"
       - "scripts/check-lesson-booking-foundation.mjs"
       - "scripts/check-lesson-booking-browser-boundary.mjs"
+      - "scripts/check-lesson-booking-reservation-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 
 permissions:
@@ -49,5 +51,7 @@ jobs:
         run: node scripts/check-lesson-booking-foundation.mjs
       - name: Verify browser/auth boundary
         run: node scripts/check-lesson-booking-browser-boundary.mjs
+      - name: Verify reservation/consent boundary
+        run: node scripts/check-lesson-booking-reservation-boundary.mjs
       - name: Build application
         run: npm run build

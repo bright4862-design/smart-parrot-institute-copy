@@ -18,6 +18,7 @@ on:
       - "scripts/check-lesson-booking-reservation-boundary.mjs"
       - "scripts/check-lesson-booking-stripe-boundary.mjs"
       - "scripts/check-lesson-booking-hold-recovery-boundary.mjs"
+      - "scripts/check-lesson-booking-attendance-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -34,6 +35,7 @@ on:
       - "scripts/check-lesson-booking-reservation-boundary.mjs"
       - "scripts/check-lesson-booking-stripe-boundary.mjs"
       - "scripts/check-lesson-booking-hold-recovery-boundary.mjs"
+      - "scripts/check-lesson-booking-attendance-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 
 permissions:
@@ -61,5 +63,7 @@ jobs:
         run: node scripts/check-lesson-booking-stripe-boundary.mjs
       - name: Verify deferred hold/recovery boundary
         run: node scripts/check-lesson-booking-hold-recovery-boundary.mjs
+      - name: Verify attendance/lesson-access boundary
+        run: node scripts/check-lesson-booking-attendance-boundary.mjs
       - name: Build application
         run: npm run build

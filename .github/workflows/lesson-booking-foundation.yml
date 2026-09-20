@@ -45,6 +45,11 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm install
+      - name: Export resolved lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: lesson-booking-resolved-lockfile
+          path: package-lock.json
       - name: Verify database foundation invariants
         run: node scripts/check-lesson-booking-foundation.mjs
       - name: Verify browser/auth boundary

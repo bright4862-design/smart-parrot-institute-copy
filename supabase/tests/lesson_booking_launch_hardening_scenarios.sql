@@ -34,7 +34,17 @@ if s.current_status<>'won' or s.needs_reconciliation is not true or (r->>'projec
 
 do $$ begin if has_function_privilege('service_role','public.record_stripe_dispute_event(text,text,text,text,text,integer,text,text,text,timestamptz,timestamptz)','EXECUTE') then raise exception 'Deprecated event-only dispute intake remains executable by service_role'; end if; end $$;
 create or replace function auth.uid() returns uuid language sql stable as $$ select '70000000-0000-0000-0000-000000000003'::uuid $$;
-do $$ declare h jsonb; begin select public.admin_booking_launch_health('2026-10-25 13:10+00') into h; if h->>'schema_version'<>'smart_parrot_booking_launch_health_v1' or h->>'status'<>'attention' or (h->'counts'->>'disputes_needing_reconciliation')::int<>1 or (h->'counts'->>'open_review_cases')::int<>1 then raise exception 'Launch-health summary mismatch: %',h; end if; if h::text like '%pi_test_phase4c%' or h::text like '%ch_test_phase4c%' or h::text like '%Phase4C Student%' then raise exception 'Launch-health summary leaked provider/customer detail: %',h; end if; end $$;
+do $$ declare h jsonb; begin
+select public.admin_booking_launch_health('2026-10-25 13:10+00') into h;
+if h->>'schema_version'<>'smart_parrot_booking_launch_health_v2'
+  or h->>'status'<>'attention'
+  or (h->'counts'->>'disputes_needing_reconciliation')::int<>1
+  or (h->'counts'->>'open_review_cases')::int<>1
+  or (h->'counts'->>'unclassified_evidence_bookings')::int<>1
+  or (h->'counts'->>'unapproved_retention_classes')::int<>4
+then raise exception 'Launch-health summary mismatch: %',h; end if;
+if h::text like '%pi_test_phase4c%' or h::text like '%ch_test_phase4c%' or h::text like '%Phase4C Student%' then raise exception 'Launch-health summary leaked provider/customer detail: %',h; end if;
+end $$;
 select public.record_stripe_dispute_event_v2('evt_phase4c_unmatched','du_phase4c_unmatched','charge.dispute.created','needs_response','unrecognized',1200,'eur','pi_test_unknown_phase4c','ch_test_unknown_phase4c','2026-10-27 12:00+00','2026-10-25 13:09+00','needs_response','unrecognized',1200,'eur','pi_test_unknown_phase4c','ch_test_unknown_phase4c','2026-10-27 12:00+00','2026-10-25 13:09:05+00');
 do $$ declare n int; begin select count(*) into n from public.admin_review_queue(100,'2026-10-25 13:10+00') q where q.source='stripe_dispute_unmatched' and q.booking_id is null and q.summary like '%current status needs_response%'; if n<>1 then raise exception 'Provider-refreshed unmatched dispute queue item missing'; end if; end $$;
 create or replace function auth.uid() returns uuid language sql stable as $$ select '70000000-0000-0000-0000-000000000004'::uuid $$;

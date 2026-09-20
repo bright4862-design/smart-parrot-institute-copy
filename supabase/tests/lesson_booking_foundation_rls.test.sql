@@ -1,9 +1,9 @@
--- pgTAP contract tests for the lesson-booking foundation migration.
+-- pgTAP contract tests for the lesson-booking foundation migrations.
 -- Run in a local Supabase stack with: supabase test db
 
 begin;
 
-select plan(15);
+select plan(21);
 
 select ok(
   not exists (
@@ -137,9 +137,95 @@ select ok(
     from pg_trigger
     where not tgisinternal
       and tgrelid = 'auth.users'::regclass
+      and tgname = 'smart_parrot_booking_user_created'
+  )
+  and not exists (
+    select 1
+    from pg_trigger
+    where not tgisinternal
+      and tgrelid = 'auth.users'::regclass
       and tgname = 'on_auth_user_created'
   ),
-  'new Supabase Auth users receive a public profile'
+  'Supabase Auth profile trigger is project-specific rather than generic'
+);
+
+select ok(
+  (
+    select count(*)
+    from pg_constraint
+    where conrelid in (
+      'public.attendance_events'::regclass,
+      'public.consents'::regclass,
+      'public.ledger_entries'::regclass
+    )
+      and contype = 'f'
+      and confrelid = 'public.bookings'::regclass
+      and confdeltype = 'r'
+  ) = 3,
+  'booking evidence foreign keys use ON DELETE RESTRICT rather than cascade'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private'
+      and p.proname = 'smart_parrot_booking_handle_new_user'
+      and p.prosecdef
+  )
+  and not exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'handle_new_user'
+  ),
+  'trigger-only Auth SECURITY DEFINER function lives outside the exposed public schema'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'available_slots'
+      and not p.prosecdef
+  ),
+  'public available_slots RPC executes as the caller'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private'
+      and p.proname = 'smart_parrot_available_slots'
+      and p.prosecdef
+  ),
+  'booking-inspection helper is isolated in the private schema'
+);
+
+select ok(
+  has_function_privilege(
+    'anon',
+    'public.available_slots(uuid,timestamp with time zone,timestamp with time zone)',
+    'execute'
+  )
+  and has_function_privilege(
+    'authenticated',
+    'public.available_slots(uuid,timestamp with time zone,timestamp with time zone)',
+    'execute'
+  ),
+  'free-slot RPC is callable by signed-out and signed-in visitors'
+);
+
+select ok(
+  not has_table_privilege('anon', 'public.bookings', 'select')
+  and not has_table_privilege('anon', 'public.stripe_links', 'select'),
+  'free-slot discovery does not expose booking or Stripe rows to anonymous callers'
 );
 
 select * from finish();

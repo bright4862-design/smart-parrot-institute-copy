@@ -99,9 +99,9 @@ do $$ declare p jsonb; f jsonb; begin
 end $$;
 
 do $$ declare p jsonb; p2 jsonb; f jsonb; f2 jsonb; c int; begin
-  select public.prepare_booking_cancellation('30000000-0000-0000-0000-000000000001','31000000-0000-0000-0000-000000000005','withdrawal','2026-10-05 12:00+00') into p;
+  select public.prepare_booking_cancellation('30000000-0000-0000-0000-000000000001','31000000-0000-0000-0000-000000000005','withdrawal','2026-10-05 12:00+00',null,null,'Cancel Student','cancel.student@example.test') into p;
   if p->>'kind'<>'withdrawal' or p->>'outcome'<>'cancelled_free' or (p->>'amount_cents')::int<>0 or p->>'payment_action'<>'release' then raise exception 'withdrawal prepare mismatch: %',p; end if;
-  select public.prepare_booking_cancellation('30000000-0000-0000-0000-000000000001','31000000-0000-0000-0000-000000000005','withdrawal','2026-10-05 12:01+00') into p2;
+  select public.prepare_booking_cancellation('30000000-0000-0000-0000-000000000001','31000000-0000-0000-0000-000000000005','withdrawal','2026-10-05 12:01+00',null,null,'Cancel Student','cancel.student@example.test') into p2;
   if p2->>'request_id'<>p->>'request_id' or p2->>'idempotent'<>'true' then raise exception 'withdrawal prepare not idempotent'; end if;
   select public.finalize_booking_cancellation('31000000-0000-0000-0000-000000000005',(p->>'cancellation_attempt')::int,0,3600) into f;
   select public.finalize_booking_cancellation('31000000-0000-0000-0000-000000000005',(p->>'cancellation_attempt')::int,0,3600) into f2;
@@ -112,14 +112,14 @@ end $$;
 
 do $$ begin
   begin
-    perform public.prepare_booking_cancellation('30000000-0000-0000-0000-000000000001','31000000-0000-0000-0000-000000000006','withdrawal','2026-10-05 12:00+00');
+    perform public.prepare_booking_cancellation('30000000-0000-0000-0000-000000000001','31000000-0000-0000-0000-000000000006','withdrawal','2026-10-05 12:00+00',null,null,'Cancel Student','cancel.student@example.test');
     raise exception 'expected withdrawal_window_expired';
   exception when others then if sqlerrm<>'withdrawal_window_expired' then raise; end if; end;
 end $$;
 
 do $$ begin
   begin
-    perform public.prepare_booking_cancellation('30000000-0000-0000-0000-000000000001','31000000-0000-0000-0000-000000000007','withdrawal','2026-10-05 12:00+00');
+    perform public.prepare_booking_cancellation('30000000-0000-0000-0000-000000000001','31000000-0000-0000-0000-000000000007','withdrawal','2026-10-05 12:00+00',null,null,'Cancel Student','cancel.student@example.test');
     raise exception 'expected withdrawal_not_enabled_for_policy';
   exception when others then if sqlerrm<>'withdrawal_not_enabled_for_policy' then raise; end if; end;
 end $$;

@@ -5,6 +5,7 @@ const migration = [
   '20260920101000_lesson_booking_phase3a_cancellation_schema.sql',
   '20260920101100_lesson_booking_phase3a_cancellation_prepare.sql',
   '20260920101200_lesson_booking_phase3a_cancellation_finalize.sql',
+  '20260920111500_lesson_booking_phase3b_compliance_ux.sql',
 ].map((name) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')).join('\n');
 const handler = readFileSync(new URL('../supabase/functions/cancel-booking/index.ts', import.meta.url), 'utf8');
 const scenarios = readFileSync(new URL('../supabase/tests/lesson_booking_cancellation_scenarios.sql', import.meta.url), 'utf8');
@@ -23,10 +24,11 @@ for (const required of [
   "p.config->>'late_cancel_hours'", "p.config->>'late_cancel_pct'", "action:='capture'",
   "action:='release'", 'b.cancellation_requested_at is null', 'for update of b skip locked',
   "kind in ('captured','hold_released')", "'withdrawal_acknowledgement'", "'cancellation_confirmation'",
-]) expect(migration.includes(required), `Phase 3A migration missing invariant: ${required}`);
+  "raise exception 'withdrawal_declaration_incomplete'", 'declaration_name', 'declaration_contact',
+]) expect(migration.includes(required), `Phase 3 cancellation migration missing invariant: ${required}`);
 
 for (const signature of [
-  'public.prepare_booking_cancellation(uuid,uuid,text,timestamptz,text,text)',
+  'public.prepare_booking_cancellation(uuid,uuid,text,timestamptz,text,text,text,text)',
   'public.mark_booking_cancellation_failed(uuid,int,text)',
   'public.finalize_booking_cancellation(uuid,int,int,int)',
 ]) {
@@ -43,7 +45,8 @@ for (const required of [
   "intent.status !== 'requires_capture'", 'intent.amount_capturable < amountCents',
   'amount_to_capture: amountCents', 'final_capture: true', 'stripe.paymentIntents.cancel(',
   'stripe.paymentIntents.capture(', 'smart-parrot-cancellation-capture-${claim.booking_id}',
-  'smart-parrot-cancellation-release-${claim.booking_id}',
+  'smart-parrot-cancellation-release-${claim.booking_id}', 'withdrawalDeclaration(body, kind)',
+  'p_declaration_name: declarationName', 'p_declaration_contact: receiptEmail',
 ]) expect(handler.includes(required), `cancel-booking missing invariant: ${required}`);
 
 expect(
@@ -60,12 +63,13 @@ expect(
 );
 expect(!/sk_(?:live|test)_[A-Za-z0-9]{12,}/.test(handler), 'Cancellation handler must not contain a literal Stripe secret');
 expect(!handler.includes('Date.now()'), 'Cancellation fee timing must not use handler clock arithmetic');
+expect(!handler.includes('p_now:'), 'Cancellation handler must not send a browser/Edge-authored policy clock to the database');
 
 for (const scenario of [
   "'cancelled_free'", "'cancelled_late'", "'cancelled_very_late'", "'cancelled_by_tutor'",
   "'withdrawal',", 'withdrawal_window_expired', 'withdrawal_not_enabled_for_policy',
   "payment_action'<>'release'", "payment_action'<>'capture'", 'public.finalize_booking_cancellation',
-  "kind='withdrawal_acknowledgement'",
+  "kind='withdrawal_acknowledgement'", 'Cancel Student', 'cancel.student@example.test',
 ]) expect(scenarios.includes(scenario), `Cancellation behavior scenarios missing: ${scenario}`);
 
 expect(/\[functions\.cancel-booking\][\s\S]*?verify_jwt = true/i.test(config), 'cancel-booking must keep platform JWT verification enabled');
@@ -82,4 +86,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log('Lesson booking cancellation/compliance boundary passed (server policy/time, exact test-only capture/release, provider-session synchronization, withdrawal fail-closed switch, immutable acknowledgement outbox).');
+console.log('Lesson booking cancellation/compliance boundary passed (server policy/time, exact test-only capture/release, provider-session synchronization, fail-closed withdrawal, explicit declaration evidence, immutable acknowledgement outbox).');

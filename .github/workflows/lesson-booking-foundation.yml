@@ -11,6 +11,8 @@ on:
       - "src/lib/lessonBookingApi.js"
       - "src/lib/lessonBookingSupabase.js"
       - "src/pages/LessonBooking.jsx"
+      - "src/pages/MyLessons.jsx"
+      - "src/pages/LessonBookingPolicy.jsx"
       - "package.json"
       - "package-lock.json"
       - "scripts/check-lesson-booking-foundation.mjs"
@@ -21,6 +23,7 @@ on:
       - "scripts/check-lesson-booking-attendance-boundary.mjs"
       - "scripts/check-lesson-booking-settlement-boundary.mjs"
       - "scripts/check-lesson-booking-cancellation-boundary.mjs"
+      - "scripts/check-lesson-booking-compliance-ux-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -30,6 +33,8 @@ on:
       - "src/lib/lessonBookingApi.js"
       - "src/lib/lessonBookingSupabase.js"
       - "src/pages/LessonBooking.jsx"
+      - "src/pages/MyLessons.jsx"
+      - "src/pages/LessonBookingPolicy.jsx"
       - "package.json"
       - "package-lock.json"
       - "scripts/check-lesson-booking-foundation.mjs"
@@ -40,6 +45,7 @@ on:
       - "scripts/check-lesson-booking-attendance-boundary.mjs"
       - "scripts/check-lesson-booking-settlement-boundary.mjs"
       - "scripts/check-lesson-booking-cancellation-boundary.mjs"
+      - "scripts/check-lesson-booking-compliance-ux-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 
 permissions:
@@ -90,6 +96,8 @@ jobs:
         run: node scripts/check-lesson-booking-settlement-boundary.mjs
       - name: Verify cancellation/compliance boundary
         run: node scripts/check-lesson-booking-cancellation-boundary.mjs
+      - name: Verify Phase 3B compliance/UX boundary
+        run: node scripts/check-lesson-booking-compliance-ux-boundary.mjs
       - name: Execute migrations + booking behavior scenarios
         run: |
           set -euo pipefail
@@ -103,5 +111,7 @@ jobs:
             -f supabase/tests/lesson_booking_settlement_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/tests/lesson_booking_cancellation_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/tests/lesson_booking_compliance_scenarios.sql
       - name: Build application
         run: npm run build

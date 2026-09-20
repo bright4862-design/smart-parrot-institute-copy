@@ -6,6 +6,12 @@ import {
 
 const LessonBookingAuthContext = createContext(null);
 
+function currentLessonBookingReturnUrl() {
+  const path = `${window.location.pathname}${window.location.search}`;
+  const safePath = path.startsWith('/') && !path.startsWith('//') ? path : '/book-lessons';
+  return `${window.location.origin}${safePath}`;
+}
+
 export function LessonBookingAuthProvider({ children }) {
   const client = useMemo(() => getLessonBookingSupabaseClient(), []);
   const configStatus = useMemo(() => getLessonBookingSupabaseStatus(), []);
@@ -46,10 +52,9 @@ export function LessonBookingAuthProvider({ children }) {
     const normalizedEmail = String(email ?? '').trim().toLowerCase();
     if (!normalizedEmail) throw new Error('Email is required.');
 
-    const redirectTo = `${window.location.origin}/book-lessons`;
     const { error: signInError } = await client.auth.signInWithOtp({
       email: normalizedEmail,
-      options: { emailRedirectTo: redirectTo },
+      options: { emailRedirectTo: currentLessonBookingReturnUrl() },
     });
     if (signInError) throw signInError;
   };

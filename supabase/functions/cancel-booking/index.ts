@@ -3,6 +3,7 @@ import { withSupabase } from 'npm:@supabase/server@^1';
 import { getStripe } from '../_shared/stripe.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type AdminClient = any;
 type CancellationClaim = {
@@ -46,6 +47,7 @@ function mapPrepareError(message: string) {
     case 'invalid_cancellation_request':
     case 'invalid_cancellation_policy':
     case 'invalid_withdrawal_policy':
+    case 'withdrawal_declaration_incomplete':
       return { status: 422, error: message };
     case 'booking_already_cancelled':
     case 'cancellation_already_requested':
@@ -61,6 +63,16 @@ function mapPrepareError(message: string) {
     default:
       return { status: 500, error: 'cancellation_prepare_failed' };
   }
+}
+
+function withdrawalDeclaration(body: Record<string, unknown>, kind: string) {
+  if (kind !== 'withdrawal') return { declarationName: null, receiptEmail: null };
+  const declarationName = String(body.declaration_name ?? '').trim();
+  const receiptEmail = String(body.receipt_email ?? '').trim().toLowerCase();
+  if (!declarationName || declarationName.length > 200 || !receiptEmail || receiptEmail.length > 320 || !EMAIL_RE.test(receiptEmail)) {
+    throw new Error('withdrawal_declaration_incomplete');
+  }
+  return { declarationName, receiptEmail };
 }
 
 async function synchronizeOpenCheckoutBeforeCancellation(
@@ -232,6 +244,14 @@ export default {
       return responseError('invalid_cancellation_request', 422);
     }
 
+    let declarationName: string | null;
+    let receiptEmail: string | null;
+    try {
+      ({ declarationName, receiptEmail } = withdrawalDeclaration(body, kind));
+    } catch {
+      return responseError('withdrawal_declaration_incomplete', 422);
+    }
+
     const actorId = ctx.userClaims?.id;
     if (!actorId || !UUID_RE.test(actorId)) {
       return responseError('authenticated_user_required', 401);
@@ -267,6 +287,8 @@ export default {
         p_kind: kind,
         p_ip: firstForwardedIp(req),
         p_user_agent: req.headers.get('user-agent')?.slice(0, 1000) ?? null,
+        p_declaration_name: declarationName,
+        p_declaration_contact: receiptEmail,
       },
     );
 

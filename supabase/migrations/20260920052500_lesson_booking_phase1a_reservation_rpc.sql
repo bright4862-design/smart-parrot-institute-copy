@@ -12,6 +12,38 @@ create unique index if not exists bookings_student_request_id_unique
 comment on column public.bookings.client_request_id is
   'Client-generated idempotency key. Unique per student when present.';
 
+create or replace function private.smart_parrot_booking_payload(
+  p_booking public.bookings,
+  p_created boolean
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'booking_id', p_booking.id,
+    'created', p_created,
+    'status', p_booking.status,
+    'student_id', p_booking.student_id,
+    'tutor_id', p_booking.tutor_id,
+    'lesson_type_id', p_booking.lesson_type_id,
+    'policy_version_id', p_booking.policy_version_id,
+    'starts_at', p_booking.starts_at,
+    'ends_at', p_booking.ends_at,
+    'currency', p_booking.currency,
+    'on_time_price_cents', p_booking.on_time_price_cents,
+    'max_charge_cents', p_booking.max_charge_cents,
+    'hold_strategy', p_booking.hold_strategy,
+    'hold_due_at', p_booking.hold_due_at,
+    'client_request_id', p_booking.client_request_id
+  );
+$$;
+
+revoke all on function private.smart_parrot_booking_payload(public.bookings, boolean)
+  from public, anon, authenticated;
+
 create or replace function public.create_booking_reservation(
   p_student_id uuid,
   p_lesson_type_id uuid,
@@ -40,30 +72,6 @@ declare
   v_checkbox_text text;
   v_ip inet;
   v_now timestamptz := now();
-
-  function booking_payload(p_booking public.bookings, p_created boolean)
-  returns jsonb
-  language sql
-  immutable
-  as $inner$
-    select jsonb_build_object(
-      'booking_id', p_booking.id,
-      'created', p_created,
-      'status', p_booking.status,
-      'student_id', p_booking.student_id,
-      'tutor_id', p_booking.tutor_id,
-      'lesson_type_id', p_booking.lesson_type_id,
-      'policy_version_id', p_booking.policy_version_id,
-      'starts_at', p_booking.starts_at,
-      'ends_at', p_booking.ends_at,
-      'currency', p_booking.currency,
-      'on_time_price_cents', p_booking.on_time_price_cents,
-      'max_charge_cents', p_booking.max_charge_cents,
-      'hold_strategy', p_booking.hold_strategy,
-      'hold_due_at', p_booking.hold_due_at,
-      'client_request_id', p_booking.client_request_id
-    );
-  $inner$;
 begin
   if p_student_id is null
     or p_lesson_type_id is null
@@ -89,7 +97,7 @@ begin
         using errcode = '22023', detail = 'request id already belongs to a different booking intent';
     end if;
 
-    return booking_payload(v_existing, false);
+    return private.smart_parrot_booking_payload(v_existing, false);
   end if;
 
   select lt.*
@@ -226,7 +234,7 @@ begin
           raise exception 'idempotency_key_reused'
             using errcode = '22023';
         end if;
-        return booking_payload(v_existing, false);
+        return private.smart_parrot_booking_payload(v_existing, false);
       end if;
 
       raise;
@@ -262,7 +270,7 @@ begin
     left(nullif(p_user_agent, ''), 1000)
   );
 
-  return booking_payload(v_booking, true);
+  return private.smart_parrot_booking_payload(v_booking, true);
 end;
 $$;
 

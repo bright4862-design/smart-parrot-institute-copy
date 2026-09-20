@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  approveAdminBookingRetentionClass,
   getAdminBookingRetentionStatus,
   listAdminBookingRetentionOptions,
+  revokeAdminBookingRetentionClassApproval,
   setAdminBookingRetentionControl,
 } from '@/lib/lessonBookingApi';
 
@@ -16,10 +18,18 @@ export default function BookingRetentionControls({ client, bookingId, onClose, o
   const [legalHold, setLegalHold] = useState(false);
   const [reasonCode, setReasonCode] = useState('operator_review');
   const [reviewAfter, setReviewAfter] = useState('');
+  const [activeRetentionDays, setActiveRetentionDays] = useState('');
+  const [archiveRetentionDays, setArchiveRetentionDays] = useState('');
+  const [sourceAuthority, setSourceAuthority] = useState('');
+  const [reviewReference, setReviewReference] = useState('');
+  const [approvalReason, setApprovalReason] = useState('legal_review_approved');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [approvalBusy, setApprovalBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  const selectedOption = useMemo(() => options.find((option) => option.code === retentionClass) || null, [options, retentionClass]);
 
   const load = async () => {
     setLoading(true);
@@ -49,23 +59,11 @@ export default function BookingRetentionControls({ client, bookingId, onClose, o
     event.preventDefault();
     setError('');
     setNotice('');
-    if (!retentionClass) {
-      setError('Choose an authoritative retention class first.');
-      return;
-    }
-    if (legalHold && !reviewAfter) {
-      setError('A legal hold requires a review date.');
-      return;
-    }
+    if (!retentionClass) return setError('Choose an authoritative retention class first.');
+    if (legalHold && !reviewAfter) return setError('A legal hold requires a review date.');
     setSaving(true);
     try {
-      const next = await setAdminBookingRetentionControl(client, {
-        bookingId,
-        retentionClass,
-        legalHold,
-        reasonCode,
-        reviewAfter: reviewAfter || null,
-      });
+      const next = await setAdminBookingRetentionControl(client, { bookingId, retentionClass, legalHold, reasonCode, reviewAfter: reviewAfter || null });
       setStatus(next);
       setNotice('Retention governance updated and audit event appended. No evidence was erased or moved.');
       onChanged?.();
@@ -73,6 +71,41 @@ export default function BookingRetentionControls({ client, bookingId, onClose, o
       setError(err?.message || 'Could not update retention governance.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const approveClass = async () => {
+    setError(''); setNotice(''); setApprovalBusy(true);
+    try {
+      await approveAdminBookingRetentionClass(client, {
+        code: retentionClass,
+        activeRetentionDays,
+        archiveRetentionDays,
+        sourceAuthority,
+        reviewReference,
+        reasonCode: approvalReason,
+      });
+      setNotice('Retention class approval recorded with reviewed duration/source evidence. Automatic erasure remains disabled.');
+      await load();
+      onChanged?.();
+    } catch (err) {
+      setError(err?.message || 'Could not approve retention class.');
+    } finally {
+      setApprovalBusy(false);
+    }
+  };
+
+  const revokeApproval = async () => {
+    setError(''); setNotice(''); setApprovalBusy(true);
+    try {
+      await revokeAdminBookingRetentionClassApproval(client, { code: retentionClass, reasonCode: approvalReason || 'legal_review_superseded' });
+      setNotice('Retention class approval revoked. The class is fail-closed until reviewed again.');
+      await load();
+      onChanged?.();
+    } catch (err) {
+      setError(err?.message || 'Could not revoke retention class approval.');
+    } finally {
+      setApprovalBusy(false);
     }
   };
 
@@ -116,9 +149,34 @@ export default function BookingRetentionControls({ client, bookingId, onClose, o
             </label>
             <div className="md:col-span-2 flex flex-wrap items-center gap-3">
               <button disabled={saving} className="rounded-lg bg-indigo-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save audited control'}</button>
-              <span className="text-xs text-slate-600">Approved retention durations remain controlled by the server-side policy table; this form cannot invent them.</span>
+              <span className="text-xs text-slate-600">Approved retention durations remain server-controlled; this form cannot erase data.</span>
             </div>
           </form>
+
+          {selectedOption && (
+            <div className="mt-6 rounded-xl border border-indigo-200 bg-white p-4">
+              <h3 className="font-black">Reviewed class approval</h3>
+              <p className="mt-1 text-xs text-slate-600">This is governance metadata only. It never starts automatic deletion or archival.</p>
+              {selectedOption.period_status === 'approved' ? (
+                <div className="mt-4 space-y-3 text-sm">
+                  <p>Approved active retention: <strong>{selectedOption.active_retention_days} days</strong>{selectedOption.archive_retention_days ? <> · archive: <strong>{selectedOption.archive_retention_days} days</strong></> : null}</p>
+                  <label className="block font-bold">Revocation reason code
+                    <input className="mt-1 w-full rounded-lg border p-2 font-normal" pattern="[a-z0-9][a-z0-9_.-]{2,79}" value={approvalReason} onChange={(e) => setApprovalReason(e.target.value.toLowerCase())} />
+                  </label>
+                  <button type="button" disabled={approvalBusy} onClick={revokeApproval} className="rounded-lg border px-3 py-2 text-sm font-bold disabled:opacity-50">Revoke reviewed approval</button>
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <label className="text-sm font-bold">Active retention days<input className="mt-1 w-full rounded-lg border p-2 font-normal" type="number" min="1" step="1" value={activeRetentionDays} onChange={(e) => setActiveRetentionDays(e.target.value)} /></label>
+                  <label className="text-sm font-bold">Archive retention days (optional)<input className="mt-1 w-full rounded-lg border p-2 font-normal" type="number" min="1" step="1" value={archiveRetentionDays} onChange={(e) => setArchiveRetentionDays(e.target.value)} /></label>
+                  <label className="text-sm font-bold md:col-span-2">Source authority<input className="mt-1 w-full rounded-lg border p-2 font-normal" value={sourceAuthority} onChange={(e) => setSourceAuthority(e.target.value)} placeholder="Reviewed legal/DPO schedule or applicable authority" /></label>
+                  <label className="text-sm font-bold">Review reference<input className="mt-1 w-full rounded-lg border p-2 font-normal" value={reviewReference} onChange={(e) => setReviewReference(e.target.value)} placeholder="legal-review-YYYY-MM-DD-v1" /></label>
+                  <label className="text-sm font-bold">Approval reason code<input className="mt-1 w-full rounded-lg border p-2 font-normal" pattern="[a-z0-9][a-z0-9_.-]{2,79}" value={approvalReason} onChange={(e) => setApprovalReason(e.target.value.toLowerCase())} /></label>
+                  <div className="md:col-span-2"><button type="button" disabled={approvalBusy} onClick={approveClass} className="rounded-lg bg-indigo-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Approve reviewed retention class</button></div>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </section>

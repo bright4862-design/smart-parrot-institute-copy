@@ -187,3 +187,41 @@ export async function setAdminBookingRetentionControl(client, { bookingId, reten
   if (error) throw error;
   return data;
 }
+
+export async function approveAdminBookingRetentionClass(client, { code, activeRetentionDays, archiveRetentionDays = null, sourceAuthority, reviewReference, reasonCode }) {
+  if (!client) throw new Error('Lesson booking Supabase client is unavailable.');
+  const activeDays = Number(activeRetentionDays);
+  const archiveDays = archiveRetentionDays === '' || archiveRetentionDays == null ? null : Number(archiveRetentionDays);
+  const source = String(sourceAuthority ?? '').trim();
+  const reference = String(reviewReference ?? '').trim();
+  const reason = String(reasonCode ?? '').trim().toLowerCase();
+  if (!String(code ?? '').trim()) throw new Error('retention class is required.');
+  if (!Number.isInteger(activeDays) || activeDays < 1) throw new Error('active retention days must be a positive whole number.');
+  if (archiveDays != null && (!Number.isInteger(archiveDays) || archiveDays < 1)) throw new Error('archive retention days must be a positive whole number.');
+  if (source.length < 3 || source.length > 500) throw new Error('source authority must be 3 to 500 characters.');
+  if (reference.length < 3 || reference.length > 200) throw new Error('review reference must be 3 to 200 characters.');
+  if (!/^[a-z0-9][a-z0-9_.-]{2,79}$/.test(reason)) throw new Error('reasonCode must be a short machine-readable code.');
+  const { data, error } = await client.rpc('admin_approve_booking_retention_class', {
+    p_code: String(code).trim(),
+    p_active_retention_days: activeDays,
+    p_archive_retention_days: archiveDays,
+    p_source_authority: source,
+    p_review_reference: reference,
+    p_reason_code: reason,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function revokeAdminBookingRetentionClassApproval(client, { code, reasonCode }) {
+  if (!client) throw new Error('Lesson booking Supabase client is unavailable.');
+  const reason = String(reasonCode ?? '').trim().toLowerCase();
+  if (!String(code ?? '').trim()) throw new Error('retention class is required.');
+  if (!/^[a-z0-9][a-z0-9_.-]{2,79}$/.test(reason)) throw new Error('reasonCode must be a short machine-readable code.');
+  const { data, error } = await client.rpc('admin_revoke_booking_retention_class_approval', {
+    p_code: String(code).trim(),
+    p_reason_code: reason,
+  });
+  if (error) throw error;
+  return data;
+}

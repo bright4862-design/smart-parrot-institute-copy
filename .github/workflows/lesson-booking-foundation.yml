@@ -31,6 +31,7 @@ on:
       - "scripts/check-lesson-booking-preview-readiness-boundary.mjs"
       - "scripts/check-lesson-booking-retention-ops-boundary.mjs"
       - "scripts/check-lesson-booking-provider-staging-boundary.mjs"
+      - "scripts/check-lesson-booking-launch-rehearsal-boundary.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
@@ -62,6 +63,7 @@ on:
       - "scripts/check-lesson-booking-preview-readiness-boundary.mjs"
       - "scripts/check-lesson-booking-retention-ops-boundary.mjs"
       - "scripts/check-lesson-booking-provider-staging-boundary.mjs"
+      - "scripts/check-lesson-booking-launch-rehearsal-boundary.mjs"
       - "scripts/lesson-booking-preview-e2e.mjs"
       - "scripts/lesson-booking-provider-preview-e2e.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
@@ -127,6 +129,8 @@ jobs:
         run: node scripts/check-lesson-booking-retention-ops-boundary.mjs
       - name: Verify Phase 4C4 provider staging/retention approval boundary
         run: node scripts/check-lesson-booking-provider-staging-boundary.mjs
+      - name: Verify Phase 4C5A rehearsal evidence/operator approval boundary
+        run: node scripts/check-lesson-booking-launch-rehearsal-boundary.mjs
       - name: Verify preview E2E execution gate is closed in CI
         run: node scripts/lesson-booking-preview-e2e.mjs
       - name: Verify provider-write preview E2E gate is closed in CI
@@ -145,5 +149,6 @@ jobs:
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_preview_retention_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_retention_ops_scenarios.sql
           sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_retention_approval_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_provider_rehearsal_scenarios.sql
       - name: Build application
         run: npm run build

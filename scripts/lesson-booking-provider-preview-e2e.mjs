@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -60,6 +61,39 @@ async function supabaseReadiness(functionName) {
   }, functionName);
 }
 
+async function ingestRehearsalEvidence(evidence, evidenceSha256) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/admin_ingest_booking_provider_rehearsal`, {
+    method: 'POST',
+    headers: {
+      apikey: publishableKey,
+      authorization: `Bearer ${adminToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_run_id: evidence.run_id,
+      p_schema_version: evidence.schema_version,
+      p_started_at: evidence.started_at,
+      p_completed_at: evidence.completed_at,
+      p_preview_project_verified: evidence.preview_project_verified,
+      p_stripe_account_verified: evidence.stripe_account_verified,
+      p_daily_webhook_domain_verified: evidence.daily_webhook_domain_verified,
+      p_stripe_customer_created: evidence.stripe_customer.created,
+      p_stripe_customer_deleted: evidence.stripe_customer.deleted,
+      p_daily_room_created: evidence.daily_room.created,
+      p_daily_room_deleted: evidence.daily_room.deleted,
+      p_cleanup_complete: evidence.cleanup_complete,
+      p_evidence_sha256: evidenceSha256,
+      p_failure_code: evidence.failure_code,
+    }),
+  });
+  if (!response.ok) throw new Error(`preview rehearsal registry failed with HTTP ${response.status}.`);
+  const result = await response.json();
+  if (result?.run_id !== evidence.run_id || result?.cleanup_complete !== evidence.cleanup_complete) {
+    throw new Error('preview rehearsal registry acknowledgement mismatch.');
+  }
+  return result;
+}
+
 const runId = crypto.randomUUID();
 const startedAt = new Date().toISOString();
 const roomSuffix = runId.replaceAll('-', '').slice(0, 20);
@@ -68,18 +102,21 @@ const evidence = {
   schema_version: 'smart_parrot_provider_preview_e2e_v1',
   run_id: runId,
   started_at: startedAt,
+  completed_at: null,
   preview_project_verified: false,
   stripe_account_verified: false,
   daily_webhook_domain_verified: false,
   stripe_customer: { id: null, created: false, deleted: false },
   daily_room: { name: roomName, created: false, deleted: false },
   cleanup_complete: false,
+  failure_code: null,
   failure: null,
 };
 
 let customerId = null;
 let roomCreated = false;
 let primaryFailure = null;
+let registryFailure = null;
 
 try {
   const baseReadiness = await supabaseReadiness('booking-preview-readiness');
@@ -188,10 +225,25 @@ try {
   if (cleanupFailures.length) {
     evidence.failure = [evidence.failure, ...cleanupFailures].filter(Boolean).join('; ');
   }
+  evidence.failure_code = !evidence.cleanup_complete ? 'cleanup_incomplete' : primaryFailure ? 'provider_rehearsal_failed' : null;
+  evidence.completed_at = new Date().toISOString();
+
+  const evidenceText = `${JSON.stringify(evidence, null, 2)}\n`;
+  const evidenceSha256 = createHash('sha256').update(evidenceText, 'utf8').digest('hex');
   await mkdir(path.dirname(evidenceFile), { recursive: true });
-  await writeFile(evidenceFile, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(evidenceFile, evidenceText, { mode: 0o600 });
+
+  try {
+    await ingestRehearsalEvidence(evidence, evidenceSha256);
+  } catch (error) {
+    registryFailure = error instanceof Error ? error : new Error(String(error));
+  }
 }
 
+if (primaryFailure && registryFailure) {
+  throw new Error(`${primaryFailure.message}; ${registryFailure.message}`);
+}
 if (primaryFailure) throw primaryFailure;
 if (!evidence.cleanup_complete) throw new Error(`Provider preview cleanup incomplete; inspect ${evidenceFile}.`);
-console.log(`Provider preview staging passed with deterministic cleanup evidence at ${evidenceFile}. No booking, PaymentIntent, charge, capture, refund, email, deploy, or publish was created.`);
+if (registryFailure) throw registryFailure;
+console.log(`Provider preview staging passed with deterministic cleanup evidence at ${evidenceFile} and append-only registry ingestion. No booking, PaymentIntent, charge, capture, refund, email, deploy, or publish was created.`);

@@ -27,3 +27,6 @@ verify_jwt = false
 # withSupabase({ auth: 'secret' }) performs the application-level check.
 [functions.place-holds]
 verify_jwt = false
+
+[functions.settle-lessons]
+verify_jwt = false

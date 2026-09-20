@@ -19,6 +19,7 @@ on:
       - "scripts/check-lesson-booking-stripe-boundary.mjs"
       - "scripts/check-lesson-booking-hold-recovery-boundary.mjs"
       - "scripts/check-lesson-booking-attendance-boundary.mjs"
+      - "scripts/check-lesson-booking-settlement-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
   pull_request:
     paths:
@@ -36,6 +37,7 @@ on:
       - "scripts/check-lesson-booking-stripe-boundary.mjs"
       - "scripts/check-lesson-booking-hold-recovery-boundary.mjs"
       - "scripts/check-lesson-booking-attendance-boundary.mjs"
+      - "scripts/check-lesson-booking-settlement-boundary.mjs"
       - ".github/workflows/lesson-booking-foundation.yml"
 
 permissions:
@@ -44,7 +46,19 @@ permissions:
 jobs:
   foundation-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,12 +70,17 @@ jobs:
           deno-version: v2.x
       - name: Install dependencies
         run: npm install
-      - name: Typecheck Phase 2A Edge Functions
+      - name: Install Postgres client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Typecheck Phase 2 Edge Functions
         run: >-
           deno check --node-modules-dir=none
           supabase/functions/create-video-token/index.ts
           supabase/functions/daily-webhook/index.ts
           supabase/functions/check-in/index.ts
+          supabase/functions/settle-lessons/index.ts
       - name: Verify database foundation invariants
         run: node scripts/check-lesson-booking-foundation.mjs
       - name: Verify browser/auth boundary
@@ -74,5 +93,20 @@ jobs:
         run: node scripts/check-lesson-booking-hold-recovery-boundary.mjs
       - name: Verify attendance/lesson-access boundary
         run: node scripts/check-lesson-booking-attendance-boundary.mjs
+      - name: Verify settlement boundary
+        run: node scripts/check-lesson-booking-settlement-boundary.mjs
+      - name: Execute migrations + settlement behavior scenarios
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/tests/bootstrap_minimal_supabase.sql
+          for migration in supabase/migrations/*.sql; do
+            echo "Applying ${migration}"
+            psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f "${migration}"
+          done
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/tests/lesson_booking_settlement_scenarios.sql
       - name: Build application
         run: npm run build

@@ -36,12 +36,13 @@ do $$ begin if has_function_privilege('service_role','public.record_stripe_dispu
 create or replace function auth.uid() returns uuid language sql stable as $$ select '70000000-0000-0000-0000-000000000003'::uuid $$;
 do $$ declare h jsonb; begin
 select public.admin_booking_launch_health('2026-10-25 13:10+00') into h;
-if h->>'schema_version'<>'smart_parrot_booking_launch_health_v2'
+if h->>'schema_version'<>'smart_parrot_booking_launch_health_v3'
   or h->>'status'<>'attention'
   or (h->'counts'->>'disputes_needing_reconciliation')::int<>1
   or (h->'counts'->>'open_review_cases')::int<>1
   or (h->'counts'->>'unclassified_evidence_bookings')::int<>1
   or (h->'counts'->>'unapproved_retention_classes')::int<>4
+  or (h->'counts'->>'provider_rehearsal_missing')::int<>1
 then raise exception 'Launch-health summary mismatch: %',h; end if;
 if h::text like '%pi_test_phase4c%' or h::text like '%ch_test_phase4c%' or h::text like '%Phase4C Student%' then raise exception 'Launch-health summary leaked provider/customer detail: %',h; end if;
 end $$;

@@ -132,7 +132,7 @@ begin
 
   if not exists (
     select 1
-    from public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions x
+    from public.lesson_booking_preview_requeue_dispatch_exclusions x
     join public.lesson_booking_preview_launch_blocker_requeue_delivery_intent_terminals t
       on t.terminal_id=x.terminal_id
     where x.intent_id=(intent1->>'intent_id')::bigint
@@ -152,7 +152,6 @@ begin
     raise exception 'Phase AB stale replay did not converge on immutable exclusion: %',excluded1_replay;
   end if;
 
-  -- Generation 2 is already expired: stale intent must never create a ready preflight.
   insert into public.lesson_booking_preview_launch_blocker_requeue_lease_events(
     schema_version,activation_id,work_generation_id,queue_item_id,snapshot_id,alert_id,lineage_ref,
     event_kind,claim_key,lease_generation_no,lease_seconds,lease_expires_at,recorded_at
@@ -186,13 +185,12 @@ begin
     raise exception 'Phase AB lease-expired exclusion mismatch: %',expired_result;
   end if;
   if exists (
-    select 1 from public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights p
+    select 1 from public.lesson_booking_preview_requeue_dispatch_preflights p
     where p.intent_id=v_expired_intent_id
   ) then
     raise exception 'Phase AB created ready evidence for an expired intent';
   end if;
 
-  -- Generation 3 remains unexpired; a newer blocker snapshot alone makes its intent stale.
   insert into public.lesson_booking_preview_launch_blocker_requeue_lease_events(
     schema_version,activation_id,work_generation_id,queue_item_id,snapshot_id,alert_id,lineage_ref,
     event_kind,claim_key,lease_generation_no,lease_seconds,lease_expires_at,recorded_at
@@ -244,15 +242,15 @@ begin
   end if;
 
   select count(*) into v_preflight_count
-  from public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights;
+  from public.lesson_booking_preview_requeue_dispatch_preflights;
   select count(*) into v_exclusion_count
-  from public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions;
+  from public.lesson_booking_preview_requeue_dispatch_exclusions;
   if v_preflight_count <> 1 or v_exclusion_count <> 3 then
     raise exception 'Phase AB expected 1 ready preflight + 3 exclusions, got % + %',v_preflight_count,v_exclusion_count;
   end if;
 
   begin
-    update public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights
+    update public.lesson_booking_preview_requeue_dispatch_preflights
     set preflight_state=preflight_state;
   exception when others then
     mutate_preflight:=true;
@@ -262,7 +260,7 @@ begin
   end if;
 
   begin
-    update public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions
+    update public.lesson_booking_preview_requeue_dispatch_exclusions
     set exclusion_reason=exclusion_reason;
   exception when others then
     mutate_exclusion:=true;
@@ -290,10 +288,10 @@ begin
     raise exception 'service_role missing Phase AB service RPC access';
   end if;
 
-  if has_table_privilege('authenticated','public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights','SELECT')
-     or has_table_privilege('service_role','public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights','SELECT')
-     or has_table_privilege('authenticated','public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions','SELECT')
-     or has_table_privilege('service_role','public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions','SELECT') then
+  if has_table_privilege('authenticated','public.lesson_booking_preview_requeue_dispatch_preflights','SELECT')
+     or has_table_privilege('service_role','public.lesson_booking_preview_requeue_dispatch_preflights','SELECT')
+     or has_table_privilege('authenticated','public.lesson_booking_preview_requeue_dispatch_exclusions','SELECT')
+     or has_table_privilege('service_role','public.lesson_booking_preview_requeue_dispatch_exclusions','SELECT') then
     raise exception 'Phase AB evidence tables must remain RPC-only';
   end if;
 end $$;

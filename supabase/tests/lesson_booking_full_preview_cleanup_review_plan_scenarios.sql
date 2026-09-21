@@ -32,9 +32,20 @@ insert into public.lesson_booking_full_preview_terminal_evidence(
   ('8c000000-0000-4000-8000-000000000203','smart_parrot_full_preview_terminal_evidence_v1','complete',repeat('7',64),repeat('8',64),
    'fixture_sessions_closed','fixture_cleanup_complete',false,'8c000000-0000-0000-0000-000000000011',statement_timestamp()-interval '44 days');
 
-select public.service_record_booking_full_preview_reconciliation_resolution(
-  '8c000000-0000-4000-8000-000000000201','cleanup_verified',repeat('4',64),repeat('9',64)
+-- Model a cleanup verification that itself is old enough for the 30-day post-resolution
+-- troubleshooting window to have elapsed. A newly recorded cleanup verification correctly
+-- restarts that window and is covered as ineligible by the Phase 4C5L regression.
+insert into public.lesson_booking_full_preview_reconciliation_resolutions(
+  run_id,schema_version,terminal_state,terminal_correlation_sha256,verification_sha256,
+  resolution_kind,resolution_source,resolved_at
+) values (
+  '8c000000-0000-4000-8000-000000000201',
+  'smart_parrot_full_preview_reconciliation_resolution_v1',
+  'complete',repeat('4',64),repeat('9',64),
+  'cleanup_verified','trusted_preview_reconciliation_worker_v1',
+  statement_timestamp()-interval '35 days'
 );
+
 select public.service_record_booking_full_preview_reconciliation_resolution(
   '8c000000-0000-4000-8000-000000000202','preserve',repeat('6',64),repeat('a',64)
 );

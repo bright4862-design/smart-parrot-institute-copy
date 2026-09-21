@@ -1,0 +1,59 @@
+name: Lesson booking Phase 4C5X
+
+on:
+  push:
+    branches:
+      - agent/lesson-booking-blueprint
+    paths:
+      - "scripts/lesson-booking-preview-requeue-lease.mjs"
+      - "scripts/check-lesson-booking-preview-requeue-lease.mjs"
+      - "scripts/lesson-booking-preview-requeue-activation.mjs"
+      - "scripts/check-lesson-booking-preview-requeue-activation.mjs"
+      - "scripts/lesson-booking-full-preview-supabase-transport.mjs"
+      - "supabase/migrations/20260921133000_lesson_booking_phase4c5x_requeue_claim_lease_terminal.sql"
+      - "supabase/tests/lesson_booking_preview_launch_blocker_requeue_claim_lease_terminal_scenarios.sql"
+      - ".github/workflows/lesson-booking-phase4c5x.yml"
+  pull_request:
+    paths:
+      - "scripts/lesson-booking-preview-requeue-lease.mjs"
+      - "scripts/check-lesson-booking-preview-requeue-lease.mjs"
+      - "scripts/lesson-booking-preview-requeue-activation.mjs"
+      - "scripts/check-lesson-booking-preview-requeue-activation.mjs"
+      - "scripts/lesson-booking-full-preview-supabase-transport.mjs"
+      - "supabase/migrations/20260921133000_lesson_booking_phase4c5x_requeue_claim_lease_terminal.sql"
+      - "supabase/tests/lesson_booking_preview_launch_blocker_requeue_claim_lease_terminal_scenarios.sql"
+      - ".github/workflows/lesson-booking-phase4c5x.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  requeue-claim-lease:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Verify Phase 4C5X requeue claim/lease boundary
+        run: node scripts/check-lesson-booking-preview-requeue-lease.mjs
+      - name: Re-verify Phase 4C5W activation boundary
+        run: node scripts/check-lesson-booking-preview-requeue-activation.mjs
+      - name: Start ephemeral PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+          sudo -u postgres pg_isready
+      - name: Verify Phase 4C5X SQL behavior
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap_minimal_supabase.sql
+          for migration in supabase/migrations/*.sql; do echo "Applying ${migration}"; sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f "${migration}"; done
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_preview_launch_blocker_requeue_claim_lease_terminal_scenarios.sql
+      - name: Build application
+        run: npm run build

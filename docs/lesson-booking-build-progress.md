@@ -8,18 +8,18 @@ Last updated: 2026-09-21
 - Working branch: `agent/lesson-booking-blueprint`.
 - Draft PR: #16.
 - Default branch refreshed this run: `main` at `7f764e5c2b691874b6049e706f1c09026c1eafaf`.
-- Phase 4C5K verified engineering checkpoint: **`dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`**.
-- GitHub comparison at the engineering checkpoint: **diverged, 131 commits ahead / 15 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
+- Phase 4C5M verified engineering checkpoint: **`ab492bc1777f62b8587b7c722eb56f38285d1e71`**.
+- GitHub comparison at the verified engineering checkpoint: **diverged, 142 commits ahead / 15 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
 - `main` remains untouched. Nothing has been merged, rebased, published to Base44, or deployed to production.
-- Approved Supabase PREVIEW/TEST project only: `mrzzbhqzxshtbqvxkcjn`, `eu-west-1`, `https://mrzzbhqzxshtbqvxkcjn.supabase.co`.
-- Applied migrations now run through **`20260921021637 / lesson_booking_phase4c5k_terminal_reconciliation_retention`**.
-- All 12 previously deployed booking Edge Functions remain unchanged this slice; Phase 4C5K deploys no Edge Function.
+- Approved Supabase PREVIEW/TEST project only: `mrzzbhqzxshtbqvxkcjn`, region `eu-west-1`, URL `https://mrzzbhqzxshtbqvxkcjn.supabase.co`.
+- Applied preview migrations now include **`20260921035310 / lesson_booking_phase4c5l_reconciliation_resolution_retention_audit`** and **`20260921035334 / lesson_booking_phase4c5m_cleanup_review_plan`**.
+- All 12 previously deployed booking Edge Functions remain unchanged in Phases 4C5L/4C5M.
 - Stripe remains TEST/SANDBOX only. Live Stripe keys/objects remain inadmissible. Stripe Connect remains deferred.
 
 ## Architecture lock
 
 - Base44/React remains the frontend shell; app id `69c16c52c86d161e74940243`.
-- Supabase Postgres/Auth/RLS/Edge Functions/Cron remains authoritative for identity, booking, policy, evidence, time, payment state, attendance, cancellation, settlement, compliance, provider readiness, preview continuation, terminal rehearsal evidence, and reconciliation/retention status.
+- Supabase Postgres/Auth/RLS/Edge Functions/Cron remains authoritative for identity, booking, policy, evidence, time, payment state, attendance, cancellation, settlement, compliance, provider readiness, preview continuation, terminal rehearsal evidence, reconciliation, retention review, and cleanup-review planning.
 - No browser-authoritative money, provider-state, attendance, identity, cleanup, retention, reconciliation, or time transition is allowed.
 - Stripe remains hold-before/capture-after: setup mode for bookings 48h+ ahead, manual capture for near-term bookings, server-side idempotency/evidence, capture/release only from trusted worker boundaries.
 - Daily remains server-evidence only with booking-scoped private rooms/tokens and signed webhook evidence.
@@ -36,109 +36,132 @@ Last updated: 2026-09-21
 - **4C5H:** deterministic synthetic preview fixture principals, evidence-aware cleanup, bounded signed-provider preparation.
 - **4C5I:** ephemeral fixture sessions, fixture lifecycle gating, redacted provider-test transcript, branch-divergence evidence.
 - **4C5J:** failure-safe terminal cleanup, deterministic transcript hashing, append-only terminal evidence correlation, replay/conflict protection.
-- **4C5K (current):** read-only terminal reconciliation queue, missing-evidence detection, and server-time preview evidence retention review status.
+- **4C5K:** read-only terminal reconciliation queue, missing-evidence detection, and server-time preview evidence retention review status.
+- **4C5L:** service-only reconciliation-resolution evidence plus immutable admin retention-review audit decisions.
+- **4C5M (current):** server-validated cleanup-review candidate queue and bounded, expiring, dry-run-only cleanup review plans. No deletion executor exists.
 
-## Phase 4C5K — terminal reconciliation queue + expiry/retention hardening — complete
+## Phase 4C5L — reconciliation resolution + retention-review audit — complete
 
-Verified engineering checkpoint: **`dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`**.
+- Added append-only `lesson_booking_full_preview_reconciliation_resolutions` and `lesson_booking_full_preview_retention_reviews` records.
+- `service_record_booking_full_preview_reconciliation_resolution(...)` is service-role only, anchored to immutable terminal-evidence correlation SHA-256, replay-safe for identical evidence, and conflict-rejecting.
+- Admin retention review can record `preserve` or `eligible_for_cleanup_review`, but the latter is accepted only when the server-derived retention window is due and no unresolved reconciliation hold remains.
+- Reconciliation resolution restarts the 30-day preview troubleshooting review window from trusted server `resolved_at`; a newly resolved cleanup cannot become immediately cleanup-review eligible.
+- `admin_booking_full_preview_terminal_retention_status(...)` uses PostgreSQL server time and always reports `destructive_cleanup_authorized=false` and `cleanup_execution_enabled=false`.
+- Preview migration applied as **`20260921035310 / lesson_booking_phase4c5l_reconciliation_resolution_retention_audit`**.
+
+## Phase 4C5M — cleanup-review queue + bounded dry-run plans — complete
+
+Verified engineering checkpoint: **`ab492bc1777f62b8587b7c722eb56f38285d1e71`**.
 
 ### Implemented
 
-- Added `supabase/migrations/20260921030000_lesson_booking_phase4c5k_terminal_reconciliation_retention.sql`.
-  - Adds a partial index for `reconciliation_required=true` terminal evidence.
-  - Adds `admin_booking_full_preview_reconciliation_queue(p_limit)` as an admin-only, minimized, read-only RPC.
-  - The queue surfaces both explicit reconciliation-required terminal evidence and terminal preview runs whose evidence is still absent after a **server-computed 15-minute grace window**.
-  - Severity is server-computed from `statement_timestamp()`; no browser-supplied clock or `p_now` parameter exists.
-  - Queue rows contain only run id, terminal state, generic reason/severity, occurrence time, and retention-hold status. They do not expose provider IDs, fixture identities, webhook bodies, transcript/correlation hashes, tokens, secrets, or payment data.
-  - Adds `admin_booking_full_preview_terminal_retention_status(p_run_id)` as an admin-only, server-time observer.
-  - Reconciliation-required evidence stays on `reconciliation_hold` with no cleanup deadline.
-  - Non-reconciliation evidence uses a **30-day technical preview troubleshooting review window** and becomes `retention_review_due` after that window. This is an operational preview choice, **not a legal retention period**.
-  - The RPC always returns `destructive_cleanup_authorized=false`; it does not delete anything or authorize a purge.
-  - Both RPCs pin `search_path=''`, immediately perform the existing server-side admin-role check, revoke `public`/`anon`, and expose only the intentionally authenticated admin RPC surface.
-- Added `scripts/lesson-booking-full-preview-reconciliation.mjs`.
-  - Provides a narrow `admin_rpc` reader for the reconciliation queue and retention status.
-  - Strips unknown/sensitive fields from server responses and rejects any payload that claims deletion authority or a non-server-authoritative clock.
-  - Never sends time inputs and contains no provider-write or destructive-cleanup path.
-- Added `scripts/check-lesson-booking-full-preview-reconciliation.mjs`.
-  - Verifies sensitive-looking injected fields do not survive normalization.
-  - Verifies only `p_limit` and `p_run_id` cross the transport boundary, never `p_now`.
-  - Statically rejects terminal-evidence deletion, provider-write identifiers, or Daily room/token handling from this slice.
-- Added `supabase/tests/lesson_booking_full_preview_reconciliation_retention_scenarios.sql`.
-  - Covers ambiguous session/fixture cleanup evidence, missing terminal evidence after the grace window, fresh retained evidence, review-due evidence, direct-table privilege denial, and non-admin RPC denial.
-  - Proves missing terminal evidence is surfaced to reconciliation but cannot be given a fabricated retention status.
-- Added `.github/workflows/lesson-booking-phase4c5k.yml`.
-  - Runs the Phase 4C5K JS boundary regression and re-verifies Phase 4C5J.
-  - Applies every booking migration into ephemeral PostgreSQL, runs the new SQL scenarios, and builds the production Vite bundle.
+- Added `supabase/migrations/20260921033000_lesson_booking_phase4c5m_cleanup_review_plan.sql`.
+  - Adds append-only, RLS-enabled `lesson_booking_full_preview_cleanup_review_plans`.
+  - Direct `anon`, `authenticated`, and `service_role` table privileges are revoked.
+  - A plan is tied to an immutable `eligible_for_cleanup_review` retention review and is always `plan_state='dry_run_only'`.
+  - Plans are generated from PostgreSQL `statement_timestamp()` and expire after 24 hours.
+- Added `admin_booking_full_preview_cleanup_review_queue(p_limit)`.
+  - Admin-only through the existing server-side admin check.
+  - Includes only immutable retention reviews with decision `eligible_for_cleanup_review` and basis `retention_review_due`.
+  - Reconciliation-required evidence is included only after trusted `cleanup_verified`; `preserve` is excluded.
+  - Returns a minimized operational shape and always returns `destructive_cleanup_authorized=false` and `cleanup_execution_enabled=false`.
+- Added `admin_prepare_booking_full_preview_cleanup_review_plan(p_run_id,p_expected_reviewed_at)`.
+  - Revalidates retention eligibility server-side instead of trusting a prior browser observation.
+  - Rejects a stale immutable retention-review timestamp.
+  - Rejects unresolved reconciliation and preserved evidence.
+  - Recomputes the post-evidence/post-resolution 30-day review window with server time.
+  - Replays an identical plan idempotently; conflicting state is rejected.
+  - Produces only a 24-hour dry-run review artifact. It does not delete evidence/fixtures, mutate Stripe/Daily, or move booking/payment state.
+- Both new `SECURITY DEFINER` RPCs use `set search_path=''`, schema-qualified relations, and the existing admin guard.
+- Added `scripts/lesson-booking-full-preview-cleanup-review.mjs` and transport mappings.
+  - Strict normalization strips unknown provider/identity/hash/token fields.
+  - Any payload claiming destructive or execution authority is rejected.
+  - No browser-supplied clock is accepted.
+- Added `scripts/check-lesson-booking-full-preview-cleanup-review.mjs`.
+  - Verifies minimization, false authority flags, no `p_now/current_time`, and statically rejects destructive SQL/provider call paths in the migration.
+- Added `supabase/tests/lesson_booking_full_preview_cleanup_review_plan_scenarios.sql` and `.github/workflows/lesson-booking-phase4c5m.yml`.
+  - Scenarios cover active/unprepared/expired plans, idempotent replay, stale review rejection, preserved reconciliation exclusion, direct-table denial, and non-admin denial.
+  - The first CI attempt exposed a test-modeling error: the scenario recorded a new `cleanup_verified` resolution and immediately expected retention to be due. Phase 4C5L correctly restarts the 30-day review window from `resolved_at`. The regression was corrected to model a genuinely aged trusted resolution rather than weakening production logic.
 
 ### Verification
 
-- GitHub Actions **Lesson booking Phase 4C5K run `35553579037` passed** on exact engineering SHA `dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`.
-  - Phase 4C5K reconciliation/retention JS regression: passed.
-  - Phase 4C5J terminal-evidence regression: passed.
-  - Ephemeral PostgreSQL startup and complete migration application: passed.
-  - Phase 4C5J + Phase 4C5K SQL scenarios: passed.
-  - Production Vite build: passed.
-- Full **Lesson booking foundation run `35553579079` passed** on the same exact engineering SHA `dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`.
-- The bounded Phase 4C5K migration was applied only to approved preview project `mrzzbhqzxshtbqvxkcjn`; Supabase recorded it as **`20260921021637 / lesson_booking_phase4c5k_terminal_reconciliation_retention`**.
+- GitHub Actions **Lesson booking Phase 4C5M run `35558855727` passed** on exact engineering SHA `ab492bc1777f62b8587b7c722eb56f38285d1e71`.
+- Full **Lesson booking foundation run `35558855729` passed** on the same engineering SHA.
+- The dedicated workflow re-ran the Phase 4C5L boundary, applied all booking migrations into ephemeral PostgreSQL, executed both L/M SQL scenarios, and completed the production Vite build.
+- Preview migration application:
+  - **`20260921035310 / lesson_booking_phase4c5l_reconciliation_resolution_retention_audit`**
+  - **`20260921035334 / lesson_booking_phase4c5m_cleanup_review_plan`**
 - Post-apply preview verification:
-  - `lesson_booking_full_preview_runs`: **0 rows**.
-  - `lesson_booking_full_preview_terminal_evidence`: **0 rows**.
-  - reconciliation-required terminal evidence: **0 rows**.
-  - `authenticated` still has **no direct SELECT** privilege on terminal evidence.
-  - reconciliation partial index is present.
-  - both new admin RPCs are present.
-- No synthetic user/session, Stripe object, Daily object, Edge Function deployment, Base44 publication, cron activation, merge, or production mutation occurred.
+  - reconciliation resolution rows: **0**;
+  - retention review rows: **0**;
+  - cleanup review plan rows: **0**;
+  - RLS enabled on all three tables;
+  - `authenticated` has **no direct SELECT** privilege on any of them;
+  - authenticated users cannot execute the service-only reconciliation-resolution RPC;
+  - `service_role` can execute that service RPC;
+  - authenticated callers can reach the intentionally guarded admin retention/cleanup-review RPCs, whose server-side admin check remains authoritative.
+- No synthetic user/session, Stripe object, Daily object, Edge Function deployment, Cron activation, Base44 publication, merge, deletion, or production mutation occurred.
 
-## Research refreshed for Phase 4C5K on 2026-09-21
+## Research refreshed for Phase 4C5M on 2026-09-21
 
 ### Supabase
 
-- Current Supabase Database Functions guidance recommends pinning `search_path` on `SECURITY DEFINER` functions and restricting `EXECUTE` to intended roles. Phase 4C5K follows that pattern and keeps the internal admin-role guard as the actual authorization check.
-- Supabase Cron uses `pg_cron` and records job runs, but no cron or automatic deletion job was introduced here because the retention policy is still an observer/review boundary rather than purge authority.
+- Current Supabase guidance says `SECURITY DEFINER` functions must pin `search_path`; with `search_path=''`, referenced relations must be schema-qualified. It also recommends explicit function privilege revocation/grants rather than relying on defaults.
+- Phase 4C5M uses that pattern and retains the internal admin-role check for intentionally authenticated admin RPCs.
 - References:
   - https://supabase.com/docs/guides/database/functions
-  - https://supabase.com/docs/guides/cron
-  - https://supabase.com/docs/guides/database/secure-data
+  - https://supabase.com/docs/guides/database/postgres/row-level-security
 
 ### Stripe
 
-- Stripe test Events can be listed for up to 30 days. Phase 4C5K uses a matching 30-day **technical preview troubleshooting review window** for minimized rehearsal evidence to keep evidence correlation practical; this is not treated as a statutory retention period.
-- Stripe POST idempotency remains the model for retry-safe provider mutations, but Phase 4C5K performs no Stripe mutation.
+- Stripe currently recommends idempotency keys for create/update POST requests so network retries do not duplicate mutations; reused keys return the saved outcome, and the same key with changed parameters is rejected. Stripe also says not to put personal data in idempotency keys.
+- Stripe webhook verification still requires the raw body, the `Stripe-Signature` header, and the endpoint-specific `whsec_...` secret, with a quick 2xx response before complex work.
+- Phase 4C5M performs no Stripe request; these constraints remain locked for the future provider executor.
 - References:
-  - https://docs.stripe.com/api/events/list
   - https://docs.stripe.com/api/idempotent_requests
+  - https://docs.stripe.com/webhooks
 
 ### Daily
 
-- Daily webhook delivery remains at-least-once/retry-oriented, so duplicate or incomplete provider evidence must continue to converge through deterministic server-side reconciliation rather than browser assertions.
-- Phase 4C5K performs no Daily mutation and stores no Daily identifiers or webhook bodies.
+- Daily's current webhook interface remains a signed/retryable provider-evidence boundary. A cleanup/reconciliation artifact therefore cannot treat a single browser observation as authoritative provider state.
+- Phase 4C5M stores no Daily room/token/provider identifier and performs no Daily mutation.
 - Reference: https://docs.daily.co/reference/rest-api/webhooks
 
 ### Base44
 
-- Elevated backend/service credentials remain inappropriate for the React browser bundle. Phase 4C5K therefore adds only server-side Supabase RPCs plus a minimized reader contract; no privileged cleanup or retention decision is moved into Base44 frontend code.
-- Reference: https://docs.base44.com/sdk-getting-started/client
+- Base44's current backend guidance places secret-bearing external API operations in server-side backend functions; secrets are not appropriate in the browser bundle or source control.
+- Smart Parrot therefore keeps this privileged cleanup/reconciliation logic in Supabase and exposes only minimized admin results to the Base44/React shell.
+- References:
+  - https://base44.com/developers
+  - https://doc-sdk.base44.app/FunctionsDocs
 
 ### France / EU privacy/testing
 
-- CNIL guidance requires retention periods to be purpose-based and non-excessive; personal data should not be retained indefinitely and should be deleted or anonymized once no longer necessary.
-- The 30-day Phase 4C5K preview window is therefore documented as a bounded operational troubleshooting interval, not a legal conclusion. Reconciliation-required evidence is held until a later explicit server-verified reconciliation decision rather than being deleted blindly.
+- CNIL guidance dated **2 April 2026** reiterates that personal data cannot be retained indefinitely; retention must be tied to the processing purpose and documented.
+- CNIL testing guidance says production personal data should not normally be reused for development/test and recommends fictitious test datasets.
+- CNIL minimization guidance recommends defining retention for logs and implementing deletion/review mechanisms, while keeping purge actions auditable.
+- Phase 4C5M therefore creates a review artifact only. It does not infer that a technical 30-day review window is itself a legal retention rule and does not activate deletion automatically.
 - References:
-  - https://www.cnil.fr/fr/cnil-direct/question/dois-je-fixer-une-duree-de-conservation-des-donnees-dans-mon-fichier
+  - https://cnil.fr/fr/passer-laction/les-durees-de-conservation-des-donnees
   - https://www.cnil.fr/fr/tester-vos-applications
+  - https://www.cnil.fr/fr/minimiser-les-donnees-collectees
 
-## Supabase preview/advisor status after Phase 4C5K
+## Supabase preview/advisor status after Phase 4C5M
 
 - Project `mrzzbhqzxshtbqvxkcjn` remains the only approved Smart Parrot preview project.
-- Security advisor still reports **19** RLS-enabled/no-policy tables. These include intentional server-only evidence/operations tables with direct authenticated table access revoked.
-- Security advisor now reports **29** authenticated-callable `SECURITY DEFINER` functions; the two Phase 4C5K observer RPCs account for the increase from 27. Both pin `search_path=''`, immediately enforce `private.smart_parrot_require_admin(auth.uid())`, and return minimized read-only data.
+- Security advisor reports **22** RLS-enabled/no-policy tables. The three L/M tables account for the increase and are intentional server-only/audit tables with direct table access revoked.
+  - Remediation reference: https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
+- Security advisor reports **32** authenticated-callable `SECURITY DEFINER` functions. The L/M admin RPC additions are intentional exposed admin entry points; each pins `search_path=''` and applies the existing role check before returning minimized data. The L service reconciliation RPC is not authenticated-callable.
+  - Remediation/reference: https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
 - The previous mutable `public.forbid_change()` search-path finding remains absent.
-- `btree_gist` remains in `public` as an existing review item and was not moved blindly during this bounded slice.
-- Performance advisor still reports **30** unindexed-FK suggestions, **14** currently-unused indexes, and the existing multiple-permissive-policy warning on `profiles`. No speculative FK index, index removal, or RLS rewrite was applied without workload evidence.
+- `btree_gist` remains in `public` as a documented existing warning and was not moved blindly during this bounded slice.
+  - Remediation/reference: https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public
+- Performance advisor reports **30** unindexed-FK suggestions, **16** currently-unused indexes, and the existing multiple-permissive-policy warning on `profiles`. L/M added covering indexes for their admin-user foreign keys, so no additional FK warning was introduced there. No speculative index removal or RLS rewrite was applied without workload evidence.
+  - FK remediation/reference: https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys
 
 ## External configuration still required for first provider-writing rehearsal
 
-Repository work can continue without these, but actual provider writes remain fail-closed until the approved preview environment has:
+Repository and preview-database hardening can continue without these, but actual provider writes remain fail-closed until the approved preview environment has:
 
 - runtime-only preview `sb_secret_...` credential for synthetic fixture/session administration;
 - Stripe **TEST** secret key, exact expected test account id, Checkout webhook signing secret, and separate dispute-webhook signing secret installed for the Supabase Edge Functions;
@@ -150,14 +173,14 @@ Connecting Stripe inside Base44 still does **not** transfer Stripe secret/webhoo
 
 ## Next coherent slice
 
-**Phase 4C5L — server-verified reconciliation resolution + retention review audit:**
+**Phase 4C5N — cleanup-plan renewal/revocation + execution-manifest boundary:**
 
-1. add append-only reconciliation-resolution evidence so a queue item can be resolved only from a trusted server-verified outcome, never a browser assertion;
-2. add immutable retention-review audit records for `preserve` / `eligible_for_cleanup_review` decisions, with server-derived timestamps and reconciliation-hold precedence;
-3. keep actual deletion disabled: any future purge executor remains separately gated and cannot be introduced as an implicit consequence of a retention review;
-4. add regressions for duplicate/stale resolution, missing terminal evidence, non-admin access, browser-clock injection, retention-hold precedence, and conflicting replay;
-5. continue to keep all Stripe/Daily provider writes and Base44 publication disabled until the missing TEST credentials are explicitly installed and bounded gates are opened.
+1. add an append-only server audit for cleanup-plan expiry/renewal/revocation so a stale plan cannot silently regain authority;
+2. produce a minimized immutable **execution-manifest preview** that references only trusted retention/reconciliation/plan artifacts and still reports `cleanup_execution_enabled=false`;
+3. keep actual deletion disabled: no DELETE/TRUNCATE/provider-mutation RPC and no Cron purge executor in this phase;
+4. add regressions for expired plans, review changes, preserve overrides, duplicate renewal, stale manifest replay, browser-clock injection, non-admin access, and sensitive-field leakage;
+5. continue to keep Stripe/Daily provider writes and Base44 publication disabled until the missing TEST credentials are explicitly installed and bounded gates are opened.
 
 ## Release status
 
-**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5K is repository-complete and CI-verified at `dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`. The bounded migration is present only in the approved Supabase preview project. PR #16 remains draft. No provider-writing rehearsal or production operation occurred.
+**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5M is repository-complete and CI-verified at `ab492bc1777f62b8587b7c722eb56f38285d1e71`. Phases 4C5L/4C5M are applied only to the approved Supabase preview project. PR #16 remains draft. No provider-writing rehearsal, destructive cleanup, or production operation occurred.

@@ -218,6 +218,14 @@ begin
     'EXECUTE'
   ) or has_function_privilege(
     'authenticated',
+    'public.service_claim_booking_preview_launch_blocker_requeue_work_audited(bigint,text,integer)',
+    'EXECUTE'
+  ) or has_function_privilege(
+    'authenticated',
+    'public.service_observe_booking_preview_launch_blocker_requeue_expired_leases(integer)',
+    'EXECUTE'
+  ) or has_function_privilege(
+    'authenticated',
     'public.service_transition_booking_preview_launch_blocker_requeue_work(bigint,text,text,text)',
     'EXECUTE'
   ) or has_function_privilege(
@@ -225,12 +233,24 @@ begin
     'public.service_list_booking_preview_launch_blocker_requeue_work(integer)',
     'EXECUTE'
   ) then
-    raise exception 'authenticated unexpectedly has Phase X service RPC access';
+    raise exception 'authenticated unexpectedly has Phase X/Y requeue service RPC access';
+  end if;
+
+  if has_function_privilege(
+    'service_role',
+    'public.service_claim_booking_preview_launch_blocker_requeue_work(bigint,text,integer)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role can bypass Phase Y through the legacy Phase X claim RPC';
   end if;
 
   if not has_function_privilege(
     'service_role',
-    'public.service_claim_booking_preview_launch_blocker_requeue_work(bigint,text,integer)',
+    'public.service_claim_booking_preview_launch_blocker_requeue_work_audited(bigint,text,integer)',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'service_role',
+    'public.service_observe_booking_preview_launch_blocker_requeue_expired_leases(integer)',
     'EXECUTE'
   ) or not has_function_privilege(
     'service_role',
@@ -241,7 +261,7 @@ begin
     'public.service_list_booking_preview_launch_blocker_requeue_work(integer)',
     'EXECUTE'
   ) then
-    raise exception 'service_role missing Phase X service RPC access';
+    raise exception 'service_role missing Phase X/Y service RPC access';
   end if;
 
   if has_table_privilege(

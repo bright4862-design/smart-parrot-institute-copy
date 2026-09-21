@@ -89,6 +89,19 @@ await assert.rejects(
   /retention_review_decision_invalid/,
 );
 
+const reconciledPreserveAudit = normalizeFullPreviewRetentionReview({
+  schema_version: 'smart_parrot_full_preview_retention_review_v1',
+  run_id: RUN_ID,
+  decision: 'preserve',
+  basis_status: 'reconciliation_preserved',
+  reviewed_at: '2026-09-21T03:00:00Z',
+  replay: false,
+  destructive_cleanup_authorized: false,
+  cleanup_execution_enabled: false,
+  server_time_authoritative: true,
+});
+assert.equal(reconciledPreserveAudit.basis_status, 'reconciliation_preserved');
+
 assert.throws(() => normalizeFullPreviewRetentionReview({
   schema_version: 'smart_parrot_full_preview_retention_review_v1',
   run_id: RUN_ID,

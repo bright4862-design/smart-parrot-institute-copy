@@ -25,6 +25,7 @@ const OPERATION_AUTH = Object.freeze({
   'admin_renew_booking_full_preview_cleanup_review_plan': 'admin_rpc',
   'admin_revoke_booking_full_preview_cleanup_review_plan': 'admin_rpc',
   'admin_prepare_booking_full_preview_cleanup_execution_manifest_preview': 'admin_rpc',
+  'service_attest_booking_full_preview_cleanup_execution_manifest': 'service_rpc',
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -97,6 +98,15 @@ export function createApprovedPreviewSupabaseTransport({
     };
   }
 
+  function serviceHeaders() {
+    const key = assertSecretKey(secretKey);
+    return {
+      apikey: key,
+      authorization: `Bearer ${key}`,
+      'content-type': 'application/json',
+    };
+  }
+
   async function invokeEdgeFunction(target, payload, auth) {
     let headers;
     if (auth === 'student_user') {
@@ -119,10 +129,19 @@ export function createApprovedPreviewSupabaseTransport({
     return decodeResponse(response);
   }
 
-  async function invokeRpc(target, payload) {
+  async function invokeAdminRpc(target, payload) {
     const response = await fetchImpl(`${identity.url}/rest/v1/rpc/${target}`, {
       method: 'POST',
       headers: userHeaders(adminAccessToken, 'admin_access_token'),
+      body: JSON.stringify(payload ?? {}),
+    });
+    return decodeResponse(response);
+  }
+
+  async function invokeServiceRpc(target, payload) {
+    const response = await fetchImpl(`${identity.url}/rest/v1/rpc/${target}`, {
+      method: 'POST',
+      headers: serviceHeaders(),
       body: JSON.stringify(payload ?? {}),
     });
     return decodeResponse(response);
@@ -176,7 +195,8 @@ export function createApprovedPreviewSupabaseTransport({
       if (!expectedAuth) throw new Error(`unsupported_preview_target:${target}`);
       if (call.auth !== expectedAuth) throw new Error(`preview_auth_class_mismatch:${target}`);
 
-      if (expectedAuth === 'admin_rpc') return invokeRpc(target, call.payload);
+      if (expectedAuth === 'admin_rpc') return invokeAdminRpc(target, call.payload);
+      if (expectedAuth === 'service_rpc') return invokeServiceRpc(target, call.payload);
       return invokeEdgeFunction(target, call.payload, expectedAuth);
     },
   });

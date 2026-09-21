@@ -71,7 +71,7 @@ declare
   v_existing public.lesson_booking_preview_launch_blocker_acknowledgements%rowtype;
   v_severity text;
   v_acknowledgement_id bigint;
-  v_decision text := pg_catalog.btrim(pg_catalog.coalesce(p_decision,''));
+  v_decision text := pg_catalog.btrim(coalesce(p_decision,''::text));
 begin
   if p_snapshot_id is null or p_snapshot_id < 1 then
     raise exception 'invalid_preview_launch_blocker_snapshot_id' using errcode='22023';

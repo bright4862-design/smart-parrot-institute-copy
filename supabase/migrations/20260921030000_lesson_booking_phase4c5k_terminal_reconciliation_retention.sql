@@ -33,32 +33,50 @@ begin
   end if;
 
   return query
-  select
-    e.run_id,
-    e.terminal_state,
-    case when e.recorded_at <= v_now - interval '24 hours' then 'urgent' else 'high' end::text,
-    case
-      when e.session_close_status = 'fixture_session_close_ambiguous'
-        then 'Ephemeral preview session closure requires reconciliation'
-      when e.fixture_cleanup_status = 'fixture_cleanup_ambiguous'
-        then 'Synthetic preview fixture cleanup outcome is ambiguous'
-      when e.fixture_cleanup_status = 'fixture_cleanup_deferred_session_close_ambiguous'
-        then 'Synthetic preview fixture cleanup deferred because session closure is ambiguous'
-      when e.fixture_cleanup_status = 'fixture_cleanup_deferred_missing_transcript'
-        then 'Synthetic preview fixture cleanup deferred because the redacted transcript was unavailable'
-      when e.fixture_cleanup_status = 'fixture_cleanup_deferred_write_gate_closed'
-        then 'Synthetic preview fixture cleanup deferred because the cleanup gate remained closed'
-      else 'Terminal preview cleanup requires reconciliation'
-    end::text,
-    e.recorded_at,
-    'reconciliation_hold'::text,
-    null::timestamptz
-  from public.lesson_booking_full_preview_terminal_evidence e
-  where e.reconciliation_required
-  order by
-    case when e.recorded_at <= v_now - interval '24 hours' then 0 else 1 end,
-    e.recorded_at,
-    e.run_id
+  with items as (
+    select
+      e.run_id,
+      e.terminal_state,
+      case when e.recorded_at <= v_now - interval '24 hours' then 'urgent' else 'high' end::text as severity,
+      case
+        when e.session_close_status = 'fixture_session_close_ambiguous'
+          then 'Ephemeral preview session closure requires reconciliation'
+        when e.fixture_cleanup_status = 'fixture_cleanup_ambiguous'
+          then 'Synthetic preview fixture cleanup outcome is ambiguous'
+        when e.fixture_cleanup_status = 'fixture_cleanup_deferred_session_close_ambiguous'
+          then 'Synthetic preview fixture cleanup deferred because session closure is ambiguous'
+        when e.fixture_cleanup_status = 'fixture_cleanup_deferred_missing_transcript'
+          then 'Synthetic preview fixture cleanup deferred because the redacted transcript was unavailable'
+        when e.fixture_cleanup_status = 'fixture_cleanup_deferred_write_gate_closed'
+          then 'Synthetic preview fixture cleanup deferred because the cleanup gate remained closed'
+        else 'Terminal preview cleanup requires reconciliation'
+      end::text as reason,
+      e.recorded_at as occurred_at,
+      'reconciliation_hold'::text as retention_status,
+      null::timestamptz as retention_review_after
+    from public.lesson_booking_full_preview_terminal_evidence e
+    where e.reconciliation_required
+
+    union all
+
+    select
+      r.run_id,
+      r.state::text as terminal_state,
+      case when r.completed_at <= v_now - interval '1 hour' then 'urgent' else 'high' end::text as severity,
+      'Terminal preview evidence is missing after the server grace window'::text as reason,
+      r.completed_at as occurred_at,
+      'reconciliation_hold'::text as retention_status,
+      null::timestamptz as retention_review_after
+    from public.lesson_booking_full_preview_runs r
+    left join public.lesson_booking_full_preview_terminal_evidence e on e.run_id = r.run_id
+    where r.terminal
+      and r.completed_at is not null
+      and r.completed_at <= v_now - interval '15 minutes'
+      and e.run_id is null
+  )
+  select i.run_id,i.terminal_state,i.severity,i.reason,i.occurred_at,i.retention_status,i.retention_review_after
+  from items i
+  order by case i.severity when 'urgent' then 0 else 1 end, i.occurred_at, i.run_id
   limit p_limit;
 end;
 $$;
@@ -69,7 +87,7 @@ grant execute on function public.admin_booking_full_preview_reconciliation_queue
   to authenticated;
 
 comment on function public.admin_booking_full_preview_reconciliation_queue(int) is
-  'Admin-only minimized queue of terminal preview evidence that requires reconciliation. Uses server statement time; returns no provider IDs, fixture identities, payload bodies, tokens, secrets, or deletion authority.';
+  'Admin-only minimized queue of terminal preview evidence requiring reconciliation or missing after a server-time grace window. Returns no provider IDs, fixture identities, payload bodies, tokens, secrets, or deletion authority.';
 
 create or replace function public.admin_booking_full_preview_terminal_retention_status(
   p_run_id uuid
@@ -105,8 +123,8 @@ begin
     v_review_after := null;
   else
     -- Purpose-bounded preview troubleshooting window. This is an eligibility signal only;
-    -- it never authorizes or performs deletion. Stripe test Events remain retrievable for
-    -- up to 30 days, so the same bounded period is used for minimized rehearsal evidence.
+    -- it never authorizes or performs deletion. Provider test event history is available for
+    -- a bounded troubleshooting period, so minimized rehearsal evidence is reviewed at 30 days.
     v_review_after := e.recorded_at + interval '30 days';
     v_review_due := v_now >= v_review_after;
     v_status := case when v_review_due then 'retention_review_due' else 'retention_active' end;

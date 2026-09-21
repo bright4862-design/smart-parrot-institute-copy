@@ -12,16 +12,17 @@ const migration = readFileSync(
 );
 const client = readFileSync(new URL('./lesson-booking-preview-requeue-dispatch-preflight.mjs', import.meta.url), 'utf8');
 const expect = (value, message) => assert.ok(value, message);
-const preflightTable = 'lesson_booking_preview_launch_blocker_requeue_dispatch_preflights';
-const exclusionTable = 'lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions';
+const preflightTable = 'lesson_booking_preview_requeue_dispatch_preflights';
+const exclusionTable = 'lesson_booking_preview_requeue_dispatch_exclusions';
 const rpc = 'service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight';
 
 for (const table of [preflightTable, exclusionTable]) {
   expect(migration.includes(`create table if not exists public.${table}`), `missing ${table}`);
   expect(migration.includes(`alter table public.${table} enable row level security`), `${table} must have RLS`);
   expect(migration.includes(`revoke all on table public.${table}`), `${table} must remain RPC-only`);
-  expect(migration.includes(`${table}_append_only`), `${table} must be append-only`);
 }
+expect(migration.includes('booking_preview_requeue_dispatch_preflight_append_only'), 'preflight evidence must be append-only');
+expect(migration.includes('booking_preview_requeue_dispatch_exclusion_append_only'), 'exclusion evidence must be append-only');
 
 expect(migration.includes(`create or replace function public.${rpc}`), 'missing Phase AB dispatch-preflight RPC');
 expect(/security definer\s+set search_path = ''/gi.test(migration), 'Phase AB privileged RPC must pin search_path');
@@ -31,7 +32,7 @@ expect(/lesson_booking_preview_launch_blocker_requeue_delivery_intent_terminals/
 expect(/t\.event_id > v_claim\.event_id[\s\S]*?event_kind in \('released','retry_scheduled','dead_lettered'\)/i.test(migration), 'Phase AB must revalidate exact claim closure');
 expect(/v_intent\.lease_expires_at <= v_now/i.test(migration), 'Phase AB must reject server-time-expired intents');
 expect(/v_intent\.snapshot_id <> v_latest_snapshot_id/i.test(migration), 'Phase AB must reject superseded snapshots');
-expect(/if v_exclusion_reason is not null[\s\S]*?insert into public\.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions/i.test(migration), 'Phase AB must persist stale-intent exclusion before ready replay');
+expect(/if v_exclusion_reason is not null[\s\S]*?insert into public\.lesson_booking_preview_requeue_dispatch_exclusions/i.test(migration), 'Phase AB must persist stale-intent exclusion before ready replay');
 expect(/if v_existing\.preflight_id is not null[\s\S]*?preflight_key <> v_preflight_key[\s\S]*?preflight_key_conflict/i.test(migration), 'Phase AB must reject conflicting current preflight keys');
 expect(/preflight_state text not null check \(preflight_state = 'ready_no_send'\)/i.test(migration), 'Phase AB preflight must remain no-send');
 expect(/exclusion_reason text not null check \(exclusion_reason in \('claim_closed','lease_expired','snapshot_superseded'\)\)/i.test(migration), 'Phase AB exclusion reasons must be bounded');

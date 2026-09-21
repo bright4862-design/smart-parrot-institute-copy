@@ -7,13 +7,12 @@ Last updated: 2026-09-21
 - Repository: `bright4862-design/smart-parrot-institute-copy` (user-selected target; do not switch to `bright4862-design/parrot-institute` without explicit instruction).
 - Working branch: `agent/lesson-booking-blueprint`; draft PR #16.
 - Default branch refreshed this run: `main` at `7f764e5c2b691874b6049e706f1c09026c1eafaf`.
-- Phase 4C5S verified engineering checkpoint: **`04a9f9cae1c163725f2c86d52c0ad85e2f8c272a`**.
-- At the engineering checkpoint the branch is **168 commits ahead / 15 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
+- Phase 4C5T verified engineering checkpoint: **`b4c3beb2a4e2307e2c23f6cb3aa20ad85d093e36`**.
+- At the engineering checkpoint the branch is **170 commits ahead / 15 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
 - `main` remains untouched. No merge/rebase, Base44 publication, production deployment, external notifier send, Stripe/Daily write, Cron sender, or destructive cleanup occurred.
 - Approved Supabase PREVIEW/TEST project only: `mrzzbhqzxshtbqvxkcjn`, region `eu-west-1`, URL `https://mrzzbhqzxshtbqvxkcjn.supabase.co`.
-- Supabase remains **ACTIVE_HEALTHY**.
-- Applied preview migration: **`20260921082326 / lesson_booking_phase4c5s_notifier_proof_escalation_queue`**.
-- Existing 12 booking Edge Functions remain unchanged by Phase 4C5S.
+- Applied preview migration: **`20260921093114 / lesson_booking_phase4c5t_escalation_claim_lease_retry_dead_letter`**.
+- Existing 12 booking Edge Functions remain unchanged by Phase 4C5T.
 - Stripe remains TEST/SANDBOX only; live keys/objects are inadmissible and Stripe Connect remains deferred.
 
 ## Architecture lock
@@ -28,59 +27,64 @@ Base44/React remains the frontend. Supabase Postgres/Auth/RLS/Edge Functions/Cro
 - 3A–3B: cancellation/withdrawal, compliance delivery, My Lessons and immutable policy evidence.
 - 4A–4C4: admin queue/evidence/disputes, launch health/readiness, retention/legal hold and provider staging.
 - 4C5A–4C5Q: provider rehearsal/readiness, durable preview runs, resumable executor, operator/fixture/session hardening, terminal evidence/reconciliation/retention, cleanup review/attestation, launch-blocker snapshots and acknowledgement/handoff evidence.
-- 4C5R: service-only append-only notifier delivery-attempt/receipt evidence plus server-time escalation observation. `delivered` remains impossible through the general receipt path without a trusted proof adapter.
-- **4C5S (current): trusted notifier proof adapter contract + minimized escalation work queue.**
+- 4C5R: append-only notifier delivery-attempt/receipt evidence plus server-time escalation observation; general receipt path cannot claim `delivered` without trusted proof.
+- 4C5S: trusted notifier proof adapter contract plus minimized escalation work queue.
+- **4C5T (current): minimized escalation claim/lease + retry/dead-letter evidence.**
 
-## Phase 4C5S — complete
+## Phase 4C5T — complete
 
-Verified engineering checkpoint: **`04a9f9cae1c163725f2c86d52c0ad85e2f8c272a`**.
+Verified engineering checkpoint: **`b4c3beb2a4e2307e2c23f6cb3aa20ad85d093e36`**.
 
 ### Implemented
 
-- Added `supabase/migrations/20260921081000_lesson_booking_phase4c5s_notifier_proof_escalation_queue.sql`.
-- Added append-only, RLS-enabled `lesson_booking_preview_launch_blocker_notifier_proofs`.
-  - Binds one exact current Phase R prepared delivery to one immutable trusted notifier proof.
-  - Accepts only a SHA-256-shaped hash of a trusted notifier receipt/message id, never the raw provider id.
-  - Requires the exact deterministic Phase R `delivery_key`, current snapshot/handoff and prior `prepared` receipt.
-  - Exact retries replay; a different proof for the same handoff conflicts.
-  - Only after the trusted proof is accepted does the service-only RPC create the Phase R terminal `delivered` receipt.
-  - Existing terminal `delivered`, `failed`, or `deferred` outcomes block conflicting proof ingestion.
-- Added append-only, RLS-enabled `lesson_booking_preview_launch_blocker_escalation_queue`.
-  - Uses the existing Phase R PostgreSQL-server-time observer.
-  - Persists only minimized work identity: handoff/snapshot/alert/observation ids, deterministic delivery key, severity, age class, escalation class, blocker count and server timestamp.
-  - Fresh/non-escalated blockers create no durable queue row; aging/overdue review/urgent work is idempotent.
-  - It stores no blocker codes, actor/customer/provider ids, provider payload, message id, receipt id, token, secret or payment data.
-- Added service-only RPCs `service_record_booking_preview_launch_blocker_trusted_delivery_proof(bigint,text,text,text)` and `service_prepare_booking_preview_launch_blocker_escalation_queue(bigint)`.
-  - Both are `SECURITY DEFINER`, pin `search_path=''`, use the existing launch-blocker advisory lock and grant EXECUTE only to `service_role`.
-  - PostgreSQL server time is authoritative; caller/browser time is not accepted.
-  - All notification/launch/provider/cleanup authority flags remain fail-closed.
-- Added `scripts/lesson-booking-preview-notifier-proof-escalation-queue.mjs`, its contract regression, PostgreSQL scenario regression and dedicated `.github/workflows/lesson-booking-phase4c5s.yml`.
-- Updated the approved preview Supabase transport with the two service RPC targets. Modern `sb_secret_...` continues to travel only in `apikey`, never `Authorization: Bearer`.
+- Added `supabase/migrations/20260921090000_lesson_booking_phase4c5t_escalation_claim_lease_retry_dead_letter.sql`.
+- Added append-only, RLS-enabled, RPC-only `lesson_booking_preview_launch_blocker_escalation_work_events`.
+  - Records only `claimed`, `released`, `retry_scheduled`, or `dead_lettered` work events.
+  - Claims use a caller-generated 32-hex opaque claim key and a PostgreSQL-server-time lease bounded to **30–300 seconds**.
+  - Exact active-claim retries replay; concurrent active leases, closed claim keys, stale leases and stale-snapshot queue items are rejected.
+  - Attempts increment deterministically from durable server evidence rather than browser state.
+  - Retry eligibility is server-derived with bounded deterministic backoff: 30, 60, 120, 240, 480, then 900 seconds.
+  - `attempts_exhausted` dead-lettering is rejected before attempt 5; dead-lettered work cannot be reclaimed.
+  - Release records only `observed_no_send`; it does not imply notification delivery.
+- Added service-only RPCs:
+  - `service_claim_booking_preview_launch_blocker_escalation_work(bigint,text,integer)`
+  - `service_transition_booking_preview_launch_blocker_escalation_work(bigint,text,text,text)`
+  - `service_list_booking_preview_launch_blocker_escalation_work(integer)`
+  - All are `SECURITY DEFINER`, pin `search_path=''`, use the Phase T advisory lock and grant EXECUTE only to `service_role`.
+  - The inspection RPC returns minimized current work state without claim keys, blocker codes, actor/customer/provider ids, raw notifier ids, secrets or payment data.
+- Added `scripts/lesson-booking-preview-escalation-lease.mjs` plus `scripts/check-lesson-booking-preview-escalation-lease.mjs`.
+  - Client normalization strips unrecognized/sensitive fields and rejects any authority flag that is not fail-closed.
+  - Approved preview service RPC transport continues to use modern `sb_secret_...` only via `apikey`, never `Authorization: Bearer`.
+  - Caller-authoritative timestamps are not accepted.
+- Added `supabase/tests/lesson_booking_preview_launch_blocker_escalation_claim_lease_scenarios.sql`.
+  - Covers exact claim replay, concurrent-claim refusal, retry replay/backoff, closed claim-key refusal, fifth-attempt dead-lettering, no dead-letter reclaim, release/reclaim, minimized inspection, stale-snapshot refusal, append-only mutation refusal and service-only grants.
+- Added dedicated `.github/workflows/lesson-booking-phase4c5t.yml`, which also re-runs the Phase 4C5S boundary, full ephemeral PostgreSQL migrations/scenario and the production Vite build.
+- Updated `scripts/lesson-booking-full-preview-supabase-transport.mjs` with the three service-only Phase T RPC targets.
 
 ### Verification
 
-- GitHub Actions **Lesson booking Phase 4C5S run `35577478349` passed** on exact engineering SHA `04a9f9cae1c163725f2c86d52c0ad85e2f8c272a`.
-- Full **Lesson booking foundation run `35577478187` passed** on the same SHA, including the existing booking/payment/security regression set, full ephemeral PostgreSQL migration/scenario execution, Edge Function checks and the production Vite build.
-- All ten booking workflows triggered by the engineering checkpoint completed successfully, including Phases J/L/M/N/O/P/Q/R/S and the full foundation suite.
-- The Phase S migration was applied only to `mrzzbhqzxshtbqvxkcjn`; Supabase recorded **`20260921082326 / lesson_booking_phase4c5s_notifier_proof_escalation_queue`**.
-- Post-apply preview verification: proof rows **0**; escalation queue rows **0**; RLS enabled on both; direct SELECT denied to both `authenticated` and `service_role`; both RPCs denied to `authenticated` and executable by `service_role` only.
-- No fake notifier proof or escalation item was inserted into preview.
+- GitHub Actions **Lesson booking Phase 4C5T run `35583031806` passed** on exact engineering SHA `b4c3beb2a4e2307e2c23f6cb3aa20ad85d093e36`.
+- Full **Lesson booking foundation run `35583031859` passed** on the same SHA.
+- All workflows triggered on the engineering checkpoint completed successfully; no workflow remained in progress or failed.
+- The Phase T migration was applied only to `mrzzbhqzxshtbqvxkcjn`; Supabase recorded **`20260921093114 / lesson_booking_phase4c5t_escalation_claim_lease_retry_dead_letter`**.
+- Post-apply preview verification: work-event rows **0**; RLS enabled; direct SELECT denied to both `authenticated` and `service_role`; all three Phase T RPCs denied to `authenticated` and executable by `service_role` only.
+- No fake escalation claim, retry, release or dead-letter evidence was inserted into preview.
 
-## Research refreshed for Phase 4C5S
+## Research refreshed for Phase 4C5T
 
-- Supabase current guidance continues to require an explicit/pinned `search_path` for `SECURITY DEFINER` functions and tight EXECUTE grants. Modern `sb_secret_...` credentials are opaque backend keys, not JWTs, and belong in the `apikey` header.
-- Stripe continues to recommend idempotency keys for retried POST mutations, warns against embedding sensitive/PII material in those keys, and keeps test/live secret keys server-side. Phase S makes no Stripe mutation.
-- Daily continues to document signed webhook processing plus retry/duplicate-delivery behavior; Phase S therefore treats notifier/provider evidence as idempotent server evidence rather than a browser claim. It makes no Daily mutation.
-- Base44 continues to reserve elevated service-role behavior for trusted backend functions rather than React/browser code.
-- GDPR/CNIL guidance continues to support data minimisation, purpose-bound retention and fictitious/non-production data in testing. Phase S stores only a proof hash and minimized operational queue metadata.
+- Supabase current guidance continues to recommend pinning `search_path` for `SECURITY DEFINER` functions and explicitly controlling function EXECUTE grants; Phase T follows that pattern.
+- Stripe still treats retried POST mutations as idempotency-sensitive and requires raw-body, endpoint-specific signature verification for webhooks. Phase T makes no Stripe mutation and does not reinterpret provider delivery state.
+- Daily continues to document signed webhooks with retry/duplicate-delivery behavior. Phase T therefore leases internal operational work separately from provider truth and makes no Daily mutation.
+- Base44 privileged/service behavior stays off the React/browser path; Phase T is a server-only Supabase contract.
+- CNIL guidance says development/test should use fictitious data rather than production personal data where possible and personal data must have purpose-bound retention. Phase T stores only minimized operational identifiers/status, not customer/provider payloads.
 
-## Supabase advisor status after Phase 4C5S
+## Supabase advisor status after Phase 4C5T
 
-- The two new server-only/RPC-only Phase S tables appear in the expected RLS-enabled/no-policy findings. This is intentional: direct Data API table access is revoked.
-- The two Phase S RPCs do **not** add authenticated-callable `SECURITY DEFINER` findings because EXECUTE is revoked from `authenticated` and granted only to `service_role`.
+- Security advisor now shows **34 RLS-enabled/no-policy notices**; the new Phase T RPC-only event table is expected in this set because direct Data API access is revoked.
+- Authenticated-callable `SECURITY DEFINER` findings remain **35**; the three Phase T RPCs do not expand that surface because EXECUTE is revoked from `authenticated` and granted only to `service_role`.
 - The prior mutable `public.forbid_change()` `search_path` warning remains absent.
-- The existing `btree_gist`-in-`public` extension warning remains a review item; it was not moved blindly.
-- Performance advisor currently reports **39 unindexed foreign-key opportunities**, **20 unused-index notices**, and the existing multiple-permissive-policy finding on `profiles`. No speculative index was added without workload/query evidence.
+- `btree_gist` in `public` remains a review item; it was not moved blindly.
+- Performance advisor flags the new Phase T foreign keys (`alert_id`, `queue_item_id`, `snapshot_id`) as unindexed and reports the queue/event index as unused while the table has zero preview rows. These are hardening candidates, not a reason to add speculative indexes before workload/query evidence.
 
 ## External configuration still required for first provider-writing rehearsal
 
@@ -88,8 +92,8 @@ Actual provider E2E remains fail-closed until the approved preview runtime has: 
 
 ## Next coherent slice
 
-**Phase 4C5T — minimized escalation claim/lease + retry/dead-letter evidence.** Add a service-only PostgreSQL-server-time bounded claim/lease for queue work, append-only claim/release/retry/dead-letter audit evidence, deterministic replay/stale-lease protections and minimized operator inspection. Keep actual external notifier sending, automatic Cron delivery, provider/payment writes, booking launch, destructive cleanup, Base44 publication, default-branch merge and production changes disabled.
+**Phase 4C5U — dead-letter operator review + bounded requeue evidence.** Add immutable service/admin review evidence bound to the exact latest dead-lettered escalation work item, with fixed decisions such as `preserve`, `retry_after_review`, and `invalid_work_item_confirmed`; server-time and stale-snapshot protections; conflict-safe idempotent replay; and a separate append-only requeue-eligibility generation for an explicitly reviewed retry. Keep external notifier sending, automatic Cron delivery, provider/payment writes, booking launch, destructive cleanup, Base44 publication, default-branch merge and production changes disabled.
 
 ## Release status
 
-**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5S is repository-complete and CI-verified at `04a9f9cae1c163725f2c86d52c0ad85e2f8c272a`; its bounded migration is applied only to the approved Supabase preview project. PR #16 remains draft. No external notification was sent and no Stripe/Daily/provider/production write occurred.
+**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5T is repository-complete and CI-verified at `b4c3beb2a4e2307e2c23f6cb3aa20ad85d093e36`; its bounded migration is applied only to the approved Supabase preview project. PR #16 remains draft. No external notification was sent and no Stripe/Daily/provider/production write occurred.

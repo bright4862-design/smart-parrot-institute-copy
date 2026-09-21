@@ -6,6 +6,7 @@ const RETENTION_STATES = new Set([
   'retention_review_due',
   'retention_preserved',
 ]);
+const RETENTION_REVIEW_BASIS_STATES = new Set([...RETENTION_STATES, 'reconciliation_preserved']);
 const RETENTION_REVIEW_DECISIONS = new Set(['preserve', 'eligible_for_cleanup_review']);
 const RECONCILIATION_RESOLUTION_KINDS = new Set(['cleanup_verified', 'preserve']);
 
@@ -131,7 +132,7 @@ export function normalizeFullPreviewRetentionReview(payload) {
   const decision = required(payload.decision, 'retention_review_decision');
   if (!RETENTION_REVIEW_DECISIONS.has(decision)) throw new Error('retention_review_decision_invalid');
   const basis = required(payload.basis_status, 'retention_review_basis');
-  if (!RETENTION_STATES.has(basis)) throw new Error('retention_review_basis_invalid');
+  if (!RETENTION_REVIEW_BASIS_STATES.has(basis)) throw new Error('retention_review_basis_invalid');
   if (payload.destructive_cleanup_authorized !== false || payload.cleanup_execution_enabled !== false) {
     throw new Error('retention_review_cleanup_authority_forbidden');
   }

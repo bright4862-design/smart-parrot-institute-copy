@@ -49,5 +49,17 @@ jobs:
         run: node scripts/check-lesson-booking-full-preview-ephemeral-sessions.mjs
       - name: Re-verify Phase 4C5H fixture lifecycle boundary
         run: node scripts/check-lesson-booking-full-preview-fixture-principals.mjs
+      - name: Start ephemeral PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+          sudo -u postgres pg_isready
+      - name: Verify Phase 4C5J append-only terminal evidence SQL behavior
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap_minimal_supabase.sql
+          for migration in supabase/migrations/*.sql; do echo "Applying ${migration}"; sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f "${migration}"; done
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_terminal_evidence_scenarios.sql
       - name: Build application
         run: npm run build

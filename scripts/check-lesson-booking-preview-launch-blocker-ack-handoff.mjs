@@ -170,8 +170,8 @@ assert.deepEqual(JSON.parse(requests[0].init.body), {
   p_decision: 'provider_configuration_required',
 });
 assert.deepEqual(JSON.parse(requests[1].init.body), { p_snapshot_id: 31 });
-assert.throws(
-  () => recordPreviewLaunchBlockerAcknowledgement({ transport, snapshotId: 31, decision: 'launch_now' }),
+await assert.rejects(
+  recordPreviewLaunchBlockerAcknowledgement({ transport, snapshotId: 31, decision: 'launch_now' }),
   /Invalid preview launch-blocker runbook decision/,
 );
 

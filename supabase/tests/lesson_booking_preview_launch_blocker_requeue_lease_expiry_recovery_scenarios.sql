@@ -11,7 +11,7 @@ declare
   s1 bigint; a1 bigint; q1 jsonb; q1id bigint; d1 bigint;
   r1 jsonb; g1 jsonb; c1 jsonb; act1 jsonb;
   expired_claim_event_id bigint; audited_claim jsonb; observation1 jsonb; observation2 jsonb;
-  expiry_id bigint; expiry_count integer; phase_t_before bigint; phase_t_after bigint;
+  v_expiry_id bigint; expiry_count integer; phase_t_before bigint; phase_t_after bigint;
   transition2 jsonb; mutate boolean:=false;
 begin
   insert into public.lesson_booking_preview_launch_blocker_snapshots(
@@ -97,16 +97,16 @@ begin
     raise exception 'Phase Y audited follow-on claim failed: %',audited_claim;
   end if;
 
-  select count(*),min(expiry_id) into expiry_count,expiry_id
-  from public.lesson_booking_preview_launch_blocker_requeue_lease_expiries
-  where claim_event_id=expired_claim_event_id;
-  if expiry_count <> 1 or expiry_id is null then
+  select count(*),min(x.expiry_id) into expiry_count,v_expiry_id
+  from public.lesson_booking_preview_launch_blocker_requeue_lease_expiries x
+  where x.claim_event_id=expired_claim_event_id;
+  if expiry_count <> 1 or v_expiry_id is null then
     raise exception 'Phase Y audited claim failed to persist exactly one expiry row';
   end if;
 
   if exists (
     select 1 from public.lesson_booking_preview_launch_blocker_requeue_lease_expiries x
-    where x.expiry_id=expiry_id
+    where x.expiry_id=v_expiry_id
       and (x.expiry_reason <> 'lease_timeout'
         or x.observed_at < x.lease_expires_at
         or x.lease_generation_no <> 1
@@ -126,8 +126,8 @@ begin
 
   if (observation1->>'item_count')::integer <> 1
      or (observation2->>'item_count')::integer <> 1
-     or (observation1#>>'{items,0,expiry_id}')::bigint <> expiry_id
-     or (observation2#>>'{items,0,expiry_id}')::bigint <> expiry_id
+     or (observation1#>>'{items,0,expiry_id}')::bigint <> v_expiry_id
+     or (observation2#>>'{items,0,expiry_id}')::bigint <> v_expiry_id
      or observation1#>>'{items,0,expiry_reason}' <> 'lease_timeout'
      or observation1#>>'{items,0,claim_key}' is not null
      or (observation1->>'requeue_execution_authorized')::boolean
@@ -140,8 +140,8 @@ begin
     raise exception 'Phase Y minimized observer mismatch: %, %',observation1,observation2;
   end if;
 
-  if (select count(*) from public.lesson_booking_preview_launch_blocker_requeue_lease_expiries
-      where claim_event_id=expired_claim_event_id) <> 1 then
+  if (select count(*) from public.lesson_booking_preview_launch_blocker_requeue_lease_expiries x
+      where x.claim_event_id=expired_claim_event_id) <> 1 then
     raise exception 'Phase Y observer duplicated expiry evidence';
   end if;
 

@@ -4,6 +4,7 @@ import {
   createFullPreviewCleanupExecutionAttestationService,
   normalizeFullPreviewCleanupExecutionAttestation,
 } from './lesson-booking-full-preview-cleanup-attestation.mjs';
+import { createApprovedPreviewSupabaseTransport } from './lesson-booking-full-preview-supabase-transport.mjs';
 
 const RUN_ID = '8c000000-0000-4000-8000-000000000400';
 const MANIFEST_AT = '2026-09-21T05:40:00.000Z';
@@ -90,6 +91,44 @@ assert.deepEqual(calls, [{
 assert.equal('p_now' in calls[0].payload, false);
 assert.equal('current_time' in calls[0].payload, false);
 assert.equal('browser_time' in calls[0].payload, false);
+
+// Supabase's current sb_secret_* contract is apikey-header-only for direct Data API requests.
+// A secret key is not a JWT and must not be copied into Authorization: Bearer.
+const serviceRpcRequests = [];
+const directTransport = createApprovedPreviewSupabaseTransport({
+  secretKey: 'sb_secret_phase4c5o_regression_only',
+  fetchImpl: async (url, options) => {
+    serviceRpcRequests.push({ url, options: structuredClone(options) });
+    return new Response(JSON.stringify({
+      schema_version: 'smart_parrot_full_preview_cleanup_execution_attestation_v1',
+      run_id: RUN_ID,
+      attestation_state: 'non_executable',
+      manifest_prepared_at: MANIFEST_AT,
+      retention_reviewed_at: REVIEWED_AT,
+      plan_effective_expires_at: EXPIRES_AT,
+      attested_at: ATTESTED_AT,
+      impact_inventory: result.impact_inventory,
+      replay: false,
+      service_only: true,
+      destructive_cleanup_authorized: false,
+      cleanup_execution_enabled: false,
+      server_time_authoritative: true,
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  },
+});
+const directService = createFullPreviewCleanupExecutionAttestationService(directTransport);
+await directService.attest(RUN_ID, MANIFEST_AT, EXPIRES_AT);
+assert.equal(serviceRpcRequests.length, 1);
+assert.equal(
+  serviceRpcRequests[0].url,
+  'https://mrzzbhqzxshtbqvxkcjn.supabase.co/rest/v1/rpc/service_attest_booking_full_preview_cleanup_execution_manifest',
+);
+assert.equal(serviceRpcRequests[0].options.headers.apikey, 'sb_secret_phase4c5o_regression_only');
+assert.equal('authorization' in serviceRpcRequests[0].options.headers, false);
+assert.equal('Authorization' in serviceRpcRequests[0].options.headers, false);
 
 const basePayload = {
   schema_version: 'smart_parrot_full_preview_cleanup_execution_attestation_v1',

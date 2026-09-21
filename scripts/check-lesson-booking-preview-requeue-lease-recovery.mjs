@@ -100,7 +100,7 @@ const mocked = await observeExpiredPreviewRequeueLeases({
 assert.equal(observedCall.target, PREVIEW_REQUEUE_LEASE_EXPIRY_OBSERVER_RPC);
 assert.equal(observedCall.auth, 'service_rpc');
 assert.deepEqual(observedCall.payload, { p_limit: 10 });
-assert.equal(observed.item_count, 1);
+assert.equal(mocked.item_count, 1);
 
 await assert.rejects(
   () => observeExpiredPreviewRequeueLeases({ transport: { invokeServer: async () => raw }, limit: 0 }),

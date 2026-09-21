@@ -1,0 +1,55 @@
+name: Lesson booking Phase 4C5I
+
+on:
+  push:
+    branches:
+      - agent/lesson-booking-blueprint
+    paths:
+      - "scripts/lesson-booking-full-preview-ephemeral-sessions.mjs"
+      - "scripts/lesson-booking-preview-ephemeral-session-handoff.mjs"
+      - "scripts/check-lesson-booking-full-preview-ephemeral-sessions.mjs"
+      - "scripts/lesson-booking-full-preview-fixture-principals.mjs"
+      - "scripts/check-lesson-booking-full-preview-fixture-principals.mjs"
+      - "scripts/lesson-booking-full-preview-operator-bootstrap.mjs"
+      - "scripts/check-lesson-booking-full-preview-operator-bootstrap.mjs"
+      - ".github/workflows/lesson-booking-phase4c5i.yml"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    paths:
+      - "scripts/lesson-booking-full-preview-ephemeral-sessions.mjs"
+      - "scripts/lesson-booking-preview-ephemeral-session-handoff.mjs"
+      - "scripts/check-lesson-booking-full-preview-ephemeral-sessions.mjs"
+      - "scripts/lesson-booking-full-preview-fixture-principals.mjs"
+      - "scripts/check-lesson-booking-full-preview-fixture-principals.mjs"
+      - "scripts/lesson-booking-full-preview-operator-bootstrap.mjs"
+      - "scripts/check-lesson-booking-full-preview-operator-bootstrap.mjs"
+      - ".github/workflows/lesson-booking-phase4c5i.yml"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-session-handoff-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Verify Phase 4C5I ephemeral fixture session and rehearsal handoff boundary
+        run: node scripts/check-lesson-booking-full-preview-ephemeral-sessions.mjs
+      - name: Re-verify Phase 4C5H fixture lifecycle boundary
+        run: node scripts/check-lesson-booking-full-preview-fixture-principals.mjs
+      - name: Re-verify Phase 4C5G operator bootstrap boundary
+        run: node scripts/check-lesson-booking-full-preview-operator-bootstrap.mjs
+      - name: Verify ephemeral session handoff gate is closed in CI
+        run: node scripts/lesson-booking-preview-ephemeral-session-handoff.mjs
+      - name: Build application
+        run: npm run build

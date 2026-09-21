@@ -15,7 +15,9 @@ insert into public.lesson_booking_full_preview_runs(
   ('7b000000-0000-4000-8000-000000000101','near_term_success','complete',null,true,2,'settled',
    '7b000000-0000-0000-0000-000000000001',statement_timestamp()-interval '11 days',statement_timestamp()-interval '10 days',statement_timestamp()-interval '10 days',statement_timestamp()-interval '10 days'),
   ('7b000000-0000-4000-8000-000000000102','near_term_success','cancelled',null,true,2,'cancelled',
-   '7b000000-0000-0000-0000-000000000001',statement_timestamp()-interval '32 days',statement_timestamp()-interval '31 days',statement_timestamp()-interval '31 days',statement_timestamp()-interval '31 days');
+   '7b000000-0000-0000-0000-000000000001',statement_timestamp()-interval '32 days',statement_timestamp()-interval '31 days',statement_timestamp()-interval '31 days',statement_timestamp()-interval '31 days'),
+  ('7b000000-0000-4000-8000-000000000103','near_term_success','complete',null,true,2,'settled',
+   '7b000000-0000-0000-0000-000000000001',statement_timestamp()-interval '3 hours',statement_timestamp()-interval '2 hours',statement_timestamp()-interval '2 hours',statement_timestamp()-interval '2 hours');
 
 insert into public.lesson_booking_full_preview_terminal_evidence(
   run_id,schema_version,terminal_state,transcript_sha256,correlation_sha256,
@@ -38,18 +40,25 @@ declare
   active_status jsonb;
   due_status jsonb;
   hold_status jsonb;
+  missing_blocked boolean := false;
 begin
   select jsonb_agg(to_jsonb(x)) into q
   from public.admin_booking_full_preview_reconciliation_queue(50) x;
 
-  if jsonb_array_length(coalesce(q,'[]'::jsonb)) <> 1 then
+  if jsonb_array_length(coalesce(q,'[]'::jsonb)) <> 2 then
     raise exception 'Unexpected reconciliation queue payload: %', q;
   end if;
-  if q->0->>'run_id' <> '7b000000-0000-4000-8000-000000000100'
-     or q->0->>'severity' <> 'urgent'
-     or q->0->>'retention_status' <> 'reconciliation_hold'
-     or q->0->'retention_review_after' <> 'null'::jsonb then
-    raise exception 'Reconciliation queue did not preserve the server-computed hold: %', q;
+  if not q @> '[{"run_id":"7b000000-0000-4000-8000-000000000100","severity":"urgent","retention_status":"reconciliation_hold"}]'::jsonb then
+    raise exception 'Ambiguous cleanup evidence is missing from reconciliation queue: %', q;
+  end if;
+  if not q @> '[{"run_id":"7b000000-0000-4000-8000-000000000103","severity":"urgent","reason":"Terminal preview evidence is missing after the server grace window","retention_status":"reconciliation_hold"}]'::jsonb then
+    raise exception 'Missing terminal evidence is not surfaced by the reconciliation queue: %', q;
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(q) item
+    where item->'retention_review_after' <> 'null'::jsonb
+  ) then
+    raise exception 'Reconciliation queue exposed a retention deadline while evidence is held: %', q;
   end if;
   if q::text like '%sha256%' or q::text like '%transcript%' or q::text like '%correlation%' then
     raise exception 'Reconciliation queue leaked terminal evidence hashes: %', q;
@@ -84,6 +93,17 @@ begin
      or (due_status->>'destructive_cleanup_authorized')::boolean
      or due_status->'retention_review_after' = 'null'::jsonb then
     raise exception 'Expired preview evidence did not become review-due without deletion authority: %', due_status;
+  end if;
+
+  begin
+    perform public.admin_booking_full_preview_terminal_retention_status(
+      '7b000000-0000-4000-8000-000000000103'
+    );
+  exception when no_data_found then
+    missing_blocked := true;
+  end;
+  if not missing_blocked then
+    raise exception 'Missing terminal evidence unexpectedly received a retention status';
   end if;
 end $$;
 

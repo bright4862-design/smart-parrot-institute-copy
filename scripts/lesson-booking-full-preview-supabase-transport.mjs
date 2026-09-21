@@ -45,6 +45,7 @@ const OPERATION_AUTH = Object.freeze({
   'service_transition_booking_preview_launch_blocker_requeue_work': 'service_rpc',
   'service_list_booking_preview_launch_blocker_requeue_work': 'service_rpc',
   'service_observe_booking_preview_launch_blocker_requeue_expired_leases': 'service_rpc',
+  'service_prepare_booking_preview_launch_blocker_requeue_delivery_intent': 'service_rpc',
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

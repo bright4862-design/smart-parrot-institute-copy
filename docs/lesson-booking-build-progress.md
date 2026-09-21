@@ -8,19 +8,19 @@ Last updated: 2026-09-21
 - Working branch: `agent/lesson-booking-blueprint`.
 - Draft PR: #16.
 - Default branch refreshed this run: `main` at `7f764e5c2b691874b6049e706f1c09026c1eafaf`.
-- Phase 4C5J verified engineering checkpoint: **`efafa4444867c0c896bde5b7d76066a126570a8c`**.
-- GitHub comparison at the engineering checkpoint: **diverged, 123 commits ahead / 15 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
+- Phase 4C5K verified engineering checkpoint: **`dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`**.
+- GitHub comparison at the engineering checkpoint: **diverged, 131 commits ahead / 15 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
 - `main` remains untouched. Nothing has been merged, rebased, published to Base44, or deployed to production.
 - Approved Supabase PREVIEW/TEST project only: `mrzzbhqzxshtbqvxkcjn`, `eu-west-1`, `https://mrzzbhqzxshtbqvxkcjn.supabase.co`.
-- Applied migrations now run through **`20260921011949 / lesson_booking_phase4c5j_terminal_evidence`**.
-- All 12 previously deployed booking Edge Functions remain unchanged this slice; Phase 4C5J deploys no Edge Function.
+- Applied migrations now run through **`20260921021637 / lesson_booking_phase4c5k_terminal_reconciliation_retention`**.
+- All 12 previously deployed booking Edge Functions remain unchanged this slice; Phase 4C5K deploys no Edge Function.
 - Stripe remains TEST/SANDBOX only. Live Stripe keys/objects remain inadmissible. Stripe Connect remains deferred.
 
 ## Architecture lock
 
 - Base44/React remains the frontend shell; app id `69c16c52c86d161e74940243`.
-- Supabase Postgres/Auth/RLS/Edge Functions/Cron remains authoritative for identity, booking, policy, evidence, time, payment state, attendance, cancellation, settlement, compliance, provider readiness, preview continuation, and terminal rehearsal evidence.
-- No browser-authoritative money, provider-state, attendance, identity, cleanup, or time transition is allowed.
+- Supabase Postgres/Auth/RLS/Edge Functions/Cron remains authoritative for identity, booking, policy, evidence, time, payment state, attendance, cancellation, settlement, compliance, provider readiness, preview continuation, terminal rehearsal evidence, and reconciliation/retention status.
+- No browser-authoritative money, provider-state, attendance, identity, cleanup, retention, reconciliation, or time transition is allowed.
 - Stripe remains hold-before/capture-after: setup mode for bookings 48h+ ahead, manual capture for near-term bookings, server-side idempotency/evidence, capture/release only from trusted worker boundaries.
 - Daily remains server-evidence only with booking-scoped private rooms/tokens and signed webhook evidence.
 - Preview tooling may coordinate existing server boundaries but may not call Stripe/Daily directly or recreate settlement/attendance/time logic in the browser.
@@ -35,85 +35,106 @@ Last updated: 2026-09-21
 - **4C5A–4C5G:** provider rehearsal evidence/readiness, full-preview contracts, durable run registry, resumable executor, exact preview transport, read-only operator bootstrap, signed webhook proof, Daily HMAC correction.
 - **4C5H:** deterministic synthetic preview fixture principals, evidence-aware cleanup, bounded signed-provider preparation.
 - **4C5I:** ephemeral fixture sessions, fixture lifecycle gating, redacted provider-test transcript, branch-divergence evidence.
-- **4C5J (current):** failure-safe terminal cleanup, deterministic redacted transcript hashing, append-only terminal evidence correlation, replay/conflict protection.
+- **4C5J:** failure-safe terminal cleanup, deterministic transcript hashing, append-only terminal evidence correlation, replay/conflict protection.
+- **4C5K (current):** read-only terminal reconciliation queue, missing-evidence detection, and server-time preview evidence retention review status.
 
-## Phase 4C5J — bounded rehearsal cleanup + evidence correlation — complete
+## Phase 4C5K — terminal reconciliation queue + expiry/retention hardening — complete
 
-Verified engineering checkpoint: **`efafa4444867c0c896bde5b7d76066a126570a8c`**.
+Verified engineering checkpoint: **`dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`**.
 
 ### Implemented
 
-- Added `scripts/lesson-booking-full-preview-terminal-evidence.mjs`.
-  - Canonicalizes and SHA-256 hashes the already-redacted provider-test transcript while deliberately excluding wall-clock-only fields such as `generated_at`, so semantically identical retries produce the same digest.
-  - Refuses transcripts that expose secrets or claim provider writes are enabled; accepts only minimized readiness/status evidence and the deterministic `smart-parrot-preview:<run_id>` namespace.
-  - Binds the transcript digest to the server-authoritative terminal run state plus session-close and fixture-cleanup outcomes in a second deterministic `correlation_sha256`.
-  - Requires the durable Supabase run to be terminal (`complete` or `cancelled`) before terminal evidence can be constructed.
-  - Always attempts ephemeral-session closure first. Ambiguous close defers synthetic-principal deletion rather than guessing that credentials are gone.
-  - Fixture cleanup runs only behind the existing explicit preview write gate and runtime `sb_secret_...` credential. Missing transcript, closed gate, or ambiguous close records a reconciliation-required state instead of destructive cleanup.
-  - Operator/provider exceptions are converted to the generic `preview_terminal_operation_failed` boundary while the finalizer still closes sessions and preserves minimized terminal evidence; raw provider exception text is not surfaced.
-- Added `supabase/migrations/20260921011500_lesson_booking_phase4c5j_terminal_evidence.sql`.
-  - Adds server-only, RLS-enabled `lesson_booking_full_preview_terminal_evidence` with one append-only row per preview run.
-  - Stores only terminal state, transcript/correlation SHA-256 values, cleanup/session status, reconciliation flag, admin recorder, and timestamp—no provider IDs, webhook bodies, tokens, fixture identities, payment instruments, room names, or provider secrets.
-  - Adds `admin_record_booking_full_preview_terminal_evidence(...)`, pinned to `search_path=''`, with the existing server-side admin-role guard.
-  - Identical terminal replay is idempotent and returns `replay=true`; a conflicting replay is rejected rather than overwriting evidence.
-  - UPDATE/DELETE is blocked by the existing immutable-change trigger.
-- Updated `scripts/lesson-booking-full-preview-supabase-transport.mjs` so only the `admin_rpc` authorization class can call the new terminal-evidence RPC.
-- Added SQL scenario coverage in `supabase/tests/lesson_booking_full_preview_terminal_evidence_scenarios.sql` for first insert, identical replay, conflicting replay, non-terminal rejection, append-only update rejection, and non-admin rejection.
-- Added `scripts/check-lesson-booking-full-preview-terminal-evidence.mjs` for deterministic transcript hashing, cleanup/session failure paths, write-gate closure, generic operator failure, transport minimization, dirty-transcript rejection, and static secret/provider-surface checks.
-- Added `.github/workflows/lesson-booking-phase4c5j.yml`; it runs 4C5J plus 4C5I/4C5H regressions, executes every migration and the new SQL scenarios in ephemeral PostgreSQL, and builds the production Vite bundle.
+- Added `supabase/migrations/20260921030000_lesson_booking_phase4c5k_terminal_reconciliation_retention.sql`.
+  - Adds a partial index for `reconciliation_required=true` terminal evidence.
+  - Adds `admin_booking_full_preview_reconciliation_queue(p_limit)` as an admin-only, minimized, read-only RPC.
+  - The queue surfaces both explicit reconciliation-required terminal evidence and terminal preview runs whose evidence is still absent after a **server-computed 15-minute grace window**.
+  - Severity is server-computed from `statement_timestamp()`; no browser-supplied clock or `p_now` parameter exists.
+  - Queue rows contain only run id, terminal state, generic reason/severity, occurrence time, and retention-hold status. They do not expose provider IDs, fixture identities, webhook bodies, transcript/correlation hashes, tokens, secrets, or payment data.
+  - Adds `admin_booking_full_preview_terminal_retention_status(p_run_id)` as an admin-only, server-time observer.
+  - Reconciliation-required evidence stays on `reconciliation_hold` with no cleanup deadline.
+  - Non-reconciliation evidence uses a **30-day technical preview troubleshooting review window** and becomes `retention_review_due` after that window. This is an operational preview choice, **not a legal retention period**.
+  - The RPC always returns `destructive_cleanup_authorized=false`; it does not delete anything or authorize a purge.
+  - Both RPCs pin `search_path=''`, immediately perform the existing server-side admin-role check, revoke `public`/`anon`, and expose only the intentionally authenticated admin RPC surface.
+- Added `scripts/lesson-booking-full-preview-reconciliation.mjs`.
+  - Provides a narrow `admin_rpc` reader for the reconciliation queue and retention status.
+  - Strips unknown/sensitive fields from server responses and rejects any payload that claims deletion authority or a non-server-authoritative clock.
+  - Never sends time inputs and contains no provider-write or destructive-cleanup path.
+- Added `scripts/check-lesson-booking-full-preview-reconciliation.mjs`.
+  - Verifies sensitive-looking injected fields do not survive normalization.
+  - Verifies only `p_limit` and `p_run_id` cross the transport boundary, never `p_now`.
+  - Statically rejects terminal-evidence deletion, provider-write identifiers, or Daily room/token handling from this slice.
+- Added `supabase/tests/lesson_booking_full_preview_reconciliation_retention_scenarios.sql`.
+  - Covers ambiguous session/fixture cleanup evidence, missing terminal evidence after the grace window, fresh retained evidence, review-due evidence, direct-table privilege denial, and non-admin RPC denial.
+  - Proves missing terminal evidence is surfaced to reconciliation but cannot be given a fabricated retention status.
+- Added `.github/workflows/lesson-booking-phase4c5k.yml`.
+  - Runs the Phase 4C5K JS boundary regression and re-verifies Phase 4C5J.
+  - Applies every booking migration into ephemeral PostgreSQL, runs the new SQL scenarios, and builds the production Vite bundle.
 
 ### Verification
 
-- GitHub Actions **Lesson booking Phase 4C5J run `35550429231` passed** on exact engineering SHA `efafa4444867c0c896bde5b7d76066a126570a8c`.
-  - Phase 4C5J JS cleanup/evidence regression: passed.
-  - Phase 4C5I ephemeral-session regression: passed.
-  - Phase 4C5H fixture lifecycle regression: passed.
-  - Ephemeral PostgreSQL migration application: passed.
-  - Phase 4C5J append-only terminal-evidence SQL scenarios: passed.
+- GitHub Actions **Lesson booking Phase 4C5K run `35553579037` passed** on exact engineering SHA `dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`.
+  - Phase 4C5K reconciliation/retention JS regression: passed.
+  - Phase 4C5J terminal-evidence regression: passed.
+  - Ephemeral PostgreSQL startup and complete migration application: passed.
+  - Phase 4C5J + Phase 4C5K SQL scenarios: passed.
   - Production Vite build: passed.
-- Full **Lesson booking foundation run `35550409010` passed** at checkpoint `76fa2b1b9ad0958bdb75c16bea69daa1ea6a3967`, including Edge Function typechecks, all existing booking/payment/security boundaries, all migrations/scenarios, closed preview execution gates, and the production build.
-- The bounded Phase 4C5J migration was applied only to approved preview project `mrzzbhqzxshtbqvxkcjn`; Supabase recorded it as **`20260921011949 / lesson_booking_phase4c5j_terminal_evidence`**.
-- Preview verification after apply: RLS is enabled on the new table, it contains **0 rows**, `authenticated` has **no direct SELECT** privilege, and the authenticated RPC surface is available only through the function's internal admin-role check.
-- No synthetic user/session, Stripe object, Daily object, Base44 publication, cron activation, merge, or production mutation occurred.
+- Full **Lesson booking foundation run `35553579079` passed** on the same exact engineering SHA `dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`.
+- The bounded Phase 4C5K migration was applied only to approved preview project `mrzzbhqzxshtbqvxkcjn`; Supabase recorded it as **`20260921021637 / lesson_booking_phase4c5k_terminal_reconciliation_retention`**.
+- Post-apply preview verification:
+  - `lesson_booking_full_preview_runs`: **0 rows**.
+  - `lesson_booking_full_preview_terminal_evidence`: **0 rows**.
+  - reconciliation-required terminal evidence: **0 rows**.
+  - `authenticated` still has **no direct SELECT** privilege on terminal evidence.
+  - reconciliation partial index is present.
+  - both new admin RPCs are present.
+- No synthetic user/session, Stripe object, Daily object, Edge Function deployment, Base44 publication, cron activation, merge, or production mutation occurred.
 
-## Research refreshed for Phase 4C5J on 2026-09-21
-
-### Stripe
-
-- Stripe requires webhook signature verification against the raw request body, `Stripe-Signature`, and the signing secret for the exact endpoint, and recommends returning a fast 2xx before slow downstream work.
-- Stripe's POST idempotency contract supports safe retries with a stable idempotency key. Phase 4C5J mirrors that property for terminal evidence: an identical terminal replay is accepted as replay, while a conflicting replay is rejected.
-- References: https://docs.stripe.com/webhooks and https://docs.stripe.com/api/idempotent_requests
+## Research refreshed for Phase 4C5K on 2026-09-21
 
 ### Supabase
 
-- Auth admin methods require a secret key and belong on a trusted server; secret credentials must never be exposed to the browser.
-- Local sign-out revokes the current refresh/session path, but an issued access JWT remains valid until expiry. Phase 4C5J therefore treats session closure as an explicit evidence state and defers destructive fixture cleanup when close is ambiguous.
-- References: https://supabase.com/docs/reference/javascript/auth-signout , https://supabase.com/docs/guides/auth/sessions , https://supabase.com/docs/reference/python/admin-api
+- Current Supabase Database Functions guidance recommends pinning `search_path` on `SECURITY DEFINER` functions and restricting `EXECUTE` to intended roles. Phase 4C5K follows that pattern and keeps the internal admin-role guard as the actual authorization check.
+- Supabase Cron uses `pg_cron` and records job runs, but no cron or automatic deletion job was introduced here because the retention policy is still an observer/review boundary rather than purge authority.
+- References:
+  - https://supabase.com/docs/guides/database/functions
+  - https://supabase.com/docs/guides/cron
+  - https://supabase.com/docs/guides/database/secure-data
+
+### Stripe
+
+- Stripe test Events can be listed for up to 30 days. Phase 4C5K uses a matching 30-day **technical preview troubleshooting review window** for minimized rehearsal evidence to keep evidence correlation practical; this is not treated as a statutory retention period.
+- Stripe POST idempotency remains the model for retry-safe provider mutations, but Phase 4C5K performs no Stripe mutation.
+- References:
+  - https://docs.stripe.com/api/events/list
+  - https://docs.stripe.com/api/idempotent_requests
 
 ### Daily
 
-- Daily documents that webhook deliveries can be duplicated and recommends idempotent duplicate handling; its default retry behavior attempts deliveries at least once. Phase 4C5J therefore uses deterministic semantic hashes/correlation instead of treating a terminal callback as unique by arrival.
-- Daily's webhook verification continues to use the signed timestamp/payload with a base64-encoded HMAC secret; no Daily secret or payload is stored in the new terminal evidence table.
+- Daily webhook delivery remains at-least-once/retry-oriented, so duplicate or incomplete provider evidence must continue to converge through deterministic server-side reconciliation rather than browser assertions.
+- Phase 4C5K performs no Daily mutation and stores no Daily identifiers or webhook bodies.
 - Reference: https://docs.daily.co/reference/rest-api/webhooks
 
 ### Base44
 
-- Base44's service-role permissions are available only inside Base44-hosted backend functions; normal frontend SDK usage is user-scoped. Phase 4C5J adds no privileged logic or Supabase secret to the Base44/React bundle.
+- Elevated backend/service credentials remain inappropriate for the React browser bundle. Phase 4C5K therefore adds only server-side Supabase RPCs plus a minimized reader contract; no privileged cleanup or retention decision is moved into Base44 frontend code.
 - Reference: https://docs.base44.com/sdk-getting-started/client
 
 ### France / EU privacy/testing
 
-- CNIL guidance recommends using fictitious/anonymized data in development/test, minimizing collected data, defining retention periods, and deleting/anonymizing data once no longer necessary.
-- Phase 4C5J therefore keeps synthetic identities cleanup-aware while retaining only deterministic hashes and minimized lifecycle evidence when accountability/reconciliation requires evidence preservation.
-- References: https://www.cnil.fr/fr/tester-vos-applications , https://www.cnil.fr/fr/minimiser-les-donnees-collectees , https://www.cnil.fr/fr/cnil-direct/question/dois-je-fixer-une-duree-de-conservation-des-donnees-dans-mon-fichier
+- CNIL guidance requires retention periods to be purpose-based and non-excessive; personal data should not be retained indefinitely and should be deleted or anonymized once no longer necessary.
+- The 30-day Phase 4C5K preview window is therefore documented as a bounded operational troubleshooting interval, not a legal conclusion. Reconciliation-required evidence is held until a later explicit server-verified reconciliation decision rather than being deleted blindly.
+- References:
+  - https://www.cnil.fr/fr/cnil-direct/question/dois-je-fixer-une-duree-de-conservation-des-donnees-dans-mon-fichier
+  - https://www.cnil.fr/fr/tester-vos-applications
 
-## Supabase preview/advisor status after Phase 4C5J
+## Supabase preview/advisor status after Phase 4C5K
 
 - Project `mrzzbhqzxshtbqvxkcjn` remains the only approved Smart Parrot preview project.
-- Security advisor now reports **19** RLS-enabled/no-policy tables; the new terminal-evidence table is intentionally included because it is server-only and direct authenticated table access is revoked.
-- Security advisor reports **27** authenticated-callable SECURITY DEFINER functions; the new terminal-evidence RPC is intentionally included, pins `search_path=''`, and immediately performs the existing server-side admin-role check. The old mutable `public.forbid_change()` search-path finding remains absent.
-- `btree_gist` remains in `public` as an existing review item; it was not moved blindly during this bounded slice.
-- Performance advisor reports **30** unindexed-FK suggestions after adding `recorded_by`, plus 14 currently-unused indexes and the existing multiple-permissive-policy warning on `profiles`. No speculative index/policy rewrite was applied without query/workload evidence.
+- Security advisor still reports **19** RLS-enabled/no-policy tables. These include intentional server-only evidence/operations tables with direct authenticated table access revoked.
+- Security advisor now reports **29** authenticated-callable `SECURITY DEFINER` functions; the two Phase 4C5K observer RPCs account for the increase from 27. Both pin `search_path=''`, immediately enforce `private.smart_parrot_require_admin(auth.uid())`, and return minimized read-only data.
+- The previous mutable `public.forbid_change()` search-path finding remains absent.
+- `btree_gist` remains in `public` as an existing review item and was not moved blindly during this bounded slice.
+- Performance advisor still reports **30** unindexed-FK suggestions, **14** currently-unused indexes, and the existing multiple-permissive-policy warning on `profiles`. No speculative FK index, index removal, or RLS rewrite was applied without workload evidence.
 
 ## External configuration still required for first provider-writing rehearsal
 
@@ -129,14 +150,14 @@ Connecting Stripe inside Base44 still does **not** transfer Stripe secret/webhoo
 
 ## Next coherent slice
 
-**Phase 4C5K — terminal reconciliation queue + expiry/retention hardening:**
+**Phase 4C5L — server-verified reconciliation resolution + retention review audit:**
 
-1. surface `reconciliation_required=true` terminal preview evidence through the existing admin review/operations boundary without giving the browser mutation authority;
-2. add a server-computed observer/readiness view that distinguishes ambiguous session closure, cleanup preservation, cleanup-write-gate closure, and conflicting/absent terminal evidence;
-3. add bounded expiry/retention semantics for synthetic preview artifacts and evidence, preserving records under explicit legal/evidence hold rather than deleting blindly;
-4. add regressions proving non-admin rejection, duplicate queue suppression, no provider secrets/IDs in admin responses, and no cleanup/time transition from browser inputs;
-5. keep all provider writes and Base44 publication disabled unless the missing TEST credentials are explicitly installed and the bounded gates are opened.
+1. add append-only reconciliation-resolution evidence so a queue item can be resolved only from a trusted server-verified outcome, never a browser assertion;
+2. add immutable retention-review audit records for `preserve` / `eligible_for_cleanup_review` decisions, with server-derived timestamps and reconciliation-hold precedence;
+3. keep actual deletion disabled: any future purge executor remains separately gated and cannot be introduced as an implicit consequence of a retention review;
+4. add regressions for duplicate/stale resolution, missing terminal evidence, non-admin access, browser-clock injection, retention-hold precedence, and conflicting replay;
+5. continue to keep all Stripe/Daily provider writes and Base44 publication disabled until the missing TEST credentials are explicitly installed and bounded gates are opened.
 
 ## Release status
 
-**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5J is repository-complete and CI-verified at `efafa4444867c0c896bde5b7d76066a126570a8c`. The bounded migration is present only in the approved Supabase preview project. PR #16 remains draft. No provider-writing rehearsal or production operation occurred.
+**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5K is repository-complete and CI-verified at `dbebbb86790e6e53a0e4ab668a0e85c10b44b6e1`. The bounded migration is present only in the approved Supabase preview project. PR #16 remains draft. No provider-writing rehearsal or production operation occurred.

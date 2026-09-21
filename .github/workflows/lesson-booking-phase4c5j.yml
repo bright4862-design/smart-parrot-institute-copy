@@ -1,0 +1,53 @@
+name: Lesson booking Phase 4C5J
+
+on:
+  push:
+    branches:
+      - agent/lesson-booking-blueprint
+    paths:
+      - "scripts/lesson-booking-full-preview-terminal-evidence.mjs"
+      - "scripts/check-lesson-booking-full-preview-terminal-evidence.mjs"
+      - "scripts/lesson-booking-full-preview-supabase-transport.mjs"
+      - "scripts/lesson-booking-full-preview-ephemeral-sessions.mjs"
+      - "scripts/lesson-booking-full-preview-fixture-principals.mjs"
+      - "supabase/migrations/20260921011500_lesson_booking_phase4c5j_terminal_evidence.sql"
+      - "supabase/tests/lesson_booking_full_preview_terminal_evidence_scenarios.sql"
+      - ".github/workflows/lesson-booking-phase4c5j.yml"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    paths:
+      - "scripts/lesson-booking-full-preview-terminal-evidence.mjs"
+      - "scripts/check-lesson-booking-full-preview-terminal-evidence.mjs"
+      - "scripts/lesson-booking-full-preview-supabase-transport.mjs"
+      - "scripts/lesson-booking-full-preview-ephemeral-sessions.mjs"
+      - "scripts/lesson-booking-full-preview-fixture-principals.mjs"
+      - "supabase/migrations/20260921011500_lesson_booking_phase4c5j_terminal_evidence.sql"
+      - "supabase/tests/lesson_booking_full_preview_terminal_evidence_scenarios.sql"
+      - ".github/workflows/lesson-booking-phase4c5j.yml"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  terminal-cleanup-evidence-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Verify Phase 4C5J bounded terminal cleanup and evidence correlation
+        run: node scripts/check-lesson-booking-full-preview-terminal-evidence.mjs
+      - name: Re-verify Phase 4C5I ephemeral session boundary
+        run: node scripts/check-lesson-booking-full-preview-ephemeral-sessions.mjs
+      - name: Re-verify Phase 4C5H fixture lifecycle boundary
+        run: node scripts/check-lesson-booking-full-preview-fixture-principals.mjs
+      - name: Build application
+        run: npm run build

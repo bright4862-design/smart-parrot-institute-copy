@@ -3,7 +3,7 @@
 -- Preview-only: records internal no-send evidence. No external notifier HTTP call, delivered assertion,
 -- Cron sender, provider/payment write, booking launch, destructive cleanup, Base44 publication, or production mutation.
 
-create table if not exists public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights (
+create table if not exists public.lesson_booking_preview_requeue_dispatch_preflights (
   preflight_id bigint generated always as identity primary key,
   schema_version text not null check (schema_version = 'smart_parrot_booking_preview_launch_blocker_requeue_dispatch_preflight_v1'),
   intent_id bigint not null unique references public.lesson_booking_preview_launch_blocker_requeue_delivery_intents(intent_id) on delete restrict,
@@ -35,25 +35,25 @@ create table if not exists public.lesson_booking_preview_launch_blocker_requeue_
   check (observed_at < lease_expires_at)
 );
 
-create index if not exists lesson_booking_preview_requeue_dispatch_preflight_queue_idx
-  on public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights(queue_item_id, preflight_id desc);
+create index if not exists booking_preview_requeue_preflight_queue_idx
+  on public.lesson_booking_preview_requeue_dispatch_preflights(queue_item_id, preflight_id desc);
 
-alter table public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights enable row level security;
+alter table public.lesson_booking_preview_requeue_dispatch_preflights enable row level security;
 
-revoke all on table public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights
+revoke all on table public.lesson_booking_preview_requeue_dispatch_preflights
   from public, anon, authenticated, service_role;
 
-drop trigger if exists lesson_booking_preview_launch_blocker_requeue_dispatch_preflights_append_only
-  on public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights;
-create trigger lesson_booking_preview_launch_blocker_requeue_dispatch_preflights_append_only
-before update or delete on public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights
+drop trigger if exists booking_preview_requeue_dispatch_preflight_append_only
+  on public.lesson_booking_preview_requeue_dispatch_preflights;
+create trigger booking_preview_requeue_dispatch_preflight_append_only
+before update or delete on public.lesson_booking_preview_requeue_dispatch_preflights
 for each row execute function public.forbid_change();
 
-create table if not exists public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions (
+create table if not exists public.lesson_booking_preview_requeue_dispatch_exclusions (
   exclusion_id bigint generated always as identity primary key,
   schema_version text not null check (schema_version = 'smart_parrot_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusion_v1'),
   intent_id bigint not null unique references public.lesson_booking_preview_launch_blocker_requeue_delivery_intents(intent_id) on delete restrict,
-  preflight_id bigint references public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights(preflight_id) on delete restrict,
+  preflight_id bigint references public.lesson_booking_preview_requeue_dispatch_preflights(preflight_id) on delete restrict,
   terminal_id bigint references public.lesson_booking_preview_launch_blocker_requeue_delivery_intent_terminals(terminal_id) on delete restrict,
   claim_event_id bigint not null references public.lesson_booking_preview_launch_blocker_requeue_lease_events(event_id) on delete restrict,
   snapshot_id bigint not null references public.lesson_booking_preview_launch_blocker_snapshots(snapshot_id) on delete restrict,
@@ -75,18 +75,18 @@ create table if not exists public.lesson_booking_preview_launch_blocker_requeue_
   check (exclusion_reason <> 'lease_expired' or excluded_at >= lease_expires_at)
 );
 
-create index if not exists lesson_booking_preview_requeue_dispatch_preflight_exclusion_snapshot_idx
-  on public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions(snapshot_id, exclusion_id desc);
+create index if not exists booking_preview_requeue_exclusion_snapshot_idx
+  on public.lesson_booking_preview_requeue_dispatch_exclusions(snapshot_id, exclusion_id desc);
 
-alter table public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions enable row level security;
+alter table public.lesson_booking_preview_requeue_dispatch_exclusions enable row level security;
 
-revoke all on table public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions
+revoke all on table public.lesson_booking_preview_requeue_dispatch_exclusions
   from public, anon, authenticated, service_role;
 
-drop trigger if exists lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions_append_only
-  on public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions;
-create trigger lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions_append_only
-before update or delete on public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions
+drop trigger if exists booking_preview_requeue_dispatch_exclusion_append_only
+  on public.lesson_booking_preview_requeue_dispatch_exclusions;
+create trigger booking_preview_requeue_dispatch_exclusion_append_only
+before update or delete on public.lesson_booking_preview_requeue_dispatch_exclusions
 for each row execute function public.forbid_change();
 
 create or replace function public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(
@@ -100,8 +100,8 @@ as $$
 declare
   v_intent public.lesson_booking_preview_launch_blocker_requeue_delivery_intents%rowtype;
   v_claim public.lesson_booking_preview_launch_blocker_requeue_lease_events%rowtype;
-  v_existing public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights%rowtype;
-  v_exclusion public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions%rowtype;
+  v_existing public.lesson_booking_preview_requeue_dispatch_preflights%rowtype;
+  v_exclusion public.lesson_booking_preview_requeue_dispatch_exclusions%rowtype;
   v_terminal public.lesson_booking_preview_launch_blocker_requeue_delivery_intent_terminals%rowtype;
   v_latest_snapshot_id bigint;
   v_now timestamptz := pg_catalog.statement_timestamp();
@@ -154,11 +154,11 @@ begin
   end if;
 
   select * into v_existing
-  from public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights p
+  from public.lesson_booking_preview_requeue_dispatch_preflights p
   where p.intent_id = v_intent.intent_id;
 
   select * into v_exclusion
-  from public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions x
+  from public.lesson_booking_preview_requeue_dispatch_exclusions x
   where x.intent_id = v_intent.intent_id;
   if found then
     return pg_catalog.jsonb_build_object(
@@ -216,7 +216,7 @@ begin
   end if;
 
   if v_exclusion_reason is not null then
-    insert into public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions(
+    insert into public.lesson_booking_preview_requeue_dispatch_exclusions(
       schema_version,intent_id,preflight_id,terminal_id,claim_event_id,snapshot_id,lease_expires_at,
       exclusion_reason,evidence_scope,excluded_at
     ) values (
@@ -229,7 +229,7 @@ begin
 
     if v_exclusion_id is null then
       select * into v_exclusion
-      from public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions x
+      from public.lesson_booking_preview_requeue_dispatch_exclusions x
       where x.intent_id = v_intent.intent_id;
       v_exclusion_id := v_exclusion.exclusion_id;
       v_exclusion_reason := v_exclusion.exclusion_reason;
@@ -308,7 +308,7 @@ begin
     );
   end if;
 
-  insert into public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights(
+  insert into public.lesson_booking_preview_requeue_dispatch_preflights(
     schema_version,intent_id,claim_event_id,activation_id,work_generation_id,queue_item_id,
     snapshot_id,alert_id,lineage_ref,lease_generation_no,lease_expires_at,intent_key,preflight_key,
     preflight_state,preflight_scope,observed_at
@@ -360,9 +360,9 @@ revoke all on function public.service_prepare_booking_preview_launch_blocker_req
 grant execute on function public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(bigint,text)
   to service_role;
 
-comment on table public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflights is
+comment on table public.lesson_booking_preview_requeue_dispatch_preflights is
   'Append-only PREVIEW no-send preflight evidence for one exact current Phase Z delivery intent. This table never authorizes dispatch and stores no claim key, customer/provider identifier, notifier receipt, token, secret, or payment material.';
-comment on table public.lesson_booking_preview_launch_blocker_requeue_dispatch_preflight_exclusions is
+comment on table public.lesson_booking_preview_requeue_dispatch_exclusions is
   'Append-only PREVIEW evidence that an exact delivery intent is stale because its claim closed, server-time lease expired, or blocker snapshot was superseded. May supersede an earlier ready_no_send preflight and never authorizes dispatch.';
 comment on function public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(bigint,text) is
   'Service-only PREVIEW dispatch preflight. Revalidates exact intent/claim, Phase AA terminal evidence, current blocker snapshot and PostgreSQL lease time; stale evidence always wins over replay. Performs no external notifier HTTP call or delivered assertion.';

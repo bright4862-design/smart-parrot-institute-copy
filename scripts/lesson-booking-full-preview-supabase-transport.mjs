@@ -99,10 +99,10 @@ export function createApprovedPreviewSupabaseTransport({
   }
 
   function serviceHeaders() {
-    const key = assertSecretKey(secretKey);
     return {
-      apikey: key,
-      authorization: `Bearer ${key}`,
+      // Modern sb_secret_* keys identify the backend component through the apikey
+      // header. They are not JWTs, so never mirror them into Authorization: Bearer.
+      apikey: assertSecretKey(secretKey),
       'content-type': 'application/json',
     };
   }

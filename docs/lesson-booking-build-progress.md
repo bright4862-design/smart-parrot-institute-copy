@@ -8,8 +8,8 @@ Last updated: 2026-09-21
 - Working branch: `agent/lesson-booking-blueprint`.
 - Draft PR: #16.
 - Default branch refreshed this run: `main` at `7f764e5c2b691874b6049e706f1c09026c1eafaf`.
-- Phase 4C5O verified engineering checkpoint: **`050a8ccbf5afc88abd9171ee93da23300dc80596`**.
-- GitHub comparison at the engineering checkpoint: **diverged, 146 commits ahead / 15 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
+- Phase 4C5O verified engineering checkpoint: **`33740c64081e2ebb70538cc1883f02193ada4555`**.
+- GitHub comparison at the verified engineering checkpoint: **diverged, 149 commits ahead / 15 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
 - `main` remains untouched. Nothing has been merged, rebased, published to Base44, or deployed to production.
 - Approved Supabase PREVIEW/TEST project only: `mrzzbhqzxshtbqvxkcjn`, region `eu-west-1`, URL `https://mrzzbhqzxshtbqvxkcjn.supabase.co`.
 - Supabase confirmed the project **ACTIVE_HEALTHY** before the Phase 4C5O preview migration was applied.
@@ -45,7 +45,7 @@ Last updated: 2026-09-21
 
 ## Phase 4C5O — service-only cleanup attestation + minimized impact inventory — complete
 
-Verified engineering checkpoint: **`050a8ccbf5afc88abd9171ee93da23300dc80596`**.
+Verified engineering checkpoint: **`33740c64081e2ebb70538cc1883f02193ada4555`**.
 
 ### Implemented
 
@@ -75,6 +75,7 @@ Verified engineering checkpoint: **`050a8ccbf5afc88abd9171ee93da23300dc80596`**.
 - Updated `scripts/lesson-booking-full-preview-supabase-transport.mjs` with a distinct `service_rpc` authorization class.
   - The approved preview identity remains pinned to `mrzzbhqzxshtbqvxkcjn`.
   - `service_rpc` requires a runtime `sb_secret_...` credential and is routed separately from student/admin JWT and worker paths.
+  - Modern Supabase `sb_secret_...` keys are sent on the `apikey` header only for this direct Data API RPC path; they are **not** copied into `Authorization: Bearer` because current Supabase guidance states these keys are not JWTs.
   - No secret is placed in the React/browser code or persisted in repository output.
 - Added `scripts/lesson-booking-full-preview-cleanup-attestation.mjs`.
   - Strictly normalizes the fixed non-executable response shape and strips unknown/sensitive fields.
@@ -82,14 +83,19 @@ Verified engineering checkpoint: **`050a8ccbf5afc88abd9171ee93da23300dc80596`**.
 - Added `scripts/check-lesson-booking-full-preview-cleanup-attestation.mjs`.
   - Injects intentionally sensitive fake provider/identity/token fields and verifies none survive normalization.
   - Verifies service-only routing, no browser-clock fields, fixed inventory shape, authority-false invariants, and absence of DELETE/TRUNCATE/provider-call patterns from the migration.
+  - Includes a direct fake-fetch regression proving `sb_secret_...` is placed in `apikey` and never in an Authorization header.
 - Added `supabase/tests/lesson_booking_full_preview_cleanup_execution_attestation_scenarios.sql` and `.github/workflows/lesson-booking-phase4c5o.yml`.
   - Covers first attestation, exact replay, minimized counts, stale manifest identity, terminal plan revocation, expired legacy manifest, function/table grants, and append-only mutation denial.
 
 ### Verification
 
-- GitHub Actions **Lesson booking Phase 4C5O run `35563997700` passed** on exact engineering SHA `050a8ccbf5afc88abd9171ee93da23300dc80596`.
-- Full **Lesson booking foundation run `35563997626` passed** on the same exact engineering SHA.
-- Dedicated CI passed the new Phase 4C5O JavaScript regression, re-verified the Phase 4C5N lifecycle contract, applied every migration to ephemeral PostgreSQL, executed Phase N and O SQL scenarios, and completed the production Vite build.
+- The first Phase 4C5O implementation passed its dedicated and full-foundation suites at `050a8ccbf5afc88abd9171ee93da23300dc80596`.
+- Fresh Supabase documentation review then identified the modern secret-key transport requirement. A **test-first regression** was committed at `c84881f4e122a6cb698e808d63f6a4fc57988e3f`; dedicated run **`35564361991` failed exactly at the new secret-header assertion**, demonstrating the old transport incorrectly mirrored `sb_secret_...` into `Authorization: Bearer`.
+- The implementation was corrected at **`33740c64081e2ebb70538cc1883f02193ada4555`** so direct service RPCs send the secret on `apikey` only.
+- GitHub Actions **Lesson booking Phase 4C5O run `35564407791` passed** on exact final engineering SHA `33740c64081e2ebb70538cc1883f02193ada4555`.
+- Full **Lesson booking foundation run `35564407772` passed** on the same exact final engineering SHA.
+- The transport change also re-triggered relevant earlier lifecycle workflows; Phase 4C5M run `35564407807`, Phase 4C5N run `35564407786`, Phase 4C5L run `35564407773`, and Phase 4C5J run `35564407783` all passed on the same SHA.
+- Dedicated CI passed the Phase 4C5O JavaScript regression, re-verified the Phase 4C5N lifecycle contract, applied every migration to ephemeral PostgreSQL, executed Phase N and O SQL scenarios, and completed the production Vite build.
 - The full foundation workflow passed the broader booking/payment/security regression suite, migration execution, Edge Function/Deno checks, and application build.
 - Preview migration application succeeded and Supabase recorded **`20260921051909 / lesson_booking_phase4c5o_cleanup_execution_attestation_inventory`**.
 - Post-apply preview verification:
@@ -108,6 +114,7 @@ Verified engineering checkpoint: **`050a8ccbf5afc88abd9171ee93da23300dc80596`**.
 ### Supabase
 
 - Current Supabase API-key guidance says `sb_secret_...` is for developer-controlled backend components only and maps to elevated `service_role` access that bypasses RLS. It must never reach the browser or source control.
+- The same current guidance states modern publishable/secret keys are supplied through `apikey`; `sb_secret_...` is not a JWT and must not be used as an `Authorization: Bearer` token. Phase 4C5O now has a regression locking this boundary.
 - Current Supabase function guidance says `SECURITY DEFINER` functions should pin `search_path` and should have execution explicitly revoked/granted when access must be restricted.
 - Phase 4C5O therefore uses a separate server-only `service_rpc` route and Postgres EXECUTE grants rather than an authenticated admin JWT to mint the attestation.
 - References:
@@ -184,4 +191,4 @@ Connecting Stripe inside Base44 still does **not** transfer Stripe secret/webhoo
 
 ## Release status
 
-**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5O is repository-complete and CI-verified at `050a8ccbf5afc88abd9171ee93da23300dc80596`. Phases 4C5L–4C5O are applied only to the approved Supabase preview project. PR #16 remains draft. No provider-writing rehearsal, destructive cleanup, or production operation occurred.
+**NO MERGE / NO BASE44 OR PRODUCTION PUBLISH.** Phase 4C5O is repository-complete and CI-verified at `33740c64081e2ebb70538cc1883f02193ada4555`. Phases 4C5L–4C5O are applied only to the approved Supabase preview project. PR #16 remains draft. No provider-writing rehearsal, destructive cleanup, or production operation occurred.

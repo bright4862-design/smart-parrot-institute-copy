@@ -63,7 +63,7 @@ Verified engineering checkpoint: **`d23c5e65adfeb90c6714a28195e650cf1aeb6bc2`**.
 
 - GitHub Actions **Lesson booking Phase 4C5V run `35590204148` passed** on exact engineering SHA `d23c5e65adfeb90c6714a28195e650cf1aeb6bc2`.
 - Full **Lesson booking foundation run `35590204195` passed** on the same SHA.
-- All **13 workflows** triggered by the engineering checkpoint completed successfully, including the Phase J–V booking workflows and the full foundation suite.
+- All **13 workflows triggered by the engineering checkpoint** completed successfully, including Phase 4C5V, the affected downstream booking regressions and the full foundation suite.
 - The bounded Phase V migration was applied only to `mrzzbhqzxshtbqvxkcjn`; Supabase recorded **`20260921104625 / lesson_booking_phase4c5v_requeue_generation_consumption_lineage`**.
 - Post-apply preview verification: consumption rows **0**; work-generation rows **0**; RLS enabled on both tables; direct SELECT denied to both `authenticated` and `service_role`; Phase V RPC denied to `authenticated` and executable by `service_role`; RPC `proconfig` is `search_path=""`.
 - Supabase project identity/status rechecked after migration: exact project `mrzzbhqzxshtbqvxkcjn`, name `Smart Parrot Supabase project`, region `eu-west-1`, status **`ACTIVE_HEALTHY`**.

@@ -26,6 +26,7 @@ const OPERATION_AUTH = Object.freeze({
   'admin_revoke_booking_full_preview_cleanup_review_plan': 'admin_rpc',
   'admin_prepare_booking_full_preview_cleanup_execution_manifest_preview': 'admin_rpc',
   'service_attest_booking_full_preview_cleanup_execution_manifest': 'service_rpc',
+  'service_record_booking_preview_launch_blocker_snapshot': 'service_rpc',
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

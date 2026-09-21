@@ -11,7 +11,7 @@ declare
   s1 bigint; a1 bigint; q1 jsonb; q1id bigint; d1 bigint;
   r1 jsonb; g1 jsonb; c1 jsonb; act1 jsonb; claim1 jsonb;
   intent1 jsonb; intent2 jsonb; terminal1 jsonb;
-  claim_event_id bigint; expired_claim_event_id bigint; v_expiry_id bigint;
+  v_claim_event_id bigint; v_expired_claim_event_id bigint; v_expiry_id bigint;
   intent_count integer; phase_t_before bigint; phase_t_after bigint;
   closed_rejected boolean:=false; expired_rejected boolean:=false; mutate boolean:=false;
 begin
@@ -70,16 +70,16 @@ begin
   select public.service_claim_booking_preview_launch_blocker_requeue_work_audited(
     (act1->>'activation_id')::bigint,repeat('d',32),120
   ) into claim1;
-  claim_event_id := (claim1->>'event_id')::bigint;
+  v_claim_event_id := (claim1->>'event_id')::bigint;
 
-  select public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(claim_event_id) into intent1;
-  select public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(claim_event_id) into intent2;
+  select public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(v_claim_event_id) into intent1;
+  select public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(v_claim_event_id) into intent2;
 
   if (intent1->>'intent_id')::bigint <> (intent2->>'intent_id')::bigint
      or (intent1->>'replay')::boolean
      or not (intent2->>'replay')::boolean
      or intent1->>'intent_key' <> pg_catalog.concat(
-          'rqi:',(act1->>'activation_id'),':',claim_event_id::text,':',(claim1->>'lease_generation_no')
+          'rqi:',(act1->>'activation_id'),':',v_claim_event_id::text,':',(claim1->>'lease_generation_no')
         )
      or intent1->>'intent_state' <> 'prepared'
      or intent1->>'transport_scope' <> 'provider_neutral_preview'
@@ -99,7 +99,7 @@ begin
 
   select count(*) into intent_count
   from public.lesson_booking_preview_launch_blocker_requeue_delivery_intents i
-  where i.claim_event_id=claim_event_id;
+  where i.claim_event_id=v_claim_event_id;
   if intent_count <> 1 then
     raise exception 'Phase Z exact replay did not converge on one intent row';
   end if;
@@ -107,7 +107,7 @@ begin
   if exists (
     select 1
     from public.lesson_booking_preview_launch_blocker_requeue_delivery_intents i
-    where i.claim_event_id=claim_event_id
+    where i.claim_event_id=v_claim_event_id
       and (i.prepared_at >= i.lease_expires_at
         or i.intent_state <> 'prepared'
         or i.transport_scope <> 'provider_neutral_preview'
@@ -133,7 +133,7 @@ begin
   end if;
 
   begin
-    perform public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(claim_event_id);
+    perform public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(v_claim_event_id);
   exception when others then
     closed_rejected:=true;
   end;
@@ -149,7 +149,7 @@ begin
     'smart_parrot_booking_preview_launch_blocker_requeue_lease_event_v1',
     (act1->>'activation_id')::bigint,(act1->>'work_generation_id')::bigint,q1id,s1,a1,act1->>'lineage_ref',
     'claimed',repeat('e',32),2,30,statement_timestamp()-interval '1 minute',statement_timestamp()-interval '2 minutes'
-  ) returning event_id into expired_claim_event_id;
+  ) returning event_id into v_expired_claim_event_id;
 
   insert into public.lesson_booking_preview_launch_blocker_requeue_lease_expiries(
     schema_version,claim_event_id,activation_id,work_generation_id,queue_item_id,snapshot_id,
@@ -160,11 +160,11 @@ begin
     e.event_id,e.activation_id,e.work_generation_id,e.queue_item_id,e.snapshot_id,
     e.alert_id,e.lineage_ref,e.lease_generation_no,e.lease_expires_at,'lease_timeout',statement_timestamp()
   from public.lesson_booking_preview_launch_blocker_requeue_lease_events e
-  where e.event_id=expired_claim_event_id
+  where e.event_id=v_expired_claim_event_id
   returning expiry_id into v_expiry_id;
 
   begin
-    perform public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(expired_claim_event_id);
+    perform public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(v_expired_claim_event_id);
   exception when others then
     expired_rejected:=true;
   end;

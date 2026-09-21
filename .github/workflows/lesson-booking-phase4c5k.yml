@@ -1,0 +1,62 @@
+name: Lesson booking Phase 4C5K
+
+on:
+  push:
+    branches:
+      - agent/lesson-booking-blueprint
+    paths:
+      - "scripts/lesson-booking-full-preview-reconciliation.mjs"
+      - "scripts/check-lesson-booking-full-preview-reconciliation.mjs"
+      - "scripts/lesson-booking-full-preview-terminal-evidence.mjs"
+      - "scripts/check-lesson-booking-full-preview-terminal-evidence.mjs"
+      - "supabase/migrations/20260921030000_lesson_booking_phase4c5k_terminal_reconciliation_retention.sql"
+      - "supabase/tests/lesson_booking_full_preview_reconciliation_retention_scenarios.sql"
+      - ".github/workflows/lesson-booking-phase4c5k.yml"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    paths:
+      - "scripts/lesson-booking-full-preview-reconciliation.mjs"
+      - "scripts/check-lesson-booking-full-preview-reconciliation.mjs"
+      - "scripts/lesson-booking-full-preview-terminal-evidence.mjs"
+      - "scripts/check-lesson-booking-full-preview-terminal-evidence.mjs"
+      - "supabase/migrations/20260921030000_lesson_booking_phase4c5k_terminal_reconciliation_retention.sql"
+      - "supabase/tests/lesson_booking_full_preview_reconciliation_retention_scenarios.sql"
+      - ".github/workflows/lesson-booking-phase4c5k.yml"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  terminal-reconciliation-retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Verify Phase 4C5K read-only reconciliation and retention boundary
+        run: node scripts/check-lesson-booking-full-preview-reconciliation.mjs
+      - name: Re-verify Phase 4C5J terminal evidence boundary
+        run: node scripts/check-lesson-booking-full-preview-terminal-evidence.mjs
+      - name: Start ephemeral PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+          sudo -u postgres pg_isready
+      - name: Verify Phase 4C5K SQL behavior
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap_minimal_supabase.sql
+          for migration in supabase/migrations/*.sql; do echo "Applying ${migration}"; sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f "${migration}"; done
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_terminal_evidence_scenarios.sql
+          sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/lesson_booking_full_preview_reconciliation_retention_scenarios.sql
+      - name: Build application
+        run: npm run build

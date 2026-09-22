@@ -1,6 +1,11 @@
 import { withSupabase } from 'npm:@supabase/server@^1';
+import {
+  dailyWebhookConfiguration,
+  validDailyWebhookSecret,
+  type ProviderCheck,
+} from '../_shared/provider-preview-readiness.ts';
 
-type Check = { ready: boolean; status: string };
+type Check = ProviderCheck;
 
 function env(name: string) {
   return Deno.env.get(name)?.trim() ?? '';
@@ -60,6 +65,7 @@ async function dailyIdentity(): Promise<Check> {
   const expectedDomainId = env('SMART_PARROT_DAILY_PREVIEW_DOMAIN_ID');
   const domainName = env('SMART_PARROT_DAILY_PREVIEW_DOMAIN_NAME');
   const roomPrefix = env('SMART_PARROT_DAILY_PREVIEW_ROOM_PREFIX');
+  const webhookSecret = env('DAILY_WEBHOOK_SECRET');
 
   if (env('SMART_PARROT_PROVIDER_E2E_ENABLED') !== '1') return { ready: false, status: 'provider_e2e_disabled' };
   if (apiKey.length < 16) return { ready: false, status: 'daily_api_key_missing' };
@@ -67,6 +73,7 @@ async function dailyIdentity(): Promise<Check> {
   if (!expectedDomainId || expectedDomainId.length < 8) return { ready: false, status: 'daily_preview_domain_id_required' };
   if (!safeDailyDomainName(domainName)) return { ready: false, status: 'daily_preview_domain_name_required' };
   if (!safeRoomPrefix(roomPrefix)) return { ready: false, status: 'safe_daily_room_prefix_required' };
+  if (!validDailyWebhookSecret(webhookSecret)) return { ready: false, status: 'daily_webhook_hmac_required' };
 
   try {
     const response = await fetch(`https://api.daily.co/v1/webhooks/${encodeURIComponent(webhookId)}`, {
@@ -81,7 +88,7 @@ async function dailyIdentity(): Promise<Check> {
     if (webhook.state === 'FAILED' || webhook.state === 'INACTIVE') {
       return { ready: false, status: 'daily_webhook_not_active' };
     }
-    return { ready: true, status: 'ready' };
+    return dailyWebhookConfiguration(webhook, webhookSecret);
   } catch {
     return { ready: false, status: 'daily_identity_unavailable' };
   }
@@ -124,7 +131,7 @@ export default {
     const blockers = Object.entries(checks).filter(([, check]) => !check.ready).map(([name]) => name);
 
     return Response.json({
-      schema_version: 'smart_parrot_booking_provider_preview_readiness_v1',
+      schema_version: 'smart_parrot_booking_provider_preview_readiness_v2',
       generated_at: new Date().toISOString(),
       status: blockers.length ? 'blocked' : 'ready',
       checks,
@@ -132,7 +139,7 @@ export default {
       boundaries: [
         'Provider identity checks are read-only and admin-only.',
         'Stripe must use a test secret key and match the explicitly configured test account.',
-        'Daily must match the explicitly configured preview webhook/domain and a preview-only room namespace.',
+        'Daily must match the explicitly configured preview webhook/domain, preview-only room namespace, exact local HMAC secret, supported retry configuration, and attendance event subscriptions.',
         'No secret, account ID, project ref, webhook ID, domain ID, webhook URL, HMAC, or provider response body is returned.',
         'This endpoint never creates, captures, refunds, settles, deletes, deploys, publishes, or sends customer communications.',
       ],

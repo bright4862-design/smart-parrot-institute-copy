@@ -1,5 +1,5 @@
 const DISPATCH_PREFLIGHT_SCHEMA = 'smart_parrot_booking_preview_launch_blocker_requeue_dispatch_preflight_v1';
-const DISPATCH_PREFLIGHT_RPC = 'service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight';
+const DISPATCH_PREFLIGHT_RPC = 'service_prepare_booking_preview_requeue_dispatch';
 const LINEAGE_RE = /^rqg:(\d+):(\d+):(\d+):(\d+)$/;
 const INTENT_KEY_RE = /^rqi:(\d+):(\d+):([1-3])$/;
 const PREFLIGHT_KEY_RE = /^[0-9a-f]{32}$/;

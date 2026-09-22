@@ -5,28 +5,111 @@ Last updated: 2026-09-22
 ## Target and release boundary
 
 - Repository: `bright4862-design/smart-parrot-institute-copy` (user-selected target; do not switch to `bright4862-design/parrot-institute` without explicit instruction).
-- Canonical integration branch: `agent/lesson-booking-blueprint`; draft PR #16.
-- Default branch refreshed this run: `main` at `7f764e5c2b691874b6049e706f1c09026c1eafaf`.
-- Verified engineering head: **`bcb8e3d87203128863db1cd80f51fdf1fe5a8eaf`** (`fix(booking): keep Phase AB identifiers distinct`).
-- At that engineering head the branch is **209 commits ahead / 15 behind `main`** with merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
-- `main` remains untouched. No merge/rebase to default, live Stripe use, real customer billing, Stripe Connect, destructive cleanup, production Cron money transition, or production provider write is authorized.
-- Approved Supabase PREVIEW/TEST project only: `mrzzbhqzxshtbqvxkcjn`, `eu-west-1`, `https://mrzzbhqzxshtbqvxkcjn.supabase.co`; status reverified **`ACTIVE_HEALTHY`**.
-- Intended public frontend domain: `asmartparrot.com`. Current public-content mapping is now proven to the Base44 **`Parrot Institute`** app (`695940b9a789c24bcec383ab`), while the booking build sandbox is **`Smart Parrot Institute  (Copy)`** (`69c16c52c86d161e74940243`). Do not overwrite or reassign the serving site blindly; integrate booking additively into the serving app and preserve existing routes.
+- Canonical serialized integration branch: `agent/lesson-booking-blueprint`; draft PR #16.
+- Verified integrated engineering head: **`0d04cb16c2f6fce21060cdf0f420731472b8f9ab`** (`test(db): route Phase AB scenarios through stable RPC`).
+- Default branch refreshed during this run: **`main` advanced to `ce30e4d5aff73d44ce330247d389fb27fcd6793c`** via Base44 bot `Update base44 packages`; the one new commit changes only `package.json` / `package-lock.json`. It was observed, not merged/rebased into the booking branch.
+- Current compare at the verified engineering head: **223 commits ahead / 16 behind `main`**, merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
+- No merge/rebase to default branch, live Stripe use, real customer billing, Stripe Connect, destructive cleanup, production Cron money transition, or production provider write occurred.
+- Approved Supabase PREVIEW/TEST project only: `mrzzbhqzxshtbqvxkcjn`, `eu-west-1`, `https://mrzzbhqzxshtbqvxkcjn.supabase.co`; status after this run: **`ACTIVE_HEALTHY`**.
+- Intended public frontend domain: `asmartparrot.com`. Public-content mapping remains proven to Base44 **`Parrot Institute`** app `695940b9a789c24bcec383ab`; the booking build sandbox remains **`Smart Parrot Institute (Copy)`** app `69c16c52c86d161e74940243`. Do not overwrite or reassign the serving site; integrate booking additively and preserve all existing public routes.
 
 ## Architecture lock
 
-Base44/React remains the frontend. Supabase Postgres/Auth/RLS/Edge Functions/Cron remains the source of truth for identity, booking/payment state, policy/consent evidence, attendance, settlement, provider readiness, preview run state, reconciliation, retention and launch-blocker/notifier evidence. No browser-authoritative money, time, attendance, provider, cleanup, launch, notification or requeue transition is allowed. Stripe remains hold-before/capture-after: setup mode for bookings 48h+ ahead and manual authorization/capture workflow near-term. Daily remains server-evidence only. Marketplace/Stripe Connect is deferred.
+Base44/React remains the frontend. Supabase Postgres/Auth/RLS/Edge Functions/Cron remains source of truth for identity, booking/payment state, policy/consent evidence, attendance, settlement, provider readiness, reconciliation, retention and launch/ops evidence. No browser-authoritative money, time, attendance, provider, cleanup, launch or notification transition is allowed. Stripe remains hold-before/capture-after: setup mode for bookings 48h+ ahead and manual authorization/capture for near-term bookings. Daily remains server-evidence only. Marketplace/Stripe Connect remains deferred.
 
-## Coordination lanes
+## Coordinated lane integration — 2026-09-22
 
-The build is serialized through one integration owner with three isolated implementation branches and one read-mostly release lane:
+This run serialized three independently verified, non-overlapping implementation lanes into `agent/lesson-booking-blueprint`.
 
-- Supabase/DB: `agent/smart-parrot-supabase-20260922` — migrations, RLS/RPCs, database regressions/advisors and server-authoritative state.
-- Provider: `agent/smart-parrot-provider-20260922` — Stripe/Daily adapters, signed webhooks, provider-readiness and TEST-only integration contracts.
-- Frontend/Base44: `agent/smart-parrot-frontend-20260922` — booking UI, Supabase browser auth/client boundary, route coexistence and Base44 compatibility.
-- Release/Deploy: exact-head verification, preview deployment, Base44/domain mapping, rollback proof and post-deploy smoke evidence; it does not author product fixes.
+### Provider lane integrated
 
-Only reviewed non-overlapping lane commits may be integrated into `agent/lesson-booking-blueprint`. The three implementation branches were initialized from coordination checkpoint `393eaf78ae34344f2b466be6e3bf2614c8075313`; no lane implementation commit has yet been integrated in this refresh.
+Source lane: `agent/smart-parrot-provider-20260922` at **`09afbdcf771f76c7012520f83afb879af5f67ebb`**, PR #18.
+
+- Exact-head lane foundation run `35721847664`: **PASS**.
+- Reviewed scope was provider-only and contained no DB migration or frontend changes.
+- Hardened Daily preview readiness now requires:
+  - a valid local `DAILY_WEBHOOK_SECRET`;
+  - exact HMAC equality against the remote Daily webhook configuration;
+  - `participant.joined` and `participant.left` attendance subscriptions;
+  - a supported Daily retry mode (`circuit-breaker` or `exponential`);
+  - existing preview project/domain/room-prefix/provider gate checks.
+- No provider write path was enabled.
+- PR #18 was squash-integrated into the booking branch as **`0e6c394284dda235fc7ba871c0abbc47c138c354`**.
+
+After the final integrated engineering SHA was green, `booking-provider-preview-readiness` alone was deployed to the approved preview project from the integrated source. It is now **ACTIVE version 2**, `verify_jwt=true`, deployment SHA-256 `bfaa3a49c4739d76b319731774d00c0795c5f6f972271bc90e16d874f65eac74`. No Stripe or Daily write was made.
+
+### Frontend/Base44 lane integrated
+
+Source lane: `agent/smart-parrot-frontend-20260922` at **`b4948aebee57ce855abd778e0b39982a0d988a09`**, PR #19.
+
+- Exact-head lane foundation run `35722689027`: **PASS**.
+- The lane was based on the prior integration head, so the reviewed non-overlapping files were transplanted serially rather than merging a stale branch wholesale.
+- Added additive `/lesson-booking` hub route and `LessonBookingHub.jsx` without changing `/`, `/learn`, `/london`, `/level-4-cafe`, `/book-lessons` or `/my-lessons` semantics.
+- Hub is visibly `TEST / preview`, states `Payments are not connected yet`, collects no card details, performs no Stripe/Daily/function write, and reports only browser-safe Supabase publishable-key configuration state.
+- `scripts/check-lesson-booking-browser-boundary.mjs` now proves route coexistence, fail-closed payment messaging and absence of browser secrets/provider authority.
+- Integration commits: `827f884270319938f65cf57dc2343f9c8bf44a70`, `5fe163456b9bee78159aa39d277ca06f6d184411`, `a985967e63a794d10034efc39561a067a159cba3`.
+
+The GitHub frontend is ready as an additive booking surface, but **no public Base44 publication occurred in this run**. The serving `Parrot Institute` app must receive a restorable checkpoint and compatibility transplant/smoke pass before `asmartparrot.com` is changed.
+
+### Supabase/DB lane integrated
+
+Source lane: `agent/smart-parrot-supabase-20260922` at **`00d6d9fc9e4b9258c789466bfe26ca0d94791a47`**, PR #17.
+
+- Exact-head lane foundation run `35726135848`: **PASS**.
+- Reviewed scope remained migrations/tests only.
+- Added stable <=63-byte service RPC alias `service_prepare_booking_preview_requeue_dispatch(bigint,text)` for Phase AB because PostgreSQL truncates identifiers beyond 63 bytes.
+  - Alias is `SECURITY DEFINER`, `search_path=''`, EXECUTE only for `service_role`.
+  - Direct `service_role` execution of the historical overlong/truncated RPC identifier is revoked.
+  - The stable alias delegates to the existing authoritative Phase AB implementation; semantics remain fail-closed/no-send.
+- Consolidated `profiles` SELECT RLS policies without changing visibility:
+  - anon: tutor profiles only;
+  - authenticated: own profile OR tutor profiles OR students booked with the signed-in tutor;
+  - existing authenticated update-own policy remains separate.
+- Added ephemeral behavioral regressions for exact visibility and RPC grants/forwarding.
+- The two migrations are already present on preview as:
+  - `20260922111940 / lesson_booking_phase4c5ab1_stable_dispatch_rpc`
+  - `20260922121722 / lesson_booking_profiles_select_policy_consolidation`
+
+The integrator also updated the Phase AB JS transport to call the stable alias and repaired the older Phase AB SQL scenario so service-facing behavior uses the alias while asserting the legacy overlong function is not directly executable by `service_role`.
+
+## Exact integrated verification
+
+First integrated attempt `68f0b2eef27260583fe3f5a8064f3586e14b6e93` correctly failed the dedicated Phase AB workflow because the historical SQL scenario still expected direct service-role access to the now-revoked overlong RPC. The JS boundary and migration application were already green. The failure was not bypassed; the stale scenario was updated to the intended short alias.
+
+Final verified engineering SHA: **`0d04cb16c2f6fce21060cdf0f420731472b8f9ab`**.
+
+- **Lesson booking Phase 4C5AB** run `35727122069`: **PASS**.
+  - stable-alias JS boundary: pass;
+  - Phase AA regression: pass;
+  - full clean migration chain: pass;
+  - Phase AB SQL behavior through the stable service RPC: pass;
+  - application build: pass.
+- **Lesson booking foundation** run `35727122070`: **PASS**.
+  - Edge Function typechecks: pass;
+  - all booking boundary checks: pass;
+  - full clean migration + behavioral scenario suite: pass;
+  - application build: pass.
+
+This is the exact integrated source used for the provider-readiness v2 preview deployment.
+
+## Supabase preview/advisor state after integration
+
+Project `mrzzbhqzxshtbqvxkcjn` remains `ACTIVE_HEALTHY`.
+
+Security advisor remains intentionally reviewed rather than silenced:
+
+- **45** RLS-enabled/no-policy notices on server-only/RPC-only tables where direct browser/table access is intentionally revoked.
+- **38** authenticated-callable `SECURITY DEFINER` findings; the integrated DB/provider/frontend work did not expand that count.
+- `btree_gist` in `public` remains a review item.
+- The prior mutable `public.forbid_change()` search-path warning remains absent.
+
+Performance advisor after the profile-policy migration:
+
+- **86** unindexed foreign-key opportunities.
+- **32** unused-index notices.
+- The previous `profiles` multiple-permissive-policy warning is **gone** after the policy consolidation.
+
+No speculative indexes were added to empty evidence tables merely to silence advisor output.
 
 ## Completed phase summary
 
@@ -40,109 +123,42 @@ Only reviewed non-overlapping lane commits may be integrated into `agent/lesson-
 - 4C5T–4C5U: escalation claim/lease/retry/dead-letter lifecycle and bounded operator requeue review.
 - 4C5V–4C5W: single-use requeue eligibility consumption, deterministic lineage and server-time activation.
 - 4C5X–4C5Y: activation-scoped requeue claim/lease/terminal lifecycle and append-only expired-lease recovery evidence.
-- 4C5Z: provider-neutral delivery-intent preparation tied to one exact current unexpired audited claim; no send or delivered assertion.
-- 4C5AA: append-only terminal evidence when a prepared intent becomes unusable because its exact claim closes, lease expires, or blocker snapshot is superseded.
-- **4C5AB (current): service-only no-send dispatch preflight plus exact stale-intent exclusion evidence.**
+- 4C5Z–4C5AA: provider-neutral delivery-intent preparation and immutable terminal evidence.
+- 4C5AB/AB1: no-send dispatch preflight, exact stale-intent exclusions and stable external service RPC identifier.
 
-## Phase 4C5AB — complete and preview-applied
+## Base44 / `asmartparrot.com` release boundary
 
-Verified engineering checkpoint: **`bcb8e3d87203128863db1cd80f51fdf1fe5a8eaf`**.
+The public domain mapping remains proven:
 
-### Implemented
+- `asmartparrot.com` serves the `Parrot Institute` Base44 app `695940b9a789c24bcec383ab`.
+- The GitHub build/source sandbox is the separate `Smart Parrot Institute (Copy)` app `69c16c52c86d161e74940243`.
 
-- Added `supabase/migrations/20260921173000_lesson_booking_phase4c5ab_requeue_dispatch_preflight.sql`.
-- Added append-only, RLS-enabled, RPC-only evidence tables with collision-safe identifiers:
-  - `lesson_booking_preview_requeue_dispatch_preflights`
-  - `lesson_booking_preview_requeue_dispatch_exclusions`
-- Added service-only RPC `service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(bigint,text)`.
-  - `SECURITY DEFINER`, `search_path=''`, direct grants revoked, EXECUTE only for `service_role`.
-  - Revalidates the exact Phase Z intent and Phase X claim, later claim closure, PostgreSQL `statement_timestamp()` lease validity, Phase AA terminal evidence and the current authoritative blocker snapshot.
-  - Stale evidence wins over replay. Exact safe replay converges; conflicting keys fail closed.
-  - Ready state is explicitly `ready_no_send`; bounded exclusion reasons are `claim_closed`, `lease_expired`, and `snapshot_superseded`.
-  - No external notifier HTTP, `delivered` assertion, provider/payment write, booking launch, blocker suppression, destructive cleanup or Cron-send authority is created.
-- Added `scripts/lesson-booking-preview-requeue-dispatch-preflight.mjs`, `scripts/check-lesson-booking-preview-requeue-dispatch-preflight.mjs`, Phase AB SQL scenarios, and `.github/workflows/lesson-booking-phase4c5ab.yml`.
-- Follow-up commits fixed identifier collisions in the Phase AB migration, regression and scenarios without weakening semantics.
+Therefore do **not** point the domain to the Copy app or overwrite the serving app. Public booking launch sequence remains:
 
-### Verification
+1. Refresh serving-app source and take a restorable Base44 checkpoint.
+2. Transplant only the reviewed additive booking UI/config required by the serving app.
+3. Verify a production build and no secret/provider-authority leakage.
+4. Smoke the existing homepage/navigation/language/program/location/admissions routes plus booking deep links/reload/auth.
+5. Publish only if those checks are green; keep payment UI fail-closed while Stripe/Daily provider readiness is blocked.
 
-Exact-head GitHub Actions on `bcb8e3d87203128863db1cd80f51fdf1fe5a8eaf`:
-
-- **Lesson booking Phase 4C5AB** run `35619219642`: **PASS**.
-- **Lesson booking foundation** run `35619219647`: **PASS**.
-
-The dedicated workflow rechecks the Phase AB JS boundary, Phase AA terminal-evidence boundary, applies the full migration chain to clean ephemeral PostgreSQL, runs the Phase AB SQL behavior scenarios, and builds the Vite application.
-
-### Preview state
-
-Supabase preview records the bounded migration as:
-
-- **`20260921153119 / lesson_booking_phase4c5ab_requeue_dispatch_preflight`**
-
-Post-apply read-only verification on `mrzzbhqzxshtbqvxkcjn`:
-
-- Phase AB preflight rows: **0**.
-- Phase AB exclusion rows: **0**.
-- RLS enabled on both tables.
-- Direct SELECT denied to both `authenticated` and `service_role` on both evidence tables.
-- `authenticated` cannot execute the Phase AB RPC.
-- `service_role` can execute the Phase AB RPC.
-- RPC is `SECURITY DEFINER` with `search_path=""`.
-- No synthetic preflight/exclusion row was inserted merely to exercise the shared preview database.
-
-The existing 12 booking Edge Functions remain ACTIVE and were not redeployed for Phase AB: `create-booking`, `fix-payment`, `cancel-booking`, `create-video-token`, `check-in`, `booking-preview-readiness`, `booking-provider-preview-readiness`, `stripe-webhook`, `stripe-dispute-webhook`, `daily-webhook`, `place-holds`, `settle-lessons`.
-
-## Supabase advisor refresh after Phase 4C5AB
-
-Security advisor:
-
-- **45** RLS-enabled/no-policy notices. The two Phase AB RPC-only evidence tables account for the expected increase from Phase AA. Direct table access is intentionally revoked; these notices are not being silenced blindly.
-- **38** authenticated-callable `SECURITY DEFINER` findings, unchanged by Phase AB. These remain subject to role-check/intent review; Phase AB did not expand that surface.
-- `btree_gist` remains installed in `public` and remains a review item.
-- The previously corrected mutable `public.forbid_change()` search-path warning remains absent.
-
-Performance advisor:
-
-- **86** unindexed foreign-key opportunities.
-- **32** unused-index notices.
-- **1** multiple-permissive-policy warning on `profiles`.
-
-The new Phase AB tables have zero rows and no production workload. Index/FK findings remain workload-driven hardening opportunities; no speculative index was added or removed merely to quiet the advisor.
-
-## Base44 / `asmartparrot.com` mapping — proven
-
-A fresh read of `https://asmartparrot.com/` returned the current Smart Parrot marketing homepage with the distinctive headline `Speak English. Unlock your future.` and the Programs / Locations / About / Admissions / Free Level Test navigation.
-
-Connected Base44 source comparison:
-
-- `Parrot Institute` (`695940b9a789c24bcec383ab`) contains the distinctive public phrase in `src/components/home/PremiumHomePage.jsx` (`titleAccent: "Unlock your future."`).
-- `Smart Parrot Institute  (Copy)` (`69c16c52c86d161e74940243`) returned zero source matches for that phrase.
-
-Therefore the current public `asmartparrot.com` content maps to **`Parrot Institute`**, not the Copy app. Full evidence is preserved in `docs/lesson-booking-base44-domain-map-2026-09-22.md`.
-
-Release consequence: engineering remains in the user-selected GitHub copy repository, but public booking UI must be transplanted/integrated additively into the serving `Parrot Institute` Base44 app. Before publish, take a restorable Base44 checkpoint, prove the exact integrated production build and booking deep links, then smoke all existing homepage/navigation/language/program/location/admissions routes. Do not reassign the domain or publish the Copy app over the serving site. Stripe may remain disconnected at frontend publication, but the UI must fail closed and must not charge.
-
-## External configuration still required for first provider-writing rehearsal
+## External configuration still required for provider-writing E2E
 
 Actual provider-writing E2E remains fail-closed until the approved preview runtime has:
 
-- runtime-only Supabase `sb_secret_...` backend credential;
+- runtime-only Supabase `sb_secret_...` backend credential where required by the harness;
 - Stripe **TEST** secret key, exact expected test account ID, Checkout webhook signing secret and separate dispute-webhook signing secret, with accepted signed TEST deliveries;
-- Daily preview API key, domain/webhook identity, room prefix, base64 HMAC and an ACTIVE signed webhook;
+- Daily preview API key, domain/webhook identity, room prefix, exact base64 HMAC and an ACTIVE signed webhook;
 - safe short-lived preview student/admin sessions and explicit bounded provider/worker write gates.
 
-A Stripe account connected inside Base44 does **not** transfer those server credentials to Supabase.
+A Stripe account connected inside Base44 does **not** transfer these server credentials to Supabase. No live key is permitted.
 
-## Next integration slice
+## Next serialized integration slice
 
-Do not extend the notification/requeue chain speculatively while parallel lanes are starting. The next serialized integration action is to ingest the first reviewed non-overlapping lane checkpoint in this order of practical launch value:
-
-1. Frontend/Base44 compatibility against the now-proven serving `Parrot Institute` app, with additive route/publication readiness.
-2. Provider secret-independent Stripe/Daily hardening/readiness contracts.
-3. Supabase advisor/security hardening where a concrete semantic issue is proven.
-4. Release lane exact-head deployability, serving-app checkpoint/rollback proof and public-route smoke plan.
-
-After each lane integration, run focused regressions; once the integrated checkpoint is complete, require exact-head broad booking CI before any preview function deployment or Base44 publication.
+1. Let the release lane prepare the restorable checkpoint + exact compatibility diff for the **serving `Parrot Institute` app**, not the Copy app.
+2. Integrate any new provider/DB/frontend lane commits only if they are based on/refreshed against this coordinated source and remain inside ownership boundaries.
+3. Before public Base44 publication, require another exact integrated production build plus serving-app route smoke evidence.
+4. Provider-writing rehearsal remains separately gated by TEST credentials/configuration; it does not block publishing the payment-disabled frontend.
 
 ## Release status
 
-**NO DEFAULT-BRANCH MERGE. NO LIVE PAYMENT. NO COPY-APP OVERWRITE.** Phase 4C5AB is repository-complete, exact-head CI-verified and preview-applied. `asmartparrot.com` is now mapped to the serving `Parrot Institute` Base44 app, so the next release work can focus on an additive booking integration into that app rather than domain reassignment.
+**INTEGRATED PREVIEW SOURCE GREEN. SUPABASE PREVIEW UPDATED. NO DEFAULT-BRANCH MERGE. NO PUBLIC BASE44 CHANGE. NO LIVE PAYMENT.** The next useful work is the additive serving-app Base44 compatibility/checkpoint path, not another speculative notifier phase.

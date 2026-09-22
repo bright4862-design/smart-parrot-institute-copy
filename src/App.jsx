@@ -18,6 +18,7 @@ const Profile = lazy(() => import('@/pages/Profile'));
 const LondonMission = lazy(() => import('@/pages/LondonMission'));
 const AdventurePrototype = lazy(() => import('@/pages/adventure-prototype'));
 const CafeMission = lazy(() => import('@/pages/CafeMission'));
+const PiccadillyMission = lazy(() => import('@/pages/PiccadillyMission'));
 
 function RouteLoading() {
   return (
@@ -57,6 +58,8 @@ const AuthenticatedApp = () => {
         <Route path="/lesson-booking-admin" element={<LessonBookingAdmin />} />
         <Route path="/london" element={<LondonMission />} />
         <Route path="/heathrow-mission" element={<LondonMission />} />
+        <Route path="/piccadilly-line" element={<PiccadillyMission />} />
+        <Route path="/level-2-piccadilly" element={<PiccadillyMission />} />
         <Route path="/adventure-prototype" element={<AdventurePrototype />} />
         <Route path="/level-4-cafe" element={<CafeMission />} />
         <Route path="/london-cafe" element={<CafeMission />} />

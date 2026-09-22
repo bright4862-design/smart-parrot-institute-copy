@@ -9,6 +9,7 @@ on:
       - 'src/pages/LondonMission.jsx'
       - 'src/game/r3fSafeDataProps.js'
       - 'scripts/check-heathrow-piccadilly-compat.mjs'
+      - 'scripts/check-piccadilly-map-contract.mjs'
       - '.github/workflows/heathrow-piccadilly-compat.yml'
       - 'package.json'
       - 'package-lock.json'
@@ -23,6 +24,7 @@ on:
       - 'src/pages/LondonMission.jsx'
       - 'src/game/r3fSafeDataProps.js'
       - 'scripts/check-heathrow-piccadilly-compat.mjs'
+      - 'scripts/check-piccadilly-map-contract.mjs'
       - '.github/workflows/heathrow-piccadilly-compat.yml'
       - 'package.json'
       - 'package-lock.json'
@@ -58,6 +60,9 @@ jobs:
         run: node scripts/check-heathrow-piccadilly-compat.mjs
         env:
           CHECK_BRANCH_DRIFT: 'false'
+
+      - name: Validate Piccadilly map contract
+        run: node scripts/check-piccadilly-map-contract.mjs
 
       - name: Fetch tracked map branches
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'

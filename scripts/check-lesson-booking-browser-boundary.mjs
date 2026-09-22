@@ -10,6 +10,7 @@ const client = read('src/lib/lessonBookingSupabase.js');
 const auth = read('src/lib/LessonBookingAuthContext.jsx');
 const api = read('src/lib/lessonBookingApi.js');
 const page = read('src/pages/LessonBooking.jsx');
+const hub = read('src/pages/LessonBookingHub.jsx');
 
 const failures = [];
 const expect = (condition, message) => {
@@ -70,7 +71,12 @@ for (const forbiddenField of ['amount_cents:', 'requested_at:', 'policy_version_
   );
 }
 
+expect(app.includes('path="/lesson-booking"'), 'App must expose the additive /lesson-booking hub route.');
 expect(app.includes('path="/book-lessons"'), 'App must expose the isolated /book-lessons route.');
+expect(app.includes('path="/my-lessons"'), 'App must preserve the /my-lessons route.');
+expect(app.includes('path="/learn"'), 'Booking work must preserve the existing /learn route.');
+expect(app.includes('path="/london"'), 'Booking work must preserve the existing /london route.');
+expect(app.includes('path="/level-4-cafe"'), 'Booking work must preserve the existing game route.');
 expect(
   app.includes('<AuthProvider>'),
   'Existing Base44 app auth wrapper must remain in place for non-booking routes.',
@@ -84,6 +90,32 @@ expect(
   'Preview route must make its read-only boundary explicit.',
 );
 
+for (const requiredHubLink of ['to="/"', 'to="/book-lessons"', 'to="/my-lessons"']) {
+  expect(hub.includes(requiredHubLink), `Booking hub must retain additive navigation ${requiredHubLink}.`);
+}
+expect(
+  hub.includes('Payments are not connected yet'),
+  'Booking hub must visibly keep payments unavailable until trusted provider readiness exists.',
+);
+expect(
+  hub.includes('No card details are collected on this page'),
+  'Booking hub must tell users the disconnected preview does not collect card details.',
+);
+expect(
+  hub.includes('TEST / preview'),
+  'Booking hub must remain visibly marked as preview while provider writes are disabled.',
+);
+expect(
+  hub.includes('getLessonBookingSupabaseStatus'),
+  'Booking hub may expose only the browser-safe Supabase configuration status.',
+);
+for (const forbiddenHubCapability of ['@stripe/', 'loadStripe(', 'functions.invoke(', 'service_role', 'sb_secret_', 'DAILY_API_KEY']) {
+  expect(
+    !hub.includes(forbiddenHubCapability),
+    `Booking hub must stay provider-neutral and browser-safe; found ${forbiddenHubCapability}.`,
+  );
+}
+
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
@@ -94,10 +126,13 @@ function walk(dir) {
 
 const sourceFiles = walk(path.join(root, 'src'));
 const browserSecretPatterns = [
-  /VITE_[A-Z0-9_]*(?:SECRET|SERVICE_ROLE)[A-Z0-9_]*/g,
+  /VITE_[A-Z0-9_]*(?:SECRET|SERVICE_ROLE|STRIPE|DAILY)[A-Z0-9_]*/g,
   /sb_secret_[A-Za-z0-9_-]+/g,
   /SUPABASE_SERVICE_ROLE_KEY/g,
   /SUPABASE_SECRET_KEY/g,
+  /sk_(?:live|test)_[A-Za-z0-9_-]+/g,
+  /whsec_[A-Za-z0-9_-]+/g,
+  /DAILY_API_KEY/g,
 ];
 
 for (const file of sourceFiles) {
@@ -106,7 +141,7 @@ for (const file of sourceFiles) {
     const matches = source.match(pattern);
     expect(
       !matches?.length,
-      `Browser source ${path.relative(root, file)} references a server-only Supabase credential: ${matches?.[0]}.`,
+      `Browser source ${path.relative(root, file)} references a server-only credential: ${matches?.[0]}.`,
     );
   }
 }
@@ -117,4 +152,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Lesson booking browser boundary passed (${sourceFiles.length} browser source files scanned; availability remains read-only and authenticated cancellation sends no money/time/policy authority).`);
+console.log(`Lesson booking browser boundary passed (${sourceFiles.length} browser source files scanned; additive booking hub is provider-neutral, payment-disabled, and existing app routes remain intact).`);

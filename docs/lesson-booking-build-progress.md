@@ -11,7 +11,7 @@ Last updated: 2026-09-22
 - At that engineering head the branch is **209 commits ahead / 15 behind `main`** with merge base `210345bbe09bc46c468fb6a7e0eee0596e8d902b`.
 - `main` remains untouched. No merge/rebase to default, live Stripe use, real customer billing, Stripe Connect, destructive cleanup, production Cron money transition, or production provider write is authorized.
 - Approved Supabase PREVIEW/TEST project only: `mrzzbhqzxshtbqvxkcjn`, `eu-west-1`, `https://mrzzbhqzxshtbqvxkcjn.supabase.co`; status reverified **`ACTIVE_HEALTHY`**.
-- Intended public frontend domain: `asmartparrot.com`. Base44 has both `Smart Parrot Institute  (Copy)` (`69c16c52c86d161e74940243`) and `Parrot Institute` (`695940b9a789c24bcec383ab`). Public publication remains blocked until the release lane proves which app currently serves the domain and can preserve existing unrelated routes with a rollback/checkpoint.
+- Intended public frontend domain: `asmartparrot.com`. Current public-content mapping is now proven to the Base44 **`Parrot Institute`** app (`695940b9a789c24bcec383ab`), while the booking build sandbox is **`Smart Parrot Institute  (Copy)`** (`69c16c52c86d161e74940243`). Do not overwrite or reassign the serving site blindly; integrate booking additively into the serving app and preserve existing routes.
 
 ## Architecture lock
 
@@ -19,14 +19,14 @@ Base44/React remains the frontend. Supabase Postgres/Auth/RLS/Edge Functions/Cro
 
 ## Coordination lanes
 
-The build is now serialized through one integration owner with three isolated implementation branches and one read-mostly release lane:
+The build is serialized through one integration owner with three isolated implementation branches and one read-mostly release lane:
 
 - Supabase/DB: `agent/smart-parrot-supabase-20260922` — migrations, RLS/RPCs, database regressions/advisors and server-authoritative state.
 - Provider: `agent/smart-parrot-provider-20260922` — Stripe/Daily adapters, signed webhooks, provider-readiness and TEST-only integration contracts.
 - Frontend/Base44: `agent/smart-parrot-frontend-20260922` — booking UI, Supabase browser auth/client boundary, route coexistence and Base44 compatibility.
 - Release/Deploy: exact-head verification, preview deployment, Base44/domain mapping, rollback proof and post-deploy smoke evidence; it does not author product fixes.
 
-Only reviewed non-overlapping lane commits may be integrated into `agent/lesson-booking-blueprint`. No lane commit was integrated during this coordination refresh because the new lane branches had not yet existed at run start; they are being initialized from the current coordinated checkpoint.
+Only reviewed non-overlapping lane commits may be integrated into `agent/lesson-booking-blueprint`. The three implementation branches were initialized from coordination checkpoint `393eaf78ae34344f2b466be6e3bf2614c8075313`; no lane implementation commit has yet been integrated in this refresh.
 
 ## Completed phase summary
 
@@ -108,14 +108,18 @@ Performance advisor:
 
 The new Phase AB tables have zero rows and no production workload. Index/FK findings remain workload-driven hardening opportunities; no speculative index was added or removed merely to quiet the advisor.
 
-## Base44/publication state
+## Base44 / `asmartparrot.com` mapping — proven
 
-Base44 currently exposes two relevant apps:
+A fresh read of `https://asmartparrot.com/` returned the current Smart Parrot marketing homepage with the distinctive headline `Speak English. Unlock your future.` and the Programs / Locations / About / Admissions / Free Level Test navigation.
 
-- `Smart Parrot Institute  (Copy)` — `69c16c52c86d161e74940243`.
-- `Parrot Institute` — `695940b9a789c24bcec383ab`.
+Connected Base44 source comparison:
 
-The build app sandbox contains the expected Vite/React booking source tree, but the current tool surface does not itself prove which app owns `asmartparrot.com`. Therefore **no Base44/public-domain publish was performed in this integration refresh**. The release lane must first prove the live app/domain mapping, take a restorable checkpoint, verify the exact integrated frontend build and smoke existing homepage/routes plus booking deep links. Stripe may remain disconnected at frontend publication, but the UI must fail closed and must not charge.
+- `Parrot Institute` (`695940b9a789c24bcec383ab`) contains the distinctive public phrase in `src/components/home/PremiumHomePage.jsx` (`titleAccent: "Unlock your future."`).
+- `Smart Parrot Institute  (Copy)` (`69c16c52c86d161e74940243`) returned zero source matches for that phrase.
+
+Therefore the current public `asmartparrot.com` content maps to **`Parrot Institute`**, not the Copy app. Full evidence is preserved in `docs/lesson-booking-base44-domain-map-2026-09-22.md`.
+
+Release consequence: engineering remains in the user-selected GitHub copy repository, but public booking UI must be transplanted/integrated additively into the serving `Parrot Institute` Base44 app. Before publish, take a restorable Base44 checkpoint, prove the exact integrated production build and booking deep links, then smoke all existing homepage/navigation/language/program/location/admissions routes. Do not reassign the domain or publish the Copy app over the serving site. Stripe may remain disconnected at frontend publication, but the UI must fail closed and must not charge.
 
 ## External configuration still required for first provider-writing rehearsal
 
@@ -132,13 +136,13 @@ A Stripe account connected inside Base44 does **not** transfer those server cred
 
 Do not extend the notification/requeue chain speculatively while parallel lanes are starting. The next serialized integration action is to ingest the first reviewed non-overlapping lane checkpoint in this order of practical launch value:
 
-1. Frontend/Base44 compatibility and additive route/publication readiness.
+1. Frontend/Base44 compatibility against the now-proven serving `Parrot Institute` app, with additive route/publication readiness.
 2. Provider secret-independent Stripe/Daily hardening/readiness contracts.
 3. Supabase advisor/security hardening where a concrete semantic issue is proven.
-4. Release lane exact-head deployability and `asmartparrot.com` app/domain proof.
+4. Release lane exact-head deployability, serving-app checkpoint/rollback proof and public-route smoke plan.
 
 After each lane integration, run focused regressions; once the integrated checkpoint is complete, require exact-head broad booking CI before any preview function deployment or Base44 publication.
 
 ## Release status
 
-**NO DEFAULT-BRANCH MERGE. NO LIVE PAYMENT. NO BLIND BASE44 PUBLISH.** Phase 4C5AB is repository-complete, exact-head CI-verified and preview-applied. The next goal is coordinated lane integration and a safe additive frontend preview/publication path, not additional unreviewed authority layers.
+**NO DEFAULT-BRANCH MERGE. NO LIVE PAYMENT. NO COPY-APP OVERWRITE.** Phase 4C5AB is repository-complete, exact-head CI-verified and preview-applied. `asmartparrot.com` is now mapped to the serving `Parrot Institute` Base44 app, so the next release work can focus on an additive booking integration into that app rather than domain reassignment.

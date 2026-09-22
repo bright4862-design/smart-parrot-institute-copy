@@ -1,4 +1,5 @@
 -- Phase 4C5AB service-only no-send dispatch preflight + exact stale-intent exclusion. Ephemeral CI only.
+-- Service-facing scenarios deliberately use the <=63-byte stable Phase AB RPC alias added in AB1.
 begin;
 
 insert into auth.users(id,raw_user_meta_data) values
@@ -71,7 +72,7 @@ begin
   v_claim_event_id := (claim1->>'event_id')::bigint;
   select public.service_prepare_booking_preview_launch_blocker_requeue_delivery_intent(v_claim_event_id) into intent1;
 
-  select public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(
+  select public.service_prepare_booking_preview_requeue_dispatch(
     (intent1->>'intent_id')::bigint,repeat('1',32)
   ) into ready1;
   if ready1->>'decision' <> 'ready_no_send'
@@ -90,7 +91,7 @@ begin
     raise exception 'Phase AB current no-send preflight mismatch: %',ready1;
   end if;
 
-  select public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(
+  select public.service_prepare_booking_preview_requeue_dispatch(
     (intent1->>'intent_id')::bigint,repeat('1',32)
   ) into replay1;
   if replay1->>'decision' <> 'ready_no_send'
@@ -100,7 +101,7 @@ begin
   end if;
 
   begin
-    perform public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(
+    perform public.service_prepare_booking_preview_requeue_dispatch(
       (intent1->>'intent_id')::bigint,repeat('9',32)
     );
   exception when unique_violation then
@@ -118,7 +119,7 @@ begin
     raise exception 'Phase AB setup failed to create Phase AA claim-closed evidence: %',terminal_obs;
   end if;
 
-  select public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(
+  select public.service_prepare_booking_preview_requeue_dispatch(
     (intent1->>'intent_id')::bigint,repeat('1',32)
   ) into excluded1;
   if excluded1->>'decision' <> 'excluded'
@@ -143,7 +144,7 @@ begin
     raise exception 'Phase AB did not bind claim-closed exclusion to Phase AA terminal evidence';
   end if;
 
-  select public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(
+  select public.service_prepare_booking_preview_requeue_dispatch(
     (intent1->>'intent_id')::bigint,repeat('f',32)
   ) into excluded1_replay;
   if excluded1_replay->>'decision' <> 'excluded'
@@ -175,7 +176,7 @@ begin
   where e.event_id=v_expired_claim_event_id
   returning intent_id into v_expired_intent_id;
 
-  select public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(
+  select public.service_prepare_booking_preview_requeue_dispatch(
     v_expired_intent_id,repeat('2',32)
   ) into expired_result;
   if expired_result->>'decision' <> 'excluded'
@@ -231,7 +232,7 @@ begin
     raise exception 'Phase AB test did not create a newer blocker snapshot';
   end if;
 
-  select public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(
+  select public.service_prepare_booking_preview_requeue_dispatch(
     v_superseded_intent_id,repeat('3',32)
   ) into superseded_result;
   if superseded_result->>'decision' <> 'excluded'
@@ -274,18 +275,26 @@ do $$
 begin
   if has_function_privilege(
     'authenticated',
-    'public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(bigint,text)',
+    'public.service_prepare_booking_preview_requeue_dispatch(bigint,text)',
     'EXECUTE'
   ) then
-    raise exception 'authenticated unexpectedly has Phase AB service RPC access';
+    raise exception 'authenticated unexpectedly has stable Phase AB service RPC access';
   end if;
 
   if not has_function_privilege(
     'service_role',
+    'public.service_prepare_booking_preview_requeue_dispatch(bigint,text)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role missing stable Phase AB service RPC access';
+  end if;
+
+  if has_function_privilege(
+    'service_role',
     'public.service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight(bigint,text)',
     'EXECUTE'
   ) then
-    raise exception 'service_role missing Phase AB service RPC access';
+    raise exception 'service_role unexpectedly retains legacy overlong Phase AB RPC access';
   end if;
 
   if has_table_privilege('authenticated','public.lesson_booking_preview_requeue_dispatch_preflights','SELECT')

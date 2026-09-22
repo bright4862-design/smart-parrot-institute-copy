@@ -9,6 +9,7 @@ import AppLayout from '@/components/layout/AppLayout';
 
 const Learn = lazy(() => import('@/pages/Learn'));
 const LessonPage = lazy(() => import('@/pages/LessonPage'));
+const LessonBookingHub = lazy(() => import('@/pages/LessonBookingHub'));
 const LessonBooking = lazy(() => import('@/pages/LessonBooking'));
 const MyLessons = lazy(() => import('@/pages/MyLessons'));
 const LessonBookingPolicy = lazy(() => import('@/pages/LessonBookingPolicy'));
@@ -51,6 +52,7 @@ const AuthenticatedApp = () => {
           <Route path="/profile" element={<Profile />} />
         </Route>
         <Route path="/lesson/:id" element={<LessonPage />} />
+        <Route path="/lesson-booking" element={<LessonBookingHub />} />
         <Route path="/book-lessons" element={<LessonBooking />} />
         <Route path="/my-lessons" element={<MyLessons />} />
         <Route path="/lesson-booking-policy/:policyVersionId" element={<LessonBookingPolicy />} />

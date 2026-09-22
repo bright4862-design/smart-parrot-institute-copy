@@ -10,11 +10,16 @@ const migration = readFileSync(
   new URL('../supabase/migrations/20260921173000_lesson_booking_phase4c5ab_requeue_dispatch_preflight.sql', import.meta.url),
   'utf8',
 );
+const stableRpcMigration = readFileSync(
+  new URL('../supabase/migrations/20260922112000_lesson_booking_phase4c5ab1_stable_dispatch_rpc.sql', import.meta.url),
+  'utf8',
+);
 const client = readFileSync(new URL('./lesson-booking-preview-requeue-dispatch-preflight.mjs', import.meta.url), 'utf8');
 const expect = (value, message) => assert.ok(value, message);
 const preflightTable = 'lesson_booking_preview_requeue_dispatch_preflights';
 const exclusionTable = 'lesson_booking_preview_requeue_dispatch_exclusions';
-const rpc = 'service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight';
+const legacyRpc = 'service_prepare_booking_preview_launch_blocker_requeue_dispatch_preflight';
+const rpc = 'service_prepare_booking_preview_requeue_dispatch';
 
 for (const table of [preflightTable, exclusionTable]) {
   expect(migration.includes(`create table if not exists public.${table}`), `missing ${table}`);
@@ -24,8 +29,8 @@ for (const table of [preflightTable, exclusionTable]) {
 expect(migration.includes('booking_preview_requeue_dispatch_preflight_append_only'), 'preflight evidence must be append-only');
 expect(migration.includes('booking_preview_requeue_dispatch_exclusion_append_only'), 'exclusion evidence must be append-only');
 
-expect(migration.includes(`create or replace function public.${rpc}`), 'missing Phase AB dispatch-preflight RPC');
-expect(/security definer\s+set search_path = ''/gi.test(migration), 'Phase AB privileged RPC must pin search_path');
+expect(migration.includes(`create or replace function public.${legacyRpc}`), 'missing authoritative Phase AB dispatch-preflight implementation');
+expect(/security definer\s+set search_path = ''/gi.test(migration), 'Phase AB privileged implementation must pin search_path');
 expect(/pg_advisory_xact_lock\(20260921,40520\)/i.test(migration), 'Phase AB must serialize with the requeue family');
 expect(/statement_timestamp\(\)/i.test(migration), 'Phase AB must use PostgreSQL server time');
 expect(/lesson_booking_preview_launch_blocker_requeue_delivery_intent_terminals/i.test(migration), 'Phase AB must honor Phase AA terminal evidence');
@@ -36,12 +41,18 @@ expect(/if v_exclusion_reason is not null[\s\S]*?insert into public\.lesson_book
 expect(/if v_existing\.preflight_id is not null[\s\S]*?preflight_key <> v_preflight_key[\s\S]*?preflight_key_conflict/i.test(migration), 'Phase AB must reject conflicting current preflight keys');
 expect(/preflight_state text not null check \(preflight_state = 'ready_no_send'\)/i.test(migration), 'Phase AB preflight must remain no-send');
 expect(/exclusion_reason text not null check \(exclusion_reason in \('claim_closed','lease_expired','snapshot_superseded'\)\)/i.test(migration), 'Phase AB exclusion reasons must be bounded');
-expect(new RegExp(`grant execute on function public\\.${rpc}\\(bigint,text\\)[\\s\\S]*?to service_role`, 'i').test(migration), 'Phase AB RPC must be service-role only');
 expect(!/\bdelete\s+from\b/i.test(migration) && !/\btruncate\b/i.test(migration), 'destructive SQL is forbidden');
 expect(!/https?:\/\//i.test(migration), 'external HTTP endpoints are forbidden');
 expect(!/\bnet\.http_/i.test(migration), 'database HTTP calls are forbidden');
 expect(!/\bcron\b[\s\S]*?schedule\s*\(/i.test(migration), 'Cron sending is forbidden');
 expect(!/p_(?:now|current_time|observed_at|lease_expires_at|prepared_at)\b/i.test(migration), 'caller-controlled time is forbidden');
+
+expect(stableRpcMigration.includes(`create or replace function public.${rpc}`), 'missing stable Phase AB dispatch RPC alias');
+expect(new RegExp(`security definer[\\s\\S]*?set search_path = ''`, 'i').test(stableRpcMigration), 'stable Phase AB RPC alias must pin search_path');
+expect(new RegExp(`grant execute on function public\\.${rpc}\\(bigint,text\\)[\\s\\S]*?to service_role`, 'i').test(stableRpcMigration), 'stable Phase AB RPC alias must be service-role only');
+expect(new RegExp(`revoke execute on function public\\.${legacyRpc}\\(bigint,text\\)[\\s\\S]*?from public, anon, authenticated, service_role`, 'i').test(stableRpcMigration), 'legacy overlong RPC must not remain service-callable');
+expect(stableRpcMigration.includes(`select public.${legacyRpc}(`), 'stable RPC alias must delegate to authoritative Phase AB implementation');
+expect(Buffer.byteLength(rpc, 'utf8') <= 63, 'stable Phase AB RPC alias must fit PostgreSQL identifier limit');
 
 for (const table of [preflightTable, exclusionTable]) {
   const tableBlock = migration.match(new RegExp(`create table if not exists public\\.${table} \\([\\s\\S]*?\\n\\);`, 'i'))?.[0] ?? '';
@@ -71,6 +82,8 @@ for (const sentinel of [
   expect(client.includes(`${sentinel}: false`), `client must allowlist fail-closed ${sentinel}`);
 }
 
+expect(client.includes(`const DISPATCH_PREFLIGHT_RPC = '${rpc}'`), 'Phase AB client must target the stable RPC alias');
+expect(!client.includes(`const DISPATCH_PREFLIGHT_RPC = '${legacyRpc}'`), 'Phase AB client must not target the overlong legacy RPC');
 expect(!/fetch\s*\(/.test(client), 'Phase AB client must not perform external HTTP');
 expect(!/Date\.now\s*\(/.test(client), 'Phase AB client must not authoritatively decide time');
 expect(!/p_(?:now|current_time|observed_at|lease_expires_at|prepared_at)\s*:/.test(client), 'Phase AB client must not send caller time');
@@ -138,4 +151,4 @@ await assert.rejects(
   'zero preflight key must be rejected before transport',
 );
 
-console.log('Phase 4C5AB requeue dispatch-preflight boundary passed.');
+console.log('Phase 4C5AB requeue dispatch-preflight boundary passed with stable service RPC alias.');
